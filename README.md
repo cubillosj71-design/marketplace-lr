@@ -25,7 +25,7 @@ Docente: Ing. Wilson Rojas Reales. Revisión y aprobación: grupo de Ingeniería
 | Integración continua | GitHub Actions |
 | Análisis estático | SonarCloud |
 
-## Estructura
+## Estructura inicial
 
 ```
 marketplace-lr/
