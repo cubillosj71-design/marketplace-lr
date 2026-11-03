@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: marketplace_db
+          POSTGRES_USER: marketplace
+          POSTGRES_PASSWORD: marketplace
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgres://marketplace:marketplace@localhost:5432/marketplace_db
+      DJANGO_SECRET_KEY: ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-dev.txt
+      - name: Revisar el proyecto Django
+        run: python manage.py check
+      - name: Migraciones al día
+        run: python manage.py makemigrations --check --dry-run
+      - name: Fronteras entre servicios (import-linter, ADR-001)
+        run: lint-imports
+      - name: Pruebas
+        run: pytest -q
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm ci
+      - run: npm run build
