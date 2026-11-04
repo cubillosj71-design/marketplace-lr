@@ -121,5 +121,6 @@ El detalle está en [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Enlaces
 
-- Jira: _pendiente_
-- Confluence: _pendiente_
+- Jira (proyecto MAL): https://softwaregt.atlassian.net/jira/software/projects/MAL/boards/2/backlog
+- Confluence (espacio MAL): https://softwaregt.atlassian.net/wiki/spaces/MAL/overview
+- Documentos de la fase de análisis y diseño: [docs/analisis](docs/analisis) y [docs/diseno](docs/diseno)
