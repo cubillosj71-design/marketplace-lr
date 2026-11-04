@@ -121,5 +121,5 @@ El detalle está en [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Enlaces
 
-- Jira: _pendiente_
-- Confluence: _pendiente_
+- Jira: 
+- Confluence:
