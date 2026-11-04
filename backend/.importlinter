@@ -1,0 +1,140 @@
+[importlinter]
+root_packages =
+    apps
+    config
+include_external_packages = False
+
+[importlinter:contract:identidad]
+name = identidad no importa modelos de otros servicios (ADR-001)
+type = forbidden
+source_modules =
+    apps.identidad
+forbidden_modules =
+    apps.catalogo.models
+    apps.busqueda.models
+    apps.reservas.models
+    apps.pagos.models
+    apps.resenas.models
+    apps.notificaciones.models
+    apps.auditoria.models
+    apps.reportes.models
+
+[importlinter:contract:catalogo]
+name = catalogo no importa modelos de otros servicios (ADR-001)
+type = forbidden
+source_modules =
+    apps.catalogo
+forbidden_modules =
+    apps.identidad.models
+    apps.busqueda.models
+    apps.reservas.models
+    apps.pagos.models
+    apps.resenas.models
+    apps.notificaciones.models
+    apps.auditoria.models
+    apps.reportes.models
+
+[importlinter:contract:busqueda]
+name = busqueda no importa modelos de otros servicios (ADR-001)
+type = forbidden
+source_modules =
+    apps.busqueda
+forbidden_modules =
+    apps.identidad.models
+    apps.catalogo.models
+    apps.reservas.models
+    apps.pagos.models
+    apps.resenas.models
+    apps.notificaciones.models
+    apps.auditoria.models
+    apps.reportes.models
+
+[importlinter:contract:reservas]
+name = reservas no importa modelos de otros servicios (ADR-001)
+type = forbidden
+source_modules =
+    apps.reservas
+forbidden_modules =
+    apps.identidad.models
+    apps.catalogo.models
+    apps.busqueda.models
+    apps.pagos.models
+    apps.resenas.models
+    apps.notificaciones.models
+    apps.auditoria.models
+    apps.reportes.models
+
+[importlinter:contract:pagos]
+name = pagos no importa modelos de otros servicios (ADR-001)
+type = forbidden
+source_modules =
+    apps.pagos
+forbidden_modules =
+    apps.identidad.models
+    apps.catalogo.models
+    apps.busqueda.models
+    apps.reservas.models
+    apps.resenas.models
+    apps.notificaciones.models
+    apps.auditoria.models
+    apps.reportes.models
+
+[importlinter:contract:resenas]
+name = resenas no importa modelos de otros servicios (ADR-001)
+type = forbidden
+source_modules =
+    apps.resenas
+forbidden_modules =
+    apps.identidad.models
+    apps.catalogo.models
+    apps.busqueda.models
+    apps.reservas.models
+    apps.pagos.models
+    apps.notificaciones.models
+    apps.auditoria.models
+    apps.reportes.models
+
+[importlinter:contract:notificaciones]
+name = notificaciones no importa modelos de otros servicios (ADR-001)
+type = forbidden
+source_modules =
+    apps.notificaciones
+forbidden_modules =
+    apps.identidad.models
+    apps.catalogo.models
+    apps.busqueda.models
+    apps.reservas.models
+    apps.pagos.models
+    apps.resenas.models
+    apps.auditoria.models
+    apps.reportes.models
+
+[importlinter:contract:auditoria]
+name = auditoria no importa modelos de otros servicios (ADR-001)
+type = forbidden
+source_modules =
+    apps.auditoria
+forbidden_modules =
+    apps.identidad.models
+    apps.catalogo.models
+    apps.busqueda.models
+    apps.reservas.models
+    apps.pagos.models
+    apps.resenas.models
+    apps.notificaciones.models
+    apps.reportes.models
+
+[importlinter:contract:reportes]
+name = reportes no importa modelos de otros servicios (ADR-001)
+type = forbidden
+source_modules =
+    apps.reportes
+forbidden_modules =
+    apps.identidad.models
+    apps.catalogo.models
+    apps.busqueda.models
+    apps.reservas.models
+    apps.pagos.models
+    apps.resenas.models
+    apps.notificaciones.models
+    apps.auditoria.models
