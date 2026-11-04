@@ -7,18 +7,18 @@ Usamos un flujo basado en GitHub Flow: una rama principal estable y una rama cor
 | Rama | Para qué | Ejemplo |
 |---|---|---|
 | `main` | Código estable e integrado. Protegida: no recibe pushes directos. | |
-| `feature/LR-<n>-<descripcion>` | Una historia de usuario o tarea nueva | `feature/LR-12-crear-reserva` |
-| `fix/LR-<n>-<descripcion>` | Corrección de un defecto | `fix/LR-31-total-cotizacion` |
+| `feature/MAL-<n>-<descripcion>` | Una historia de usuario o tarea nueva | `feature/MAL-13-crear-reserva` |
+| `fix/MAL-<n>-<descripcion>` | Corrección de un defecto | `fix/MAL-12-total-cotizacion` |
 | `docs/<descripcion>` | Solo documentación | `docs/actualizar-readme` |
 
-La descripción va en minúsculas, sin tildes y con guiones. Con la clave `LR-<n>` en el nombre, Jira enlaza la rama con su historia.
+La descripción va en minúsculas, sin tildes y con guiones. Con la clave `MAL-<n>` en el nombre, Jira enlaza la rama con su historia.
 
 ## Commits
 
 Formato:
 
 ```
-LR-<n>: <tipo> <descripción en presente>
+MAL-<n>: <tipo> <descripción en presente>
 ```
 
 Tipos: `feat` (funcionalidad), `fix` (corrección), `test` (pruebas), `docs` (documentación), `refactor` (cambio interno sin cambiar el comportamiento) y `chore` (configuración o dependencias).
@@ -26,9 +26,9 @@ Tipos: `feat` (funcionalidad), `fix` (corrección), `test` (pruebas), `docs` (do
 Ejemplos:
 
 ```
-LR-12: feat validar solapamiento de fechas al confirmar la reserva
-LR-12: test agregar caso de reserva superpuesta
-LR-31: fix redondear la tarifa de servicio a dos decimales
+MAL-13: feat validar solapamiento de fechas al confirmar la reserva
+MAL-13: test agregar caso de reserva superpuesta
+MAL-12: fix redondear la tarifa de servicio a dos decimales
 ```
 
 Cada commit debe ser un cambio coherente que se pueda entender solo.
@@ -44,11 +44,11 @@ Historia en Jira → rama → commits → Pull Request → GitHub Actions → pr
    ```
    git checkout main
    git pull
-   git checkout -b feature/LR-12-crear-reserva
+   git checkout -b feature/MAL-13-crear-reserva
    ```
 3. Hacer commits con el formato de arriba y subir la rama:
    ```
-   git push -u origin feature/LR-12-crear-reserva
+   git push -u origin feature/MAL-13-crear-reserva
    ```
 4. Abrir el Pull Request hacia `main` usando la plantilla. El título lleva la clave de Jira.
 5. Esperar a que GitHub Actions y SonarCloud terminen en verde.

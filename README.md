@@ -55,9 +55,10 @@ marketplace-lr/
 │   └── .importlinter      # fronteras entre servicios
 ├── frontend/              # aplicación web en React + Vite + TypeScript
 ├── docs/
+│   ├── analisis/          # documento de requerimientos (SRS)
 │   ├── diseno/            # documento de diseño (SDD)
 │   ├── adr/               # registros de decisiones de arquitectura
-│   ├── diagramas/         # C4, UML, clases y modelo relacional (.drawio y .png)
+│   ├── diagramas/         # BPMN, casos de uso, C4, UML, clases y modelo relacional
 │   └── api/               # contrato OpenAPI (entrega D3)
 ├── .github/               # plantilla de Pull Request y pipeline de CI
 ├── docker-compose.yml     # entorno local con PostgreSQL
@@ -111,7 +112,7 @@ La aplicación queda en http://localhost:5173 y muestra si la API responde.
 
 ## Forma de trabajo
 
-- Toda tarea nace en Jira con la clave `LR` (por ejemplo, `LR-12`).
+- Toda tarea nace en Jira con la clave `MAL` (por ejemplo, `MAL-13`).
 - Cada historia se desarrolla en su propia rama y llega a `main` por Pull Request revisado por otro integrante.
 - `main` está protegida: no acepta pushes directos.
 - Cada Pull Request corre el pipeline: `manage.py check`, migraciones, import-linter, pruebas y compilación del front.
