@@ -1,6 +1,6 @@
 import { Ban, CheckCircle2, ClipboardList, FileSpreadsheet, FileText, PauseCircle, PowerOff, ShieldAlert, UserRound, Users, Wallet, type LucideIcon } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import { CIUDADES, ESTADO_TXT, ROL_TXT, TIPOS, cop, nochesReserva, type EstadoPub, type Rol } from "../data";
+import { CIUDADES, ESTADO_TXT, ROL_TXT, TIPOS, cop, type EstadoPub, type Rol } from "../data";
 import { Page } from "../layout";
 import { useStore, useToast } from "../store";
 import { descargarExcel, descargarPDF, type Reporte } from "../exportar";
@@ -41,10 +41,10 @@ function useDescarga(nombre: string) {
     try {
       const r = armar();
       if (formato === "PDF") descargarPDF(r); else await descargarExcel(r);
-      registrarEvento("Reporte descargado", `${nombre} · ${formato} · ${periodo} · ${r.filas.length} registros`, "EXITO");
+      registrarEvento("Reporte descargado", `${nombre} · ${formato} · ${periodo} · ${r.filas.length} registros`, "EXITO", { entidad: "Reporte" });
       toast(`${nombre} descargado en ${formato}`);
     } catch {
-      registrarEvento("Reporte descargado", `${nombre} · ${formato} · no se pudo generar`, "FALLO");
+      registrarEvento("Reporte descargado", `${nombre} · ${formato} · no se pudo generar`, "FALLO", { entidad: "Reporte" });
       toast("No se pudo generar el reporte. Intenta de nuevo.", "err");
     } finally {
       setOcupado(false);
@@ -84,14 +84,15 @@ function AvisoDescarga() {
 
 /* ---------------- Módulo Usuarios: Reporte de usuarios ---------------- */
 export function ReporteUsuarios() {
-  const { usuarios } = useStore();
+  const { usuarios, restriccionVigente } = useStore();
   const d = useDescarga("Reporte de usuarios");
+  const fechaHora = (iso: string) => new Date(iso).toLocaleString("es-CO", { dateStyle: "medium", timeStyle: "short" });
   const [rol, setRol] = useState<"" | Rol>("");
   const [estado, setEstado] = useState<"" | keyof typeof ESTADO_CUENTA_TXT>("");
 
   const lista = usuarios
-    .filter((u) => enPeriodo(u.creado, d.desde, d.hasta) && (!rol || u.rol === rol) && (!estado || u.estado === estado))
-    .sort((a, b) => (b.creado ?? "").localeCompare(a.creado ?? ""));
+    .filter((u) => enPeriodo(u.fechaRegistro, d.desde, d.hasta) && (!rol || u.rol === rol) && (!estado || u.estado === estado))
+    .sort((a, b) => b.fechaRegistro.localeCompare(a.fechaRegistro));
   const porRol = (r: Rol) => lista.filter((u) => u.rol === r).length;
   const porEstado = (e: keyof typeof ESTADO_CUENTA_TXT) => lista.filter((u) => u.estado === e).length;
 
@@ -108,8 +109,9 @@ export function ReporteUsuarios() {
       ["Cuentas desactivadas", porEstado("DESACTIVADA")],
       ["Cuentas restringidas", porEstado("RESTRINGIDA")],
     ],
-    columnas: ["Nombre", "Correo", "Rol", "Ciudad", "Teléfono", "Estado de la cuenta", "Fecha de registro"],
-    filas: lista.map((u) => [u.nombre, u.correo, ROL_TXT[u.rol], u.ciudad || "Sin ciudad", u.telefono, ESTADO_CUENTA_TXT[u.estado], fechaCorta(u.creado)]),
+    columnas: ["Nombre", "Correo", "Rol", "Teléfono", "Estado de la cuenta", "Motivo de restricción", "Fecha de registro", "Autorizó datos (Ley 1581)"],
+    filas: lista.map((u) => [u.nombre, u.correo, ROL_TXT[u.rol], u.telefono, ESTADO_CUENTA_TXT[u.estado],
+      restriccionVigente(u.id)?.motivo ?? "", fechaCorta(u.fechaRegistro), fechaHora(u.aceptaDatosEn)]),
     archivo: `reporte-usuarios_${d.desde}_${d.hasta}`,
   });
 
@@ -150,15 +152,19 @@ export function ReporteUsuarios() {
         {lista.length === 0 ? <div className="empty-state"><Users /><b>No hay usuarios registrados en ese periodo</b></div> : (
           <div className="table-wrap">
             <table className="table">
-              <thead><tr><th>Usuario</th><th>Rol</th><th>Ciudad</th><th>Estado</th><th>Registro</th></tr></thead>
+              <thead><tr><th>Usuario</th><th>Rol</th><th>Teléfono</th><th>Estado</th><th>Registro</th><th>Autorizó datos</th></tr></thead>
               <tbody>
                 {lista.map((u) => (
                   <tr key={u.id}>
                     <td className="cell-2"><b>{u.nombre}</b><span className="subtle">{u.correo}</span></td>
                     <td>{ROL_TXT[u.rol]}</td>
-                    <td>{u.ciudad || "Sin ciudad"}</td>
-                    <td><span className={`badge ${u.estado === "ACTIVA" ? "badge-ACTIVA" : u.estado === "RESTRINGIDA" ? "badge-BLOQUEADA" : "badge-PAUSADA"}`}>{ESTADO_CUENTA_TXT[u.estado].toUpperCase()}</span></td>
-                    <td>{fechaCorta(u.creado)}</td>
+                    <td>{u.telefono}</td>
+                    <td>
+                      <span className={`badge ${u.estado === "ACTIVA" ? "badge-ACTIVA" : u.estado === "RESTRINGIDA" ? "badge-BLOQUEADA" : "badge-PAUSADA"}`}>{ESTADO_CUENTA_TXT[u.estado].toUpperCase()}</span>
+                      {restriccionVigente(u.id) && <span className="subtle" style={{ display: "block", marginTop: 4, maxWidth: 220 }}>{restriccionVigente(u.id)!.motivo}</span>}
+                    </td>
+                    <td>{fechaCorta(u.fechaRegistro)}</td>
+                    <td className="subtle">{fechaHora(u.aceptaDatosEn)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -189,14 +195,15 @@ export function ReportePublicaciones() {
   // Reservas confirmadas o completadas con llegada en el periodo, sobre las publicaciones del reporte
   const reservasDe = (pubId: number) => reservas.filter((r) => r.publicacionId === pubId
     && (r.estado === "CONFIRMADA" || r.estado === "COMPLETADA") && enPeriodo(r.llegada, d.desde, d.hasta));
-  const ingresoDe = (pubId: number) => {
-    const p = publicaciones.find((x) => x.id === pubId)!;
-    return reservasDe(pubId).reduce((s, r) => s + nochesReserva(r).length * (p.precioNoche ?? 0) + (p.limpieza ?? 0), 0);
-  };
-  const filas = lista.map((p) => ({ p, reservas: reservasDe(p.id).length, ingreso: ingresoDe(p.id) }));
+  // Se usan los valores fijados en cada reserva (total y tarifa de servicio), así un cambio de tarifa no los altera (CA-22.1)
+  const filas = lista.map((p) => {
+    const rs = reservasDe(p.id);
+    return { p, reservas: rs.length, ingreso: rs.reduce((s, r) => s + r.total, 0), plataforma: rs.reduce((s, r) => s + r.tarifaServicio, 0) };
+  });
   const n = (e: EstadoPub) => lista.filter((p) => p.estado === e).length;
   const totalReservas = filas.reduce((s, f) => s + f.reservas, 0);
   const totalIngreso = filas.reduce((s, f) => s + f.ingreso, 0);
+  const totalPlataforma = filas.reduce((s, f) => s + f.plataforma, 0);
 
   const demanda = (clave: "ciudad" | "tipo") => {
     const m = new Map<string, { pubs: number; reservas: number }>();
@@ -222,13 +229,14 @@ export function ReportePublicaciones() {
       ["Bloqueadas", n("BLOQUEADA")],
       ["Reservas confirmadas o completadas", totalReservas],
       ["Ingresos estimados brutos (COP)", cop(totalIngreso)],
+      ["Ingresos de la plataforma, tarifa de servicio (COP)", cop(totalPlataforma)],
       ...porCiudad.map(([k, v]): [string, string] => [`Demanda en ${k}`, `${cant(v.reservas, "reserva")} · ${cant(v.pubs, "publicación", "publicaciones")}`]),
       ...porTipo.map(([k, v]): [string, string] => [`Demanda por tipo: ${k}`, `${cant(v.reservas, "reserva")} · ${cant(v.pubs, "publicación", "publicaciones")}`]),
     ],
-    columnas: ["Código", "Título", "Anfitrión", "Ciudad", "Tipo", "Precio por noche", "Estado", "Reservas", "Ingreso estimado", "Creada"],
-    filas: filas.map(({ p, reservas: r, ingreso }) => [p.id, p.titulo, nombre(p.anfitrionId), p.ciudad, p.tipo || "Sin tipo",
-      p.precioNoche ?? "Sin precio", ESTADO_TXT[p.estado], r, ingreso, fechaCorta(p.creada ?? p.actualizada)]),
-    moneda: [5, 8],
+    columnas: ["Código", "Título", "Anfitrión", "Ciudad", "Tipo", "Precio por noche", "Estado", "Reservas", "Ingreso bruto", "Ingreso plataforma", "Creada"],
+    filas: filas.map(({ p, reservas: r, ingreso, plataforma }) => [p.id, p.titulo, nombre(p.anfitrionId), p.ciudad, p.tipo || "Sin tipo",
+      p.precioNoche ?? "Sin precio", ESTADO_TXT[p.estado], r, ingreso, plataforma, fechaCorta(p.creada ?? p.actualizada)]),
+    moneda: [5, 8, 9],
     archivo: `reporte-publicaciones_${d.desde}_${d.hasta}`,
   });
 
@@ -268,7 +276,7 @@ export function ReportePublicaciones() {
         <Stat icon={ClipboardList} v={lista.length} label="Publicaciones en el periodo" bg="#dff3ef" fg="#0f766e" />
         <Stat icon={CheckCircle2} v={n("ACTIVA")} label="Activas" bg="#dcf3e4" fg="#166534" />
         <Stat icon={PauseCircle} v={`${n("PAUSADA")} / ${n("BLOQUEADA")}`} label="Pausadas / Bloqueadas" bg="#e3ecfa" fg="#1e4a8a" />
-        <Stat icon={Wallet} v={cop(totalIngreso)} label={`Ingresos estimados · ${totalReservas} reservas`} bg="#fdf0c8" fg="#8a4b05" />
+        <Stat icon={Wallet} v={cop(totalIngreso)} label={`Ingreso bruto · plataforma ${cop(totalPlataforma)}`} bg="#fdf0c8" fg="#8a4b05" />
       </div>
 
       <div className="grid-2">
@@ -290,9 +298,9 @@ export function ReportePublicaciones() {
         {lista.length === 0 ? <div className="empty-state"><Ban /><b>No hay publicaciones creadas en ese periodo</b></div> : (
           <div className="table-wrap">
             <table className="table">
-              <thead><tr><th>Publicación</th><th>Anfitrión</th><th>Tipo</th><th>Precio/noche</th><th>Estado</th><th style={{ textAlign: "right" }}>Reservas</th><th style={{ textAlign: "right" }}>Ingreso est.</th></tr></thead>
+              <thead><tr><th>Publicación</th><th>Anfitrión</th><th>Tipo</th><th>Precio/noche</th><th>Estado</th><th style={{ textAlign: "right" }}>Reservas</th><th style={{ textAlign: "right" }}>Ingreso bruto</th><th style={{ textAlign: "right" }}>Plataforma</th></tr></thead>
               <tbody>
-                {filas.map(({ p, reservas: r, ingreso }) => (
+                {filas.map(({ p, reservas: r, ingreso, plataforma }) => (
                   <tr key={p.id}>
                     <td className="cell-2"><b>{p.titulo}</b><span className="subtle">{p.ciudad} · #{p.id} · creada {fechaCorta(p.creada ?? p.actualizada)}</span></td>
                     <td>{nombre(p.anfitrionId)}</td>
@@ -301,6 +309,7 @@ export function ReportePublicaciones() {
                     <td><Badge estado={p.estado} /></td>
                     <td style={{ textAlign: "right" }}>{r}</td>
                     <td style={{ textAlign: "right" }}>{cop(ingreso)}</td>
+                    <td style={{ textAlign: "right" }}>{cop(plataforma)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -308,7 +317,7 @@ export function ReportePublicaciones() {
           </div>
         )}
       </div>
-      <p className="subtle">Ingreso estimado = noches reservadas × precio por noche + limpieza, sobre reservas confirmadas o completadas con llegada en el periodo. La descarga queda en el registro de acciones.</p>
+      <p className="subtle">Ingreso bruto = total de cada reserva (precio base − descuento + limpieza + tarifa de servicio). Ingreso de la plataforma = tarifa de servicio fijada al confirmar la reserva. Cuenta las reservas confirmadas o completadas con llegada en el periodo. La descarga queda en el registro de acciones.</p>
     </Page>
   );
 }

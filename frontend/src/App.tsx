@@ -1,6 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AppLayout, SoloRol } from "./layout";
-import { AdminPublicaciones, RegistroAcciones, RevisarPublicacion } from "./pages/admin";
+import { AdminPublicaciones, RegistroAcciones, RevisarPublicacion, TarifaServicioPage } from "./pages/admin";
 import { Inicio, Login, Recuperar, Registro, Restablecer } from "./pages/auth";
 import { Calendario } from "./pages/calendario";
 import { Explorar, ExplorarDetalle, ExplorarPublico, ExplorarPublicoDetalle } from "./pages/explorar";
@@ -44,6 +44,7 @@ export default function App() {
         <Route path="/admin/revision/:id" element={<SoloRol roles={["ADMINISTRADOR"]}><RevisarPublicacion /></SoloRol>} />
         <Route path="/admin/reportes/usuarios" element={<SoloRol roles={["ADMINISTRADOR"]}><ReporteUsuarios /></SoloRol>} />
         <Route path="/admin/reportes/publicaciones" element={<SoloRol roles={["ADMINISTRADOR"]}><ReportePublicaciones /></SoloRol>} />
+        <Route path="/admin/tarifa" element={<SoloRol roles={["ADMINISTRADOR"]}><TarifaServicioPage /></SoloRol>} />
         <Route path="/admin/registro" element={<SoloRol roles={["ADMINISTRADOR"]}><RegistroAcciones /></SoloRol>} />
       </Route>
 

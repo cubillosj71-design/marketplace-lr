@@ -1,7 +1,7 @@
-import { ArrowLeft, Ban, Check, CheckCircle2, CircleDashed, ClipboardList, PauseCircle, Search, ShieldOff, Undo2 } from "lucide-react";
+import { ArrowLeft, Ban, Check, CheckCircle2, CircleDashed, ClipboardList, History, PauseCircle, Percent, Search, ShieldOff, Undo2 } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { cop, faltantesRevision, type EstadoPub } from "../data";
+import { cop, cotizar, faltantesRevision, type AccionModeracion, type EstadoPub } from "../data";
 import { Page } from "../layout";
 import { useStore, useToast } from "../store";
 import { Alert, Badge, Field, ImageTile, Modal } from "../ui";
@@ -69,7 +69,7 @@ export function AdminPublicaciones({ soloPendientes = false }: { soloPendientes?
                       <div className="row" style={{ gap: 6 }}>
                         {p.estado === "PENDIENTE_REVISION" && <button className="btn btn-primary btn-sm" onClick={() => go(`/admin/revision/${p.id}`)}>Revisar</button>}
                         {(p.estado === "ACTIVA" || p.estado === "PAUSADA") && <button className="btn btn-danger btn-sm" onClick={() => { setBloquear(p.id); setMotivo(""); }}><Ban /> Bloquear</button>}
-                        {p.estado === "BLOQUEADA" && <button className="btn btn-secondary btn-sm" onClick={() => { cambiarEstado(p.id, "PAUSADA", { motivoBloqueo: undefined }); toast("Desbloqueada: queda PAUSADA y el anfitrión puede reactivarla"); }}><ShieldOff /> Desbloquear</button>}
+                        {p.estado === "BLOQUEADA" && <button className="btn btn-secondary btn-sm" onClick={() => { cambiarEstado(p.id, "PAUSADA"); toast("Desbloqueada: queda PAUSADA y el anfitrión puede reactivarla"); }}><ShieldOff /> Desbloquear</button>}
                         <Link className="btn btn-ghost btn-sm" to={`/publicaciones/${p.id}`}>Ver</Link>
                       </div>
                     </td>
@@ -91,7 +91,7 @@ export function AdminPublicaciones({ soloPendientes = false }: { soloPendientes?
           <div className="modal-actions">
             <button className="btn btn-secondary" onClick={() => setBloquear(null)}>Cancelar</button>
             <button className="btn btn-primary" style={{ background: "var(--err)" }} disabled={!motivo.trim()}
-              onClick={() => { cambiarEstado(pub.id, "BLOQUEADA", { motivoBloqueo: motivo.trim() }); setBloquear(null); toast("Publicación bloqueada"); }}>Bloquear</button>
+              onClick={() => { cambiarEstado(pub.id, "BLOQUEADA", motivo); setBloquear(null); toast("Publicación bloqueada"); }}>Bloquear</button>
           </div>
         </Modal>
       )}
@@ -128,7 +128,7 @@ export function RevisarPublicacion() {
           <div className="row">
             <button className="btn btn-secondary" onClick={() => {
               if (!motivo.trim()) return setError("Escribe la observación para el anfitrión.");
-              cambiarEstado(p.id, "BORRADOR", { observacion: motivo.trim() });
+              cambiarEstado(p.id, "BORRADOR", motivo);
               toast("Devuelta al anfitrión con tu observación"); go("/admin/revision");
             }}><Undo2 /> Devolver</button>
             <button className="btn btn-primary" onClick={() => { cambiarEstado(p.id, "ACTIVA"); toast("Aprobada: ya aparece en las búsquedas"); go("/admin/revision"); }}>
@@ -161,6 +161,7 @@ export function RevisarPublicacion() {
             <textarea className="textarea" placeholder="Ej. Las fotos no corresponden al alojamiento." value={motivo} onChange={(e) => { setMotivo(e.target.value); setError(""); }} />
           </Field>
           <Alert tipo="info">Al aprobarla pasa a ACTIVA y aparece en las búsquedas. Al devolverla vuelve a BORRADOR y el anfitrión ve tu observación.</Alert>
+          <HistorialRevisiones pubId={p.id} />
         </aside>
       </div>
     </Page>
@@ -184,13 +185,14 @@ export function RegistroAcciones() {
         {lista.length === 0 ? <div className="empty-state"><CheckCircle2 /><b>Aún no hay acciones registradas</b><span>Inicia sesión con otras cuentas o intenta entrar a una función de otro rol.</span></div> : (
           <div className="table-wrap">
             <table className="table">
-              <thead><tr><th>Fecha y hora</th><th>Quién</th><th>Acción</th><th>Detalle</th><th>Resultado</th></tr></thead>
+              <thead><tr><th>Fecha y hora</th><th>Quién</th><th>Acción</th><th>Entidad</th><th>Detalle</th><th>Resultado</th></tr></thead>
               <tbody>
                 {lista.map((e) => (
                   <tr key={e.id}>
                     <td style={{ whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>{new Date(e.fecha).toLocaleString("es-CO", { dateStyle: "short", timeStyle: "medium" })}</td>
                     <td>{e.quien}</td>
                     <td>{e.accion}</td>
+                    <td style={{ whiteSpace: "nowrap" }}>{e.entidad ? `${e.entidad}${e.entidadId ? ` #${e.entidadId}` : ""}` : ""}</td>
                     <td className="muted">{e.detalle}</td>
                     <td><span className={`badge ${e.resultado === "EXITO" ? "badge-ACTIVA" : "badge-BLOQUEADA"}`}>{e.resultado === "EXITO" ? "ÉXITO" : "FALLO"}</span></td>
                   </tr>
@@ -199,6 +201,85 @@ export function RegistroAcciones() {
             </table>
           </div>
         )}
+      </div>
+    </Page>
+  );
+}
+
+/* ---------------- RevisionPublicacion: historial de moderación ---------------- */
+export const ACCION_TXT: Record<AccionModeracion, string> = {
+  APROBAR: "Aprobada", DEVOLVER: "Devuelta", PAUSAR: "Pausada", REACTIVAR: "Reactivada", BLOQUEAR: "Bloqueada", DESBLOQUEAR: "Desbloqueada",
+};
+
+export function HistorialRevisiones({ pubId }: { pubId: number }) {
+  const { revisionesDe, usuarios } = useStore();
+  const lista = revisionesDe(pubId);
+  return (
+    <div className="stack" style={{ gap: 8 }}>
+      <h3 style={{ display: "flex", alignItems: "center", gap: 8 }}><History size={18} /> Historial de revisiones</h3>
+      {lista.length === 0 ? <p className="subtle">Aún no tiene revisiones del administrador.</p> : (
+        <ul className="list-plain historial">
+          {lista.map((r) => (
+            <li key={r.id}>
+              <b>{ACCION_TXT[r.accion]}</b>
+              <span className="subtle">
+                {new Date(r.fecha).toLocaleString("es-CO", { dateStyle: "medium", timeStyle: "short" })} · {usuarios.find((u) => u.id === r.adminId)?.nombre}
+              </span>
+              {r.observacion && <span>«{r.observacion}»</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/* ---------------- HU-22 · RF-D-ADM-03.1 Configurar la tarifa de servicio ---------------- */
+export function TarifaServicioPage() {
+  const { tarifas, tarifaActual, cambiarTarifa, publicaciones } = useStore();
+  const toast = useToast();
+  const [valor, setValor] = useState(String(tarifaActual));
+  const [error, setError] = useState("");
+  const ejemplo = publicaciones.find((p) => p.id === 101)!;
+  const pct = Number(valor);
+  const c = cotizar(ejemplo, 3, Number.isFinite(pct) ? pct : tarifaActual);
+  const historial = [...tarifas].sort((a, b) => b.vigenteDesde.localeCompare(a.vigenteDesde));
+  return (
+    <Page req="RF-D-ADM-03.1 · HU-22 · CA-22.1">
+      <div className="page-head">
+        <div><h1>Tarifa de servicio</h1><p>Porcentaje que cobra la plataforma sobre el precio base menos el descuento. Va de 0 % a 30 %.</p></div>
+      </div>
+      <div className="detail-grid" style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 20, alignItems: "start" }}>
+        <section className="card stack">
+          <div className="card-title"><span className="ico"><Percent /></span><h3>Porcentaje vigente: {tarifaActual} %</h3></div>
+          <Field label="Nuevo porcentaje" error={error} hint="Se aplica a las cotizaciones nuevas. Las reservas confirmadas conservan su valor.">
+            <input className="input" type="number" min={0} max={30} step={0.5} value={valor} onChange={(e) => { setValor(e.target.value); setError(""); }} />
+          </Field>
+          <div className="row">
+            <button className="btn btn-primary right" onClick={() => {
+              const r = cambiarTarifa(valor.trim() === "" ? NaN : pct);
+              if (!r.ok) setError(r.error); else toast(`Tarifa de servicio actualizada a ${pct} %`);
+            }}>Guardar porcentaje</button>
+          </div>
+          <Alert tipo="info">
+            Ejemplo con «{ejemplo.titulo}», 3 noches: precio base {cop(c.precioBase)}, limpieza {cop(c.limpieza)},
+            tarifa de servicio {cop(c.tarifaServicio)}, total {cop(c.total)}.
+          </Alert>
+        </section>
+        <section className="card" style={{ padding: 0, overflow: "hidden" }}>
+          <h3 style={{ padding: "16px 18px 6px" }}>Historial</h3>
+          <table className="table">
+            <thead><tr><th>Porcentaje</th><th>Vigente desde</th></tr></thead>
+            <tbody>
+              {historial.map((t, i) => (
+                <tr key={t.vigenteDesde}>
+                  <td><b>{t.porcentaje} %</b>{i === 0 && <span className="badge badge-ACTIVA" style={{ marginLeft: 8 }}>VIGENTE</span>}</td>
+                  <td>{new Date(t.vigenteDesde).toLocaleString("es-CO", { dateStyle: "medium", timeStyle: "short" })}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
       </div>
     </Page>
   );

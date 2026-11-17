@@ -41,6 +41,7 @@ Todas usan la contraseña `Clave1234`. En la pantalla de ingreso hay botones par
 | ALO | Reporte de publicaciones (solo Administrador): periodo, estado, ciudad, tipo, reservas, ingresos estimados, demanda por ciudad y tipo, descarga PDF o Excel | `/admin/reportes/publicaciones` | RF-D-ADM-05.2, RF-D-ADM-05.1, HU-25, CA-25.1, CA-25.2 |
 | (RES) | Explorar alojamientos, huésped y visitante | `/explorar`, `/explorar-publico` | Búsqueda básica; la completa es del módulo RES |
 | (ADM) | Todas las publicaciones, revisar, bloquear | `/admin/...` | RF-D-ADM-01.1, para cerrar el ciclo de estados |
+| (ADM) | Tarifa de servicio: porcentaje vigente (0 % a 30 %) e historial | `/admin/tarifa` | RF-D-ADM-03.1, HU-22, CA-22.1 |
 | (ADM) | Registro de acciones (inicios de sesión, accesos negados, cambios de estado, descargas de reportes) | `/admin/registro` | HU-23, BPMN-07 |
 
 ## Roles y permisos
@@ -61,6 +62,21 @@ Si alguien entra a una ruta que no le corresponde, ve "No tienes permiso" y el i
 - Cada descarga queda en el registro de acciones con quién, fecha, hora, formato, periodo y número de registros.
 - Las activas del reporte de publicaciones coinciden con el tablero de "Todas las publicaciones" (CA-25.1).
 - En la vista publicada como artefacto el navegador bloquea las descargas; corriendo el proyecto o el HTML independiente sí descargan.
+
+## Correspondencia con el diagrama de clases y el modelo relacional
+
+| Clase / tabla | En el prototipo |
+|---|---|
+| Usuario | correo, nombre, teléfono, rol, estado, `fechaRegistro` y `aceptaDatosEn` (fecha y hora en que autorizó la Ley 1581). Sin ciudad, igual que en el diagrama. |
+| RestriccionUsuario | motivo, fecha de inicio y fecha de fin. Al ingresar, la cuenta restringida ve el motivo y hasta cuándo. |
+| TokenRecuperacion | creado, vence a los 20 minutos, un solo uso. |
+| Publicacion | mismos atributos y estados; operaciones enviar a revisión, aprobar, devolver, pausar, reactivar, bloquear y desbloquear. |
+| RevisionPublicacion | historial de moderación (APROBAR, DEVOLVER, PAUSAR, REACTIVAR, BLOQUEAR, DESBLOQUEAR) con observación, fecha y administrador. La observación de una devolución y el motivo de un bloqueo salen de aquí. |
+| ReglaAlojamiento | cada regla es un registro con `descripcion` y `orden`. |
+| ImagenPublicacion, Servicio, ServicioAdicional, PoliticaCancelacion | imágenes en orden, servicios incluidos, adicionales con precio y política Moderada con sus tramos. |
+| Reserva | fechas, número de huéspedes, estado, `total` y `tarifaServicio` fijados al confirmar. |
+| TarifaServicio | historial de porcentajes con `vigenteDesde`; 10 % inicial. El reporte usa el valor guardado en cada reserva, así un cambio no altera las confirmadas (CA-22.1). |
+| EventoAuditoria | acción, entidad, id de la entidad, detalle, resultado y fecha. La IP la llena el backend; en el prototipo queda vacía. |
 
 ## Estructura
 

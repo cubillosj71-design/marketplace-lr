@@ -1,5 +1,5 @@
 import {
-  CalendarDays, CheckCircle2, FileBarChart2, FileSpreadsheet, ChevronRight, ClipboardCheck, Compass, History, Home, KeyRound, LayoutList, LogOut,
+  CalendarDays, CheckCircle2, FileBarChart2, Percent, FileSpreadsheet, ChevronRight, ClipboardCheck, Compass, History, Home, KeyRound, LayoutList, LogOut,
   PlusCircle, RotateCcw, ShieldCheck, Star, UserRound,
 } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
@@ -64,6 +64,7 @@ function useNav(): { titulo: string; items: Item[] }[] {
         count: publicaciones.filter((p) => p.estado === "PENDIENTE_REVISION").length,
       },
       { to: "/admin/reportes/publicaciones", label: "Reporte de publicaciones", icon: FileSpreadsheet },
+      { to: "/admin/tarifa", label: "Tarifa de servicio", icon: Percent },
       { to: "/admin/registro", label: "Registro de acciones", icon: History },
     ],
   };
@@ -92,6 +93,7 @@ const MIGAS: [RegExp, string][] = [
   [/^\/admin\/revision/, "Pendientes de revisión"],
   [/^\/admin\/publicaciones/, "Todas las publicaciones"],
   [/^\/admin\/registro/, "Registro de acciones"],
+  [/^\/admin\/tarifa/, "Tarifa de servicio"],
   [/^\/admin\/reportes\/usuarios/, "Reporte de usuarios"],
   [/^\/admin\/reportes\/publicaciones/, "Reporte de publicaciones"],
 ];

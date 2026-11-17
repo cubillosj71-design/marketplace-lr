@@ -1,7 +1,7 @@
 import { Check, KeyRound, Minus, PowerOff, ShieldCheck, UserRound } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CIUDADES, ROL_TXT, fechaLarga, iniciales } from "../data";
+import { ROL_TXT, fechaLarga, iniciales } from "../data";
 import { Page } from "../layout";
 import { useStore, useToast } from "../store";
 import { Alert, Field, Modal } from "../ui";
@@ -12,13 +12,13 @@ export function Perfil() {
   const toast = useToast();
   const go = useNavigate();
   const u = usuario!;
-  const [f, setF] = useState({ nombre: u.nombre, telefono: u.telefono, ciudad: u.ciudad });
+  const [f, setF] = useState({ nombre: u.nombre, telefono: u.telefono });
   const [err, setErr] = useState<Record<string, string>>({});
   const [guardado, setGuardado] = useState(false);
   const [confirmar, setConfirmar] = useState(false);
   const pendientes = reservasPendientesDe(u);
   const esAdmin = u.rol === "ADMINISTRADOR";
-  const cambiado = f.nombre !== u.nombre || f.telefono !== u.telefono || f.ciudad !== u.ciudad;
+  const cambiado = f.nombre !== u.nombre || f.telefono !== u.telefono;
 
   const guardar = () => {
     const er: Record<string, string> = {};
@@ -56,16 +56,17 @@ export function Perfil() {
             <Field label="Teléfono" error={err.telefono}>
               <input className="input" value={f.telefono} onChange={(e) => setF({ ...f, telefono: e.target.value })} />
             </Field>
-            <Field label="Ciudad">
-              <select className="select" value={f.ciudad} onChange={(e) => setF({ ...f, ciudad: e.target.value })}>
-                <option value="">Selecciona tu ciudad</option>
-                {CIUDADES.map((c) => <option key={c}>{c}</option>)}
-              </select>
-            </Field>
             <Field label="Correo electrónico" hint="El correo identifica tu cuenta y no se puede cambiar.">
               <input className="input" value={u.correo} readOnly />
             </Field>
+            <Field label="Fecha de registro">
+              <input className="input" value={new Date(u.fechaRegistro + "T12:00:00").toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric" })} readOnly />
+            </Field>
           </div>
+          <p className="subtle" style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <ShieldCheck size={15} /> Autorizaste el tratamiento de tus datos personales (Ley 1581 de 2012) el{" "}
+            {new Date(u.aceptaDatosEn).toLocaleString("es-CO", { dateStyle: "long", timeStyle: "short" })}.
+          </p>
           <div className="row-between">
             <span className="subtle">El rol tampoco se cambia: cada cuenta tiene un único rol.</span>
             <button className="btn btn-primary" disabled={!cambiado} onClick={guardar}>Guardar cambios</button>
@@ -169,6 +170,7 @@ const MATRIZ: [string, boolean, boolean, boolean, boolean][] = [
   ["Aprobar, devolver o bloquear publicaciones", false, false, false, true],
   ["Modificar cualquier publicación", false, false, false, true],
   ["Consultar el registro de acciones", false, false, false, true],
+  ["Configurar la tarifa de servicio", false, false, false, true],
   ["Descargar reportes de usuarios y publicaciones (PDF o Excel)", false, false, false, true],
 ];
 

@@ -6,8 +6,9 @@ import { useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   CIUDADES, PALETA, POLITICA_MODERADA, SERVICIOS, TIPOS, cop, faltantesRevision, fechaLarga,
-  type Adicional, type EstadoPub, type Publicacion,
+  type Adicional, type EstadoPub, type Publicacion, type ReglaAlojamiento,
 } from "../data";
+import { HistorialRevisiones } from "./admin";
 import { Denegado, Page } from "../layout";
 import { useStore, useToast } from "../store";
 import { Alert, Badge, Field, ImageTile, Modal } from "../ui";
@@ -16,7 +17,7 @@ import { Alert, Badge, Field, ImageTile, Modal } from "../ui";
    CU-ALO-03 Consultar mis publicaciones
    ========================================================= */
 export function MisPublicaciones() {
-  const { usuario, publicaciones } = useStore();
+  const { usuario, publicaciones, ultimaRevision } = useStore();
   const go = useNavigate();
   const [q, setQ] = useState("");
   const [estado, setEstado] = useState<"" | EstadoPub>("");
@@ -26,7 +27,11 @@ export function MisPublicaciones() {
     (!q || (p.titulo + " " + p.ciudad).toLowerCase().includes(q.toLowerCase())) &&
     (!estado || p.estado === estado) && (!tipo || p.tipo === tipo));
   const n = (e: EstadoPub) => mias.filter((p) => p.estado === e).length;
-  const devueltas = mias.filter((p) => p.estado === "BORRADOR" && p.observacion);
+  // Devuelta = borrador cuya última revisión del administrador es DEVOLVER (RevisionPublicacion)
+  const devueltas = mias.flatMap((p) => {
+    const r = ultimaRevision(p.id);
+    return p.estado === "BORRADOR" && r?.accion === "DEVOLVER" ? [{ p, obs: r.observacion }] : [];
+  });
 
   const stats = [
     { label: "Activas", v: n("ACTIVA"), icon: CheckCircle2, bg: "#dcf3e4", fg: "#166534" },
@@ -51,9 +56,9 @@ export function MisPublicaciones() {
         ))}
       </div>
 
-      {devueltas.map((p) => (
+      {devueltas.map(({ p, obs }) => (
         <Alert key={p.id} tipo="info">
-          <b>{p.titulo}</b> fue devuelta por el administrador: «{p.observacion}»{" "}
+          <b>{p.titulo}</b> fue devuelta por el administrador: «{obs}»{" "}
           <Link to={`/publicaciones/${p.id}/editar`}>Corregir</Link>
         </Alert>
       ))}
@@ -108,7 +113,7 @@ export function MisPublicaciones() {
    ========================================================= */
 export function DetallePublicacion() {
   const { id } = useParams();
-  const { usuario, publicaciones, reservasConfirmadas, enviarARevision, cambiarEstado, usuarios } = useStore();
+  const { usuario, publicaciones, reservasConfirmadas, enviarARevision, cambiarEstado, usuarios, ultimaRevision } = useStore();
   const toast = useToast();
   const go = useNavigate();
   const [modal, setModal] = useState<null | "pausar" | "reactivar" | { faltan: string[] }>(null);
@@ -119,6 +124,7 @@ export function DetallePublicacion() {
     return <Denegado titulo="No puedes ver esta publicación" texto="Solo el anfitrión dueño o un administrador pueden abrirla." />;
 
   const reservas = reservasConfirmadas(p.id);
+  const ultima = ultimaRevision(p.id);
   const anfitrion = usuarios.find((u) => u.id === p.anfitrionId);
   const editable = ["BORRADOR", "ACTIVA", "PAUSADA"].includes(p.estado) || esAdmin;
   const volver = esAdmin ? "/admin/publicaciones" : "/publicaciones";
@@ -147,9 +153,9 @@ export function DetallePublicacion() {
         </div>
       </div>
 
-      {p.estado === "BORRADOR" && p.observacion && <Alert tipo="info"><b>Observación del administrador:</b> «{p.observacion}»</Alert>}
+      {p.estado === "BORRADOR" && ultima?.accion === "DEVOLVER" && <Alert tipo="info"><b>Observación del administrador:</b> «{ultima.observacion}»</Alert>}
       {p.estado === "PENDIENTE_REVISION" && <Alert tipo="warn">En revisión: el administrador la aprobará o la devolverá con observaciones. Mientras tanto no aparece en las búsquedas.</Alert>}
-      {p.estado === "BLOQUEADA" && <Alert tipo="error"><b>Bloqueada por moderación:</b> {p.motivoBloqueo} Solo un administrador puede desbloquearla.</Alert>}
+      {p.estado === "BLOQUEADA" && <Alert tipo="error"><b>Bloqueada por moderación:</b> {ultima?.accion === "BLOQUEAR" ? ultima.observacion : ""} Solo un administrador puede desbloquearla.</Alert>}
       {p.estado === "PAUSADA" && <Alert tipo="info">Pausada: no aparece en las búsquedas ni recibe reservas nuevas. Las reservas confirmadas se mantienen.</Alert>}
 
       <div className="card card-tight">
@@ -175,7 +181,9 @@ export function DetallePublicacion() {
         </section>
         <section className="card stack">
           <h3>Reglas y política</h3>
-          <p>{p.reglas || <span className="muted">Sin reglas</span>}</p>
+          {p.reglas.length
+            ? <ol className="reglas">{[...p.reglas].sort((a, b) => a.orden - b.orden).map((r) => <li key={r.orden}>{r.descripcion}</li>)}</ol>
+            : <span className="muted">Sin reglas</span>}
           <p className="muted">{p.ubicacion}</p>
           <div><span className="label">Política de cancelación: </span><b>{p.politica || "Sin elegir"}</b></div>
           {p.politica && <ul className="list-plain subtle">{POLITICA_MODERADA.map((t) => <li key={t.tramo}>{t.devolucion} · {t.tramo}</li>)}</ul>}
@@ -187,6 +195,8 @@ export function DetallePublicacion() {
           ) : <Alert tipo="warn">Falta al menos una imagen para enviar a revisión.</Alert>}
         </section>
       </div>
+
+      <section className="card"><HistorialRevisiones pubId={p.id} /></section>
 
       <section className="card stack">
         <div className="card-head" style={{ margin: 0 }}>
@@ -250,7 +260,7 @@ export function DetallePublicacion() {
 const vacia = (anfitrionId: number): Publicacion => ({
   id: 0, anfitrionId, titulo: "", descripcion: "", tipo: "", ciudad: "", ubicacion: "", capacidad: null,
   precioNoche: null, limpieza: null, descuentoPct: null, descuentoNoches: null, servicios: [], adicionales: [],
-  reglas: "", imagenes: [], politica: "", estado: "BORRADOR", bloqueos: [], actualizada: "",
+  reglas: [], imagenes: [], politica: "", estado: "BORRADOR", bloqueos: [], actualizada: "",
 });
 
 const num = (v: string) => (v.trim() === "" ? null : Number(v.replace(/\D/g, "")));
@@ -295,7 +305,9 @@ export function FormPublicacion() {
       if (validarPaso1().titulo || validarPaso1().capacidad) setPaso(1);
       return;
     }
-    const g = guardarPublicacion(p);
+    // Cada regla es un registro con su orden (ReglaAlojamiento); las vacías no se guardan
+    const reglas: ReglaAlojamiento[] = p.reglas.filter((r) => r.descripcion.trim()).map((r, i) => ({ descripcion: r.descripcion.trim(), orden: i + 1 }));
+    const g = guardarPublicacion({ ...p, reglas });
     if (!enviar) {
       toast(existente ? "Cambios guardados" : "Publicación guardada como BORRADOR");
       return go(`/publicaciones/${g.id}`);
@@ -383,9 +395,20 @@ export function FormPublicacion() {
           <Field label="Ubicación" hint="Dirección o referencia en texto.">
             <input className="input" placeholder="Ej. Vereda El Roble, a 5 min de la plaza" value={p.ubicacion} onChange={(e) => set("ubicacion", e.target.value)} />
           </Field>
-          <Field label="Reglas del alojamiento">
-            <textarea className="textarea" style={{ minHeight: 72 }} placeholder="Ej. No fumar. Sin fiestas. Silencio después de las 10 p. m." value={p.reglas} onChange={(e) => set("reglas", e.target.value)} />
-          </Field>
+          <div className="stack" style={{ gap: 8 }}>
+            <span className="label">Reglas del alojamiento <span className="subtle">(una por línea, en el orden en que se muestran)</span></span>
+            {p.reglas.map((r, i) => (
+              <div className="regla-row" key={i}>
+                <span className="regla-n">{i + 1}</span>
+                <input className="input" aria-label={`Regla ${i + 1}`} placeholder={["Ej. No fumar", "Ej. Sin fiestas", "Ej. Silencio después de las 10 p. m."][i] ?? "Escribe la regla"}
+                  value={r.descripcion} onChange={(e) => set("reglas", p.reglas.map((x, j) => j === i ? { ...x, descripcion: e.target.value } : x))} />
+                <button type="button" className="icon-btn" aria-label="Quitar regla" onClick={() => set("reglas", p.reglas.filter((_, j) => j !== i).map((x, j) => ({ ...x, orden: j + 1 })))}><Trash2 /></button>
+              </div>
+            ))}
+            <button type="button" className="link-btn" style={{ alignSelf: "flex-start" }} onClick={() => set("reglas", [...p.reglas, { descripcion: "", orden: p.reglas.length + 1 }])}>
+              + Agregar regla
+            </button>
+          </div>
           <div className="row">
             <Link className="btn btn-ghost" to="/publicaciones">Cancelar</Link>
             <button className="btn btn-secondary right" onClick={() => guardar(false)}>Guardar borrador</button>

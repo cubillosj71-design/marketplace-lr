@@ -95,7 +95,7 @@ function Detalle({ base, visitante }: { base: string; visitante: boolean }) {
             <div className="chips">{p.servicios.map((s) => <span key={s} className="svc"><Check />{s}</span>)}</div>
           </section>
           <section className="card stack">
-            <h3>Reglas del alojamiento</h3><p>{p.reglas}</p>
+            <h3>Reglas del alojamiento</h3><ol className="reglas">{[...p.reglas].sort((a, b) => a.orden - b.orden).map((r) => <li key={r.orden}>{r.descripcion}</li>)}</ol>
             <h3>Política de cancelación: Moderada</h3>
             <ul className="list-plain">{POLITICA_MODERADA.map((t) => <li key={t.tramo}><b style={{ width: 52 }}>{t.devolucion}</b>{t.tramo}</li>)}</ul>
           </section>
