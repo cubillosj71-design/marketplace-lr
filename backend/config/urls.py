@@ -12,7 +12,14 @@ def salud(request):
 
 SERVICIOS = ["identidad", "catalogo", "busqueda", "reservas", "resenas", "notificaciones", "auditoria", "reportes"]
 
-urlpatterns = [
-    path("admin/", admin.site.urls),
-    path("api/v1/salud", salud),
-] + [path(f"api/v1/{s}/", include(f"apps.{s}.urls")) for s in SERVICIOS]
+# Rutas de administración: prefijo /api/v1/admin y rol ADMINISTRADOR (sección 3.4)
+ADMIN = ["identidad", "catalogo", "reservas", "auditoria", "reportes"]
+
+urlpatterns = (
+    [
+        path("admin/", admin.site.urls),
+        path("api/v1/salud", salud),
+    ]
+    + [path(f"api/v1/{s}/", include(f"apps.{s}.urls")) for s in SERVICIOS]
+    + [path("api/v1/admin/", include((f"apps.{s}.urls_admin", f"admin-{s}"))) for s in ADMIN]
+)

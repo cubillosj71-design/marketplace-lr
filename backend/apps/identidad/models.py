@@ -9,8 +9,11 @@ campos password y last_login. No usa PermissionsMixin para no crear tablas
 extra de grupos y permisos: el acceso se decide por el rol.
 """
 
+from django.conf import settings
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
 from django.db import models
+from django.db.models import Q
+from django.utils import timezone
 
 
 class RolUsuario(models.TextChoices):
@@ -43,7 +46,8 @@ class Usuario(AbstractBaseUser):
     correo = models.EmailField(max_length=254, unique=True)
     nombre_completo = models.CharField(max_length=120)
     telefono = models.CharField(max_length=20)
-    ciudad = models.CharField(max_length=80, blank=True, null=True)
+    # Asociación opcional con el catálogo de ciudades (usuario.ciudad_id en el modelo relacional)
+    ciudad = models.ForeignKey("catalogo.Ciudad", on_delete=models.PROTECT, null=True, blank=True, related_name="+")
     rol = models.CharField(max_length=15, choices=RolUsuario.choices)
     estado = models.CharField(max_length=12, choices=EstadoCuenta.choices, default=EstadoCuenta.ACTIVA)
     acepta_datos_en = models.DateTimeField(help_text="Autorización de tratamiento de datos (Ley 1581)")
@@ -78,3 +82,45 @@ class Usuario(AbstractBaseUser):
 
     def has_module_perms(self, app_label) -> bool:
         return self.is_staff
+
+
+class RestriccionUsuario(models.Model):
+    """Restricción impuesta por un administrador (RF-D-ADM-02.1). El estado RESTRINGIDA de la cuenta
+    se deriva de la restricción vigente y se escribe en la misma transacción (DA-04)."""
+
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="restricciones")
+    administrador = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    motivo = models.TextField()
+    fecha_inicio = models.DateTimeField(default=timezone.now)
+    fecha_fin = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        db_table = "restriccion_usuario"
+        ordering = ["-fecha_inicio"]
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(fecha_fin__isnull=True) | Q(fecha_fin__gt=models.F("fecha_inicio")), name="restriccion_rango_valido"
+            ),
+        ]
+
+    def esta_vigente(self, ahora=None) -> bool:
+        ahora = ahora or timezone.now()
+        return self.fecha_inicio <= ahora and (self.fecha_fin is None or self.fecha_fin > ahora)
+
+
+class TokenRecuperacion(models.Model):
+    """Enlace de recuperación (RNF-P-SEG-03): se guarda solo el hash SHA-256, vence a los 20 minutos
+    y se usa una sola vez."""
+
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+")
+    token_hash = models.CharField(max_length=64, unique=True)
+    creado = models.DateTimeField(auto_now_add=True)
+    vence = models.DateTimeField()
+    usado_en = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        db_table = "token_recuperacion"
+
+    def es_valido(self, ahora=None) -> bool:
+        ahora = ahora or timezone.now()
+        return self.usado_en is None and ahora < self.vence

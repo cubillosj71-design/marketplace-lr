@@ -45,11 +45,13 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django.contrib.postgres",
     # Terceros
     "rest_framework",
     "rest_framework_simplejwt.token_blacklist",
     "corsheaders",
     # Servicios del negocio: una app por servicio (ADR-001)
+    "apps.comun",
     "apps.identidad",
     "apps.catalogo",
     "apps.busqueda",
@@ -157,8 +159,34 @@ PASSWORD_HASHERS = [
 ]
 
 REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": ["rest_framework_simplejwt.authentication.JWTAuthentication"],
+    # JWT que además revisa en cada petición si la cuenta sigue activa (ADR-005)
+    "DEFAULT_AUTHENTICATION_CLASSES": ["apps.comun.autenticacion.JWTConEstadoDeCuenta"],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
+    "EXCEPTION_HANDLER": "apps.comun.errores.manejar_excepcion",
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 50,
+}
+
+# Recuperación de contraseña (RNF-P-SEG-03): el enlace apunta a la aplicación web y vence en 20 minutos
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173")
+MINUTOS_ENLACE_RECUPERACION = 20
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "no-responder@alojamientoslr.co")
+# En desarrollo los correos se muestran en la consola; en producción se configura SMTP por variables de entorno
+EMAIL_BACKEND = os.environ.get(
+    "EMAIL_BACKEND",
+    "django.core.mail.backends.console.EmailBackend" if DEBUG else "django.core.mail.backends.smtp.EmailBackend",
+)
+
+# Reportes (ADR-009): periodo máximo de 12 meses
+MESES_MAXIMOS_REPORTE = 12
+
+# Logs estructurados en JSON (RNF-O-OPE-01)
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {"json": {"()": "apps.comun.logs.FormatoJSON"}},
+    "handlers": {"consola": {"class": "logging.StreamHandler", "formatter": "json"}},
+    "loggers": {"marketplace": {"handlers": ["consola"], "level": "INFO"}},
 }
 
 # JWT: acceso de 30 minutos, renovación de 24 horas y lista negra al cerrar sesión (ADR-005)
