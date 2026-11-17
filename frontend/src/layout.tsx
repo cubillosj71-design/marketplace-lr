@@ -1,5 +1,5 @@
 import {
-  CalendarDays, CheckCircle2, ChevronRight, ClipboardCheck, Compass, History, Home, KeyRound, LayoutList, LogOut,
+  CalendarDays, CheckCircle2, FileBarChart2, FileSpreadsheet, ChevronRight, ClipboardCheck, Compass, History, Home, KeyRound, LayoutList, LogOut,
   PlusCircle, RotateCcw, ShieldCheck, Star, UserRound,
 } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
@@ -63,12 +63,17 @@ function useNav(): { titulo: string; items: Item[] }[] {
         to: "/admin/revision", label: "Pendientes de revisión", icon: ClipboardCheck,
         count: publicaciones.filter((p) => p.estado === "PENDIENTE_REVISION").length,
       },
+      { to: "/admin/reportes/publicaciones", label: "Reporte de publicaciones", icon: FileSpreadsheet },
       { to: "/admin/registro", label: "Registro de acciones", icon: History },
     ],
   };
+  // El reporte de usuarios pertenece al módulo Usuarios y solo lo ve el Administrador
+  const usuariosItems = usuario.rol === "ADMINISTRADOR"
+    ? [...cuenta, { to: "/admin/reportes/usuarios", label: "Reporte de usuarios", icon: FileBarChart2 }]
+    : cuenta;
   return [
     { titulo: "Alojamientos", items: porRol[usuario.rol] },
-    { titulo: "Usuarios", items: cuenta },
+    { titulo: "Usuarios", items: usuariosItems },
   ];
 }
 
@@ -87,6 +92,8 @@ const MIGAS: [RegExp, string][] = [
   [/^\/admin\/revision/, "Pendientes de revisión"],
   [/^\/admin\/publicaciones/, "Todas las publicaciones"],
   [/^\/admin\/registro/, "Registro de acciones"],
+  [/^\/admin\/reportes\/usuarios/, "Reporte de usuarios"],
+  [/^\/admin\/reportes\/publicaciones/, "Reporte de publicaciones"],
 ];
 
 export function AppLayout() {
@@ -97,7 +104,7 @@ export function AppLayout() {
   const go = useNavigate();
   if (!usuario) return <Navigate to="/ingresar" replace />;
   const miga = MIGAS.find(([r]) => r.test(loc.pathname))?.[1] ?? "";
-  const seccion = loc.pathname.startsWith("/perfil") || loc.pathname.startsWith("/roles") ? "Usuarios" : "Alojamientos";
+  const seccion = loc.pathname.startsWith("/perfil") || loc.pathname.startsWith("/roles") || loc.pathname.startsWith("/admin/reportes/usuarios") ? "Usuarios" : "Alojamientos";
 
   const links = nav.flatMap((g) => g.items);
   const renderLink = (it: Item) => (

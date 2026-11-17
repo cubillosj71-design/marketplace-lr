@@ -169,6 +169,7 @@ const MATRIZ: [string, boolean, boolean, boolean, boolean][] = [
   ["Aprobar, devolver o bloquear publicaciones", false, false, false, true],
   ["Modificar cualquier publicación", false, false, false, true],
   ["Consultar el registro de acciones", false, false, false, true],
+  ["Descargar reportes de usuarios y publicaciones (PDF o Excel)", false, false, false, true],
 ];
 
 export function Roles() {

@@ -168,7 +168,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         d.usuarios.push({
           id: Math.max(...d.usuarios.map((u) => u.id)) + 1,
           nombre: nombre.trim(), correo: correo.trim(), telefono: telefono.trim(), ciudad: "",
-          rol, estado: "ACTIVA", clave,
+          rol, estado: "ACTIVA", clave, creado: hoy,
         });
         return d;
       });
@@ -233,6 +233,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         ...p,
         id: nueva ? Math.max(0, ...db.publicaciones.map((x) => x.id)) + 1 : p.id,
         actualizada: hoy,
+        creada: nueva ? hoy : (p.creada ?? actual?.creada),
       };
       upd((d) => {
         if (nueva) d.publicaciones.unshift(guardada);

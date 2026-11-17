@@ -15,6 +15,7 @@ export interface Usuario {
   rol: Rol;
   estado: EstadoCuenta;
   clave: string;
+  creado?: string; // fecha de registro AAAA-MM-DD
 }
 
 export interface Adicional { nombre: string; precio: number }
@@ -43,6 +44,7 @@ export interface Publicacion {
   motivoBloqueo?: string;
   bloqueos: string[]; // fechas AAAA-MM-DD marcadas como no disponibles por el anfitrión
   actualizada: string;
+  creada?: string; // fecha de creación AAAA-MM-DD
 }
 
 export interface Reserva {
@@ -86,12 +88,12 @@ const img = (n: number, nombres: string[]): Imagen[] =>
   nombres.map((nombre, i) => ({ id: `i${n}-${i}`, nombre, color: PALETA[(n + i) % PALETA.length] }));
 
 export const SEED_USUARIOS: Usuario[] = [
-  { id: 1, nombre: "Laura Gómez", correo: "anfitrion@correo.com", telefono: "310 555 0182", ciudad: "Bogotá", rol: "ANFITRION", estado: "ACTIVA", clave: "Clave1234" },
-  { id: 2, nombre: "Carlos Ruiz", correo: "huesped@correo.com", telefono: "315 222 4410", ciudad: "Medellín", rol: "HUESPED", estado: "ACTIVA", clave: "Clave1234" },
-  { id: 3, nombre: "Admin LR", correo: "admin@inversioneslr.com", telefono: "601 555 0100", ciudad: "Bogotá", rol: "ADMINISTRADOR", estado: "ACTIVA", clave: "Clave1234" },
-  { id: 4, nombre: "Pedro Lara", correo: "pedro@correo.com", telefono: "300 410 7788", ciudad: "Bogotá", rol: "ANFITRION", estado: "ACTIVA", clave: "Clave1234" },
-  { id: 5, nombre: "Sofía Mejía", correo: "sofia@correo.com", telefono: "320 118 9034", ciudad: "Medellín", rol: "ANFITRION", estado: "ACTIVA", clave: "Clave1234" },
-  { id: 6, nombre: "Andrés Silva", correo: "restringido@correo.com", telefono: "311 902 3321", ciudad: "Bogotá", rol: "ANFITRION", estado: "RESTRINGIDA", clave: "Clave1234" },
+  { id: 1, nombre: "Laura Gómez", correo: "anfitrion@correo.com", telefono: "310 555 0182", ciudad: "Bogotá", rol: "ANFITRION", estado: "ACTIVA", clave: "Clave1234", creado: "2026-03-14" },
+  { id: 2, nombre: "Carlos Ruiz", correo: "huesped@correo.com", telefono: "315 222 4410", ciudad: "Medellín", rol: "HUESPED", estado: "ACTIVA", clave: "Clave1234", creado: "2026-05-02" },
+  { id: 3, nombre: "Admin LR", correo: "admin@inversioneslr.com", telefono: "601 555 0100", ciudad: "Bogotá", rol: "ADMINISTRADOR", estado: "ACTIVA", clave: "Clave1234", creado: "2026-01-10" },
+  { id: 4, nombre: "Pedro Lara", correo: "pedro@correo.com", telefono: "300 410 7788", ciudad: "Bogotá", rol: "ANFITRION", estado: "ACTIVA", clave: "Clave1234", creado: "2026-07-21" },
+  { id: 5, nombre: "Sofía Mejía", correo: "sofia@correo.com", telefono: "320 118 9034", ciudad: "Medellín", rol: "ANFITRION", estado: "ACTIVA", clave: "Clave1234", creado: "2026-09-08" },
+  { id: 6, nombre: "Andrés Silva", correo: "restringido@correo.com", telefono: "311 902 3321", ciudad: "Bogotá", rol: "ANFITRION", estado: "RESTRINGIDA", clave: "Clave1234", creado: "2026-10-27" },
 ];
 
 const base = (p: Partial<Publicacion> & Pick<Publicacion, "id" | "anfitrionId" | "titulo" | "estado">): Publicacion => ({
@@ -116,7 +118,7 @@ const base = (p: Partial<Publicacion> & Pick<Publicacion, "id" | "anfitrionId" |
 
 export const SEED_PUBLICACIONES: Publicacion[] = [
   base({
-    id: 101, anfitrionId: 1, estado: "ACTIVA",
+    id: 101, creada: "2026-04-02", anfitrionId: 1, estado: "ACTIVA",
     titulo: "Apartamento con vista a Monserrate", tipo: "Apartamento", ciudad: "Bogotá",
     ubicacion: "La Candelaria, a 3 cuadras del Chorro de Quevedo",
     descripcion: "Apartamento luminoso de dos habitaciones con vista a los cerros, cocina equipada y balcón.",
@@ -128,7 +130,7 @@ export const SEED_PUBLICACIONES: Publicacion[] = [
     bloqueos: ["2026-12-12", "2026-12-13", "2026-12-14"],
   }),
   base({
-    id: 102, anfitrionId: 1, estado: "PAUSADA",
+    id: 102, creada: "2026-05-18", anfitrionId: 1, estado: "PAUSADA",
     titulo: "Cabaña El Roble", tipo: "Cabaña", ciudad: "Guatavita", ubicacion: "Vereda El Roble, km 4",
     descripcion: "Cabaña de madera junto al embalse, con chimenea y zona de fogata.",
     capacidad: 5, precioNoche: 310000, limpieza: 60000,
@@ -136,7 +138,7 @@ export const SEED_PUBLICACIONES: Publicacion[] = [
     imagenes: img(2, ["Fachada", "Chimenea"]),
   }),
   base({
-    id: 103, anfitrionId: 1, estado: "PENDIENTE_REVISION",
+    id: 103, creada: "2026-06-30", anfitrionId: 1, estado: "PENDIENTE_REVISION",
     titulo: "Habitación cerca al centro", tipo: "Habitación", ciudad: "Bogotá", ubicacion: "Calle 19 con carrera 4",
     descripcion: "Habitación privada con baño, a 10 minutos del centro histórico. Incluye Wi-Fi y agua caliente.",
     capacidad: 2, precioNoche: 95000, limpieza: 20000,
@@ -144,7 +146,7 @@ export const SEED_PUBLICACIONES: Publicacion[] = [
     imagenes: img(3, ["Habitación", "Baño", "Escritorio", "Edificio"]),
   }),
   base({
-    id: 104, anfitrionId: 1, estado: "BORRADOR",
+    id: 104, creada: "2026-08-12", anfitrionId: 1, estado: "BORRADOR",
     titulo: "Casa familiar en Villa de Leyva", tipo: "Casa", ciudad: "Villa de Leyva",
     ubicacion: "Vereda El Roble, a 5 min de la plaza",
     descripcion: "Casa de dos pisos a 5 minutos de la plaza principal, con patio y zona BBQ.",
@@ -154,38 +156,38 @@ export const SEED_PUBLICACIONES: Publicacion[] = [
     observacion: "Las fotos no corresponden al alojamiento. Sube fotos reales de la casa.",
   }),
   base({
-    id: 105, anfitrionId: 1, estado: "BLOQUEADA",
+    id: 105, creada: "2026-10-05", anfitrionId: 1, estado: "BLOQUEADA",
     titulo: "Loft Chapinero", tipo: "Apartamento", ciudad: "Bogotá", ubicacion: "Chapinero Alto",
     descripcion: "Loft moderno con terraza.", capacidad: 2, precioNoche: 180000, limpieza: 40000,
     servicios: ["Wi-Fi", "TV"], imagenes: img(5, ["Loft"]),
     motivoBloqueo: "La dirección publicada no coincide con la del alojamiento.",
   }),
   base({
-    id: 201, anfitrionId: 4, estado: "PENDIENTE_REVISION",
+    id: 201, creada: "2026-08-01", anfitrionId: 4, estado: "PENDIENTE_REVISION",
     titulo: "Estudio Usaquén", tipo: "Apartamento", ciudad: "Bogotá", ubicacion: "Usaquén, cerca del parque",
     descripcion: "Estudio para dos con cocineta.", capacidad: 2, precioNoche: 150000, limpieza: 30000,
     servicios: ["Wi-Fi", "Cocina"], imagenes: img(6, ["Estudio", "Cocineta"]),
   }),
   base({
-    id: 301, anfitrionId: 5, estado: "ACTIVA",
+    id: 301, creada: "2026-09-15", anfitrionId: 5, estado: "ACTIVA",
     titulo: "Cabaña del Lago", tipo: "Cabaña", ciudad: "Guatapé", ubicacion: "Orilla del embalse, sector La Piedra",
     descripcion: "Cabaña con muelle propio y kayak.", capacidad: 5, precioNoche: 280000, limpieza: 60000,
     servicios: ["Wi-Fi", "Parqueadero", "Cocina"], imagenes: img(7, ["Muelle", "Sala"]),
   }),
   base({
-    id: 302, anfitrionId: 5, estado: "ACTIVA",
+    id: 302, creada: "2026-10-01", anfitrionId: 5, estado: "ACTIVA",
     titulo: "Casa campestre La Ceja", tipo: "Casa", ciudad: "La Ceja", ubicacion: "Vía La Ceja – La Unión, km 2",
     descripcion: "Casa campestre con jardín amplio y BBQ.", capacidad: 8, precioNoche: 390000, limpieza: 80000,
     servicios: ["Wi-Fi", "Parqueadero", "Cocina", "Piscina"], imagenes: img(8, ["Jardín", "Piscina"]),
   }),
   base({
-    id: 303, anfitrionId: 5, estado: "ACTIVA",
+    id: 303, creada: "2026-11-03", anfitrionId: 5, estado: "ACTIVA",
     titulo: "Habitación Laureles", tipo: "Habitación", ciudad: "Medellín", ubicacion: "Laureles, circular 1",
     descripcion: "Habitación privada en casa familiar.", capacidad: 2, precioNoche: 110000, limpieza: 20000,
     servicios: ["Wi-Fi", "Agua caliente"], imagenes: img(9, ["Habitación"]),
   }),
   base({
-    id: 304, anfitrionId: 6, estado: "ACTIVA",
+    id: 304, creada: "2026-10-28", anfitrionId: 6, estado: "ACTIVA",
     titulo: "Apartamento El Poblado", tipo: "Apartamento", ciudad: "Medellín", ubicacion: "El Poblado",
     descripcion: "No aparece en búsquedas porque la cuenta del anfitrión está restringida.",
     capacidad: 3, precioNoche: 240000, limpieza: 40000, servicios: ["Wi-Fi"], imagenes: img(10, ["Sala"]),

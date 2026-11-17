@@ -403,3 +403,24 @@ table.table { width: 100%; border-collapse: collapse; font-size: 14px; }
   .day small { display: none; }
   .req-tag { padding: 0 16px 16px; }
 }
+
+/* ---------- reportes ---------- */
+.report-filtros { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.report-filtros-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.page-head .btn svg { margin-right: 2px; }
+@media (max-width: 900px) {
+  .report-filtros, .report-filtros-5 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+  .report-filtros, .report-filtros-5 { grid-template-columns: 1fr; }
+  .page-head .row { width: 100%; }
+  .page-head .row .btn { flex: 1; }
+}
+.cell-2 b, .cell-2 .subtle { display: block; }
+.cell-2 .subtle { margin-top: 2px; }
+.stat > div { min-width: 0; }
+@media (max-width: 560px) {
+  .stat { gap: 10px; }
+  .stat .ico { width: 36px; height: 36px; }
+  .stat b { font-size: 20px; overflow-wrap: anywhere; }
+}
