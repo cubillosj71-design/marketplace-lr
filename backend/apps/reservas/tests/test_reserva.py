@@ -43,7 +43,7 @@ def test_ca_13_1_reserva_confirmada_y_noches_ocupadas(cotizacion, cliente, dias)
     assert reserva["pagos"][0]["estado"] == "APROBADO" and reserva["pagos"][0]["tipo"] == "COBRO"
     r_db = Reserva().objects.get(pk=reserva["id"])
     assert r_db.politica_id is not None and r_db.cotizacion_id == cotizacion.cot["id"]
-    assert Pago().objects.get().reserva_id == r_db.id
+    assert Pago().objects.get(cotizacion_id=cotizacion.cot["id"]).reserva_id == r_db.id
     noches = cliente.get(f"/api/v1/busqueda/publicaciones/{cotizacion.pid}", {"desde": dias(29), "hasta": dias(35)}).json()
     assert noches["disponibilidad"]["noches_no_disponibles"] == [dias(30).isoformat(), dias(31).isoformat(), dias(32).isoformat()]
     assert auditoria.consultar(accion="ReservaConfirmada").filter(entidad_id=reserva["id"]).exists()
@@ -68,7 +68,7 @@ def test_ca_13_3_pago_rechazado_no_crea_la_reserva(cotizacion):
     r = _reservar(cotizacion, medio="rechazar")
     assert r.status_code == 402 and r.json()["estado_pago"] == "RECHAZADO" and "rechaz" in r.json()["detalle"]
     assert not Reserva().objects.filter(cotizacion_id=cotizacion.cot["id"]).exists()
-    assert not Pago().objects.exists()
+    assert not Pago().objects.filter(cotizacion_id=cotizacion.cot["id"]).exists()
     intento = auditoria.consultar(accion="ReservaRechazada").get()
     assert intento.exitoso is False and intento.actor_id == cotizacion.usuario["id"]
     assert _reservar(cotizacion).status_code == 201  # con otro medio sí reserva
@@ -84,11 +84,12 @@ def test_ca_13_4_doble_clic_crea_una_sola_reserva(cotizacion):
 
 def test_rnf_p_fia_02_veinte_envios_de_la_misma_solicitud(cotizacion):
     clave = uuid.uuid4()
+    antes = Reserva().objects.count()
     respuestas = [_reservar(cotizacion, clave) for _ in range(20)]
     assert [r.status_code for r in respuestas].count(201) == 1
     assert {r.json()["id"] for r in respuestas} == {respuestas[0].json()["id"]}
-    assert Reserva().objects.count() == 4  # 3 de la demo + 1
-    assert Pago().objects.count() == 1  # se cobró una sola vez
+    assert Reserva().objects.count() == antes + 1
+    assert Pago().objects.filter(cotizacion_id=cotizacion.cot["id"]).count() == 1  # se cobró una sola vez
 
 
 def test_rnf_p_fia_03_falla_a_la_mitad_no_deja_registros(cotizacion, monkeypatch):
@@ -99,13 +100,14 @@ def test_rnf_p_fia_03_falla_a_la_mitad_no_deja_registros(cotizacion, monkeypatch
         raise RuntimeError("Falla después del pago")
 
     monkeypatch.setattr(services, "publicar", fallar)
+    confirmadas, aprobados = auditoria.consultar(accion="ReservaConfirmada").count(), auditoria.consultar(accion="PagoAprobado").count()
     with pytest.raises(RuntimeError):
         services.reservar(apps.get_model("identidad", "Usuario").objects.get(pk=cotizacion.usuario["id"]),
                           cotizacion.cot["id"], uuid.uuid4(), "tarjeta")
     assert not Reserva().objects.filter(cotizacion_id=cotizacion.cot["id"]).exists()
-    assert not Pago().objects.exists()
-    assert not auditoria.consultar(accion="ReservaConfirmada").exists()
-    assert not auditoria.consultar(accion="PagoAprobado").exists()
+    assert not Pago().objects.filter(cotizacion_id=cotizacion.cot["id"]).exists()
+    assert auditoria.consultar(accion="ReservaConfirmada").count() == confirmadas
+    assert auditoria.consultar(accion="PagoAprobado").count() == aprobados
 
 
 def test_rnf_p_fia_03_falla_de_la_pasarela_no_deja_registros(cotizacion, monkeypatch):
@@ -117,7 +119,8 @@ def test_rnf_p_fia_03_falla_de_la_pasarela_no_deja_registros(cotizacion, monkeyp
     monkeypatch.setattr(AdaptadorSimulado, "cobrar", caida)
     r = _reservar(cotizacion)
     assert r.status_code == 500
-    assert not Reserva().objects.filter(cotizacion_id=cotizacion.cot["id"]).exists() and not Pago().objects.exists()
+    assert not Reserva().objects.filter(cotizacion_id=cotizacion.cot["id"]).exists()
+    assert not Pago().objects.filter(cotizacion_id=cotizacion.cot["id"]).exists()
     assert auditoria.consultar(accion="ErrorOperacion", exitoso=False).exists()
 
 
@@ -136,7 +139,7 @@ def test_fechas_ocupadas_al_reservar_responde_409(cotizacion, entrar, dias):
                                         {"fecha_inicio": dias(31).isoformat(), "fecha_fin": dias(32).isoformat(), "tipo": "NO_DISPONIBLE"}, format="json")
     r = _reservar(cotizacion)
     assert r.status_code == 409 and r.json()["detalle"] == "Las fechas ya no están disponibles."
-    assert not Pago().objects.exists()
+    assert not Pago().objects.filter(cotizacion_id=cotizacion.cot["id"]).exists()
 
 
 def test_la_misma_cotizacion_no_se_reserva_dos_veces_con_otra_clave(cotizacion):
@@ -196,7 +199,7 @@ def test_reserva_no_se_modifica_ni_se_borra(cotizacion, sql):
 
 
 def test_pago_solo_cambia_estado_y_referencia(cotizacion):
-    _reservar(cotizacion)
-    _sql_ok("UPDATE pago SET estado = 'EN_VERIFICACION', referencia_externa = 'pi_123'")
+    rid = _reservar(cotizacion).json()["id"]
+    _sql_ok("UPDATE pago SET estado = 'EN_VERIFICACION', referencia_externa = 'pi_123' WHERE reserva_id = %s", [rid])
     for sql in ("UPDATE pago SET monto = monto + 1", "UPDATE pago SET reserva_id = NULL", "DELETE FROM pago", "TRUNCATE pago CASCADE"):
         _sql_falla(sql)

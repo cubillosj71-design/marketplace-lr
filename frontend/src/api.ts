@@ -238,3 +238,79 @@ export const notificacionesApi = {
   marcarLeida: (id: number) => api.post<NotificacionApi>(`/notificaciones/${id}/leida`),
   marcarTodas: () => api.post<{ marcadas: number }>("/notificaciones/leidas"),
 };
+
+/* ---------------- Administración (MOD-09 y moderación, HU-19 a HU-25) ---------------- */
+
+export interface PublicacionAdmin {
+  id: number; anfitrion: number; titulo: string; ciudad: number | null; ciudad_nombre: string | null;
+  tipo_alojamiento: number | null; tipo_nombre: string | null; precio_noche: string | null;
+  estado: "BORRADOR" | "PENDIENTE_REVISION" | "ACTIVA" | "PAUSADA" | "BLOQUEADA"; actualizada: string;
+}
+
+export interface PublicacionCompleta extends PublicacionAdmin {
+  descripcion: string; ubicacion_textual: string; capacidad: number | null; tarifa_limpieza: string | null;
+  descuento_porcentaje: string | null; descuento_min_noches: number | null; politica_nombre: string | null;
+  servicios: ItemCatalogo[]; servicios_adicionales: { id: number; nombre: string; precio: string }[];
+  reglas: { descripcion: string; orden: number }[]; imagenes: { ruta: string; orden: number }[];
+  revisiones: { accion: string; observacion: string | null; fecha: string; administrador: number }[]; faltantes: string[];
+}
+
+export interface UsuarioAdmin extends UsuarioApi { motivo_restriccion: string | null; restriccion_hasta: string | null }
+
+export interface EventoAuditoriaApi {
+  id: number; fecha: string; actor_id: number | null; actor_nombre: string | null; actor_correo: string | null; actor_rol: string | null;
+  accion: string; entidad: string | null; entidad_id: number | null; exitoso: boolean; detalle: Record<string, unknown> | null; ip: string | null;
+}
+
+export interface TableroApi {
+  desde: string; hasta: string; usuarios_por_rol: Record<string, number>; publicaciones_activas: number;
+  reservas_por_estado: Record<string, number>; reservas_total: number; ingresos: { bruto: string; plataforma: string };
+  top_ciudades: { ciudad: string; reservas: number; monto_bruto: string }[];
+}
+
+type Pagina<T> = { count: number; next: string | null; previous: string | null; results: T[] };
+
+/** Recorre todas las páginas de una lista paginada de DRF. */
+async function todas<T>(ruta: string, params: Record<string, unknown>): Promise<T[]> {
+  const salida: T[] = [];
+  for (let page = 1; ; page++) {
+    const { data } = await api.get<Pagina<T>>(ruta, { params: { ...params, page } });
+    salida.push(...data.results);
+    if (!data.next) return salida;
+  }
+}
+
+export const adminApi = {
+  publicaciones: (estado?: string) => todas<PublicacionAdmin>("/admin/publicaciones", estado ? { estado } : {}),
+  publicacion: (id: number) => api.get<PublicacionCompleta>(`/catalogo/publicaciones/${id}`),
+  revisar: (id: number, accion: "APROBAR" | "DEVOLVER", observacion?: string) =>
+    api.post<PublicacionCompleta>(`/admin/publicaciones/${id}/revision`, { accion, observacion }),
+  bloquear: (id: number, motivo: string) => api.post<PublicacionCompleta>(`/admin/publicaciones/${id}/bloqueo`, { motivo }),
+  desbloquear: (id: number) => api.delete<PublicacionCompleta>(`/admin/publicaciones/${id}/bloqueo`),
+  pausar: (id: number) => api.post<PublicacionCompleta>(`/catalogo/publicaciones/${id}/pausar`),
+  reactivar: (id: number) => api.post<PublicacionCompleta>(`/catalogo/publicaciones/${id}/reactivar`),
+  usuarios: (rol?: string, q?: string) => api.get<UsuarioAdmin[]>("/admin/usuarios", { params: { rol: rol || undefined, q: q || undefined } }),
+  restringir: (id: number, motivo: string, fecha_fin?: string | null) =>
+    api.post(`/admin/usuarios/${id}/restriccion`, { motivo, ...(fecha_fin ? { fecha_fin } : {}) }),
+  quitarRestriccion: (id: number) => api.delete(`/admin/usuarios/${id}/restriccion`),
+  tarifa: () => api.get<{ porcentaje: string; historial: { porcentaje: string; vigente_desde: string; administrador: number }[] }>("/admin/tarifa-servicio"),
+  cambiarTarifa: (porcentaje: string) => api.put<{ porcentaje: string; vigente_desde: string }>("/admin/tarifa-servicio", { porcentaje }),
+  auditoria: (f: { usuario?: number; tipo?: string; desde?: string; hasta?: string; page?: number }) =>
+    api.get<Pagina<EventoAuditoriaApi> & { tipos: { clave: string; nombre: string }[] }>("/admin/auditoria", { params: f }),
+  tablero: (desde: string, hasta: string) => api.get<TableroApi>("/admin/tablero", { params: { desde, hasta } }),
+  /** RF-D-ADM-05.2: el servidor genera el archivo (ADR-009). Devuelve el blob y el nombre de Content-Disposition. */
+  async reporte(tipo: string, params: Record<string, string | undefined>) {
+    try {
+      const r = await api.get<Blob>(`/admin/reportes/${tipo}`, { params, responseType: "blob" });
+      const disp = String(r.headers["content-disposition"] ?? "");
+      const nombre = /filename="?([^";]+)"?/.exec(disp)?.[1] ?? `reporte-${tipo}.${params.formato ?? "pdf"}`;
+      return { blob: r.data, nombre };
+    } catch (e) {
+      // Con responseType blob, el error JSON de la API también llega como Blob: se lee para mostrar el detalle
+      if (isAxiosError(e) && e.response?.data instanceof Blob) {
+        try { e.response.data = JSON.parse(await e.response.data.text()); } catch { /* no era JSON */ }
+      }
+      throw e;
+    }
+  },
+};

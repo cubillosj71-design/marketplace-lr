@@ -83,6 +83,21 @@ def restriccion_vigente(usuario_id: int) -> RestriccionUsuario | None:
     return _vigentes().filter(usuario_id=usuario_id).first()
 
 
+def usuarios_para_admin(rol: str | None = None, q: str | None = None) -> list[dict]:
+    """HU-21: cuentas para el administrador, con activa, restringida y el motivo de la restricción vigente."""
+    qs = Usuario.objects.all().order_by("nombre_completo", "id")
+    if rol:
+        qs = qs.filter(rol=rol)
+    if q and q.strip():
+        qs = qs.filter(Q(nombre_completo__icontains=q.strip()) | Q(correo__icontains=q.strip()))
+    vigentes = {r.usuario_id: r for r in _vigentes().filter(usuario__in=qs)}
+    return [{
+        **_dict(u, u.id in vigentes),
+        "motivo_restriccion": vigentes[u.id].motivo if u.id in vigentes else None,
+        "restriccion_hasta": vigentes[u.id].fecha_fin if u.id in vigentes else None,
+    } for u in qs]
+
+
 # ---------------------------------------------------------------- CU-USU-01 Registrarse
 
 def registrar(*, nombre_completo, correo, telefono, password, rol, acepta_datos, ciudad=None, ip=None) -> Usuario:

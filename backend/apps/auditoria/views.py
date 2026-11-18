@@ -12,6 +12,9 @@ class EventoSerializer(serializers.Serializer):
     id = serializers.IntegerField()
     fecha = serializers.DateTimeField()
     actor_id = serializers.IntegerField(allow_null=True)
+    actor_nombre = serializers.CharField(source="actor.nombre_completo", default=None)
+    actor_correo = serializers.CharField(source="actor.correo", default=None)
+    actor_rol = serializers.CharField(source="actor.rol", default=None)
     accion = serializers.CharField()
     entidad = serializers.CharField(allow_null=True)
     entidad_id = serializers.IntegerField(allow_null=True)
@@ -22,6 +25,7 @@ class EventoSerializer(serializers.Serializer):
 
 class FiltrosSerializer(serializers.Serializer):
     usuario = serializers.IntegerField(required=False)  # actor_id
+    tipo = serializers.ChoiceField(choices=list(services.TIPOS_ACCION), required=False)
     accion = serializers.CharField(required=False)
     exitoso = serializers.BooleanField(required=False, allow_null=True, default=None)
     desde = serializers.DateField(required=False)
@@ -29,7 +33,9 @@ class FiltrosSerializer(serializers.Serializer):
 
 
 class AuditoriaAdmin(ListAPIView):
-    """GET /admin/auditoria?usuario&accion&desde&hasta (RF-D-ADM-04.1, CA-23.1)."""
+    """GET /admin/auditoria?usuario&tipo&accion&desde&hasta (RF-D-ADM-04.1, CA-23.1, CA-23.3).
+
+    Devuelve la página de eventos y, en "tipos", los tipos de acción disponibles para el filtro."""
 
     permission_classes = [EsAdministrador]
     serializer_class = EventoSerializer
@@ -39,6 +45,11 @@ class AuditoriaAdmin(ListAPIView):
         f.is_valid(raise_exception=True)
         d = f.validated_data
         return services.consultar(
-            actor_id=d.get("usuario"), accion=d.get("accion"), exitoso=d.get("exitoso"),
+            actor_id=d.get("usuario"), tipo=d.get("tipo"), accion=d.get("accion"), exitoso=d.get("exitoso"),
             desde=d.get("desde"), hasta=d.get("hasta"),
         )
+
+    def list(self, request, *args, **kwargs):
+        respuesta = super().list(request, *args, **kwargs)
+        respuesta.data["tipos"] = services.tipos_accion()
+        return respuesta

@@ -12,6 +12,8 @@ from django.contrib.postgres.fields import DateRangeField, RangeOperators
 from django.db import models
 from django.db.models import F, Func, Q, Value
 
+from apps.comun import reloj
+
 
 class EstadoReserva(models.TextChoices):
     CONFIRMADA = "CONFIRMADA", "Confirmada"
@@ -71,7 +73,7 @@ class Cotizacion(models.Model):
     tarifa_servicio = models.DecimalField(max_digits=12, decimal_places=2)
     total_adicionales = models.DecimalField(max_digits=12, decimal_places=2)
     total = models.DecimalField(max_digits=12, decimal_places=2)
-    creada = models.DateTimeField(auto_now_add=True)
+    creada = models.DateTimeField(default=reloj.ahora)  # reloj inyectable: los reportes cuentan por fecha de creación
     vence = models.DateTimeField()
 
     class Meta:
@@ -107,7 +109,7 @@ class Reserva(models.Model):
     total = models.DecimalField(max_digits=12, decimal_places=2)
     estado = models.CharField(max_length=12, choices=EstadoReserva.choices, default=EstadoReserva.CONFIRMADA)
     clave_idempotencia = models.UUIDField(unique=True)
-    creada = models.DateTimeField(auto_now_add=True)
+    creada = models.DateTimeField(default=reloj.ahora)  # reloj inyectable: los reportes cuentan por fecha de creación
     actualizada = models.DateTimeField(auto_now=True)
 
     class Meta:

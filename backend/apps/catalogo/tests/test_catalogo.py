@@ -92,7 +92,8 @@ def test_ca_08_pausar_y_reactivar_sin_tocar_reservas(demo, entrar):
     pid = _id("Apartamento con vista a Monserrate")
     c = entrar("anfitrion@correo.com")
     assert c.post(f"{BASE}/publicaciones/{pid}/pausar").json()["estado"] == "PAUSADA"
-    assert len(reservas.reservas_pendientes(c.usuario["id"], True)) == 2  # CA-08.4
+    # CA-08.4: pausar no toca las reservas (Monserrate tiene 2 CONFIRMADAS y Loft Chapinero 1 EN_REVISION en la demo)
+    assert len(reservas.reservas_pendientes(c.usuario["id"], True)) == 3
     assert c.post(f"{BASE}/publicaciones/{pid}/reactivar").json()["estado"] == "ACTIVA"
     assert c.post(f"{BASE}/publicaciones/{_id('Habitación cerca al centro')}/pausar").status_code == 409
 

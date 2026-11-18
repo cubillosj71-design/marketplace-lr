@@ -70,7 +70,7 @@ def test_ca_15_5_desde_el_dia_de_llegada_no_se_cancela(reserva_740, entrar, relo
     r = _cancelar(entrar, reserva_740["id"])
     assert r.status_code == 409 and "llegada" in r.json()["detalle"]
     assert Reserva().objects.get(pk=reserva_740["id"]).estado == "CONFIRMADA"
-    assert not Cancelacion().objects.exists()
+    assert not Cancelacion().objects.filter(reserva_id=reserva_740["id"]).exists()
 
 
 def test_ca_15_3_el_registro_muestra_quien_cuando_motivo_y_valor(reserva_740, entrar, reloj):

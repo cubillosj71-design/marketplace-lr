@@ -95,13 +95,15 @@ Registro, sesión (`usuario`) y perfil devuelven:
 | Reservas | `GET y PUT /admin/tarifa-servicio` | Administrador | RF-D-ADM-03.1 |
 | Notificaciones | `GET /notificaciones` · `POST /notificaciones/{id}/leida` · `POST /notificaciones/leidas` | Con sesión | RF-D-RES-04.1 |
 | Interno | `POST /interno/tareas/diarias` (encabezado `X-Token-Tareas`) | Tarea programada | RF-D-RES-02.3, CA-20.5 |
-| Auditoría | `GET /admin/auditoria?usuario&accion&desde&hasta` (opcional `exitoso`) | Administrador | RF-D-ADM-04.1, CA-23.1 |
+| Identidad | `GET /admin/usuarios?rol&q` | Administrador | RF-D-ADM-02.1, HU-21 |
+| Auditoría | `GET /admin/auditoria?usuario&tipo&accion&desde&hasta` (opcional `exitoso`) | Administrador | RF-D-ADM-04.1, CA-23.1, CA-23.3 |
 | Reportes | `GET /admin/tablero?desde&hasta` | Administrador | RF-D-ADM-05.1 |
 | Reportes | `GET /admin/reportes/{tipo}?formato=pdf\|xlsx&desde&hasta` | Administrador | RF-D-ADM-05.2 |
 
 Tipos de reporte: `usuarios` (filtros `rol` y `estado` = ACTIVA, DESACTIVADA o RESTRINGIDA, derivado de `activa` y de
-la restricción vigente), `publicaciones` (filtros `estado`, `ciudad`, `tipo`),
-`reservas`, `ingresos` y `demanda`. El periodo máximo es de 12 meses (ADR-009); sin fechas se usa el año en curso.
+la restricción vigente), `publicaciones` (filtros `estado`, y `ciudad` y `tipo` por nombre), `reservas`, `ingresos` y
+`demanda`. El periodo máximo es de 12 meses (ADR-009) y, si `desde > hasta`, responde 400. Sin fechas se usa el año
+en curso. Ver la sección "Tablero y reportes".
 
 Fuera de la tabla 3.4, el backend agrega tres rutas que el frontend necesita: `GET /catalogo/publicaciones/{id}`,
 `GET /admin/publicaciones` y `GET /identidad/recuperacion/{token}` (estado del enlace). El cambio de contraseña
@@ -110,10 +112,10 @@ con sesión iniciada va en `PATCH /identidad/perfil` con `password_actual` y `pa
 ## Decisiones de implementación
 
 - **Fronteras entre servicios (ADR-001).** Cada servicio expone `services.py`; nadie importa los modelos de otro.
-  `lint-imports` verifica 15 reglas, entre ellas que Catálogo no depende de Reservas, Identidad solo consulta a
+  `lint-imports` verifica 16 reglas, entre ellas que Catálogo no depende de Reservas, Identidad solo consulta a
   Reservas (sección 3.3), Auditoría no importa ninguna otra app salvo `apps.comun` (C4 nivel 3, vista b), Búsqueda
-  solo lee vistas y `services` (MOD-03), Pagos no depende de Reservas y Notificaciones no importa ninguna otra app
-  de negocio (MOD-07: todo le llega en los eventos).
+  solo lee vistas y `services` (MOD-03), Pagos no depende de Reservas, Notificaciones no importa ninguna otra app de
+  negocio (MOD-07: todo le llega en los eventos) y Reportes solo lee vistas (MOD-09: ninguna otra app de negocio).
 - **Eventos de dominio (ADR-007, C4 nivel 3).** `apps/comun/eventos.publicar()` se usa solo para los eventos de
   dominio del diagrama: `PublicacionAprobada`, `PublicacionDevuelta`, `PublicacionBloqueada`,
   `PublicacionDesbloqueada`, `PublicacionPausada`, `PublicacionReactivada`, `ReservaConfirmada`, `ReservaCancelada`,
@@ -149,8 +151,8 @@ con sesión iniciada va en `PATCH /identidad/perfil` con `password_actual` y `pa
   MVP no envía correos (AMB-08, AMB-12), la respuesta trae `enlace` para mostrarlo en pantalla, también en producción
   (CA-03.1). Con un correo no registrado la respuesta es igual, pero sin `enlace`. Pedir un enlace nuevo anula los
   anteriores sin usar.
-- **Reportes (ADR-009).** ReportLab y openpyxl en el servidor, con las mismas funciones del tablero (CA-25.1).
-  Cada descarga queda en la auditoría como `ReporteDescargado` (CA-25.2).
+- **Reportes (ADR-009).** ReportLab y openpyxl en el servidor, con las mismas consultas del tablero (CA-25.1). El
+  frontend ya no genera PDF ni Excel: descarga el archivo del servidor.
 - **Reloj inyectable.** Las reglas que dependen del día (cancelación, COMPLETADA, EN_REVISION vencidas, límite de
   12 meses) leen la fecha en `apps/comun/reloj.py` (hora de Colombia). Las pruebas la fijan con `reloj.fijar()`.
 - **Imágenes.** Se guardan como rutas o URL (`imagen_publicacion.ruta`). La subida de archivos queda para el despliegue.
@@ -158,14 +160,19 @@ con sesión iniciada va en `PATCH /identidad/perfil` con `password_actual` y `pa
 
 ## Vistas de solo lectura
 
-Se crean con `RunSQL` (`CREATE OR REPLACE VIEW`) y se leen con modelos `managed = False` del módulo que las publica.
-Búsqueda las combina a través de los `services`, sin importar modelos ajenos.
+Se crean con `RunSQL` (`CREATE OR REPLACE VIEW`) en la migración del módulo que las publica y se leen con modelos
+`managed = False`. Búsqueda combina las suyas a través de los `services` de quien las publica. Reportes tiene sus
+propios modelos `managed = False` de las cuatro vistas de reportes y no importa ninguna otra app de negocio.
 
 | Vista | La publica | Columnas | Regla |
 |---|---|---|---|
 | `v_publicacion_buscable` | Catálogo | id, titulo, ciudad_id, ciudad, tipo_alojamiento_id, tipo, capacidad, precio_noche, tarifa_limpieza, descuento_porcentaje, descuento_min_noches, politica_id, servicios (arreglo de ids), imagen_principal | Publicaciones ACTIVAS cuyo anfitrión tiene `activa = true` y ninguna restricción vigente (CA-04.3, CA-21.2). La vigencia se compara con `statement_timestamp()`. |
 | `v_noche_no_disponible` | Reservas | publicacion_id, fecha | Una fila por noche de reserva CONFIRMADA o EN_REVISION y por noche de `periodo_calendario` con `disponible = false` (`generate_series`). La noche de salida queda libre (CA-09.3). |
 | `v_calificacion_publicacion` | Reseñas | publicacion_id, promedio, total | **Provisional:** devuelve `promedio NULL` y `total 0` hasta que llegue el módulo de Reseñas. |
+| `v_usuario_reporte` | Identidad | id, nombre_completo, correo, telefono, ciudad, rol, activa, restringida, motivo_restriccion, autorizacion_datos, fecha_registro | `restringida` y `motivo_restriccion` salen de la restricción vigente. |
+| `v_publicacion_reporte` | Catálogo | id, titulo, anfitrion_id, anfitrion, ciudad, tipo, precio_noche, estado, creada | Sin BORRADOR. |
+| `v_reserva_reporte` | Reservas | id, publicacion_id, titulo, ciudad, tipo, huesped_id, huesped, creada, fecha_llegada, fecha_salida, noches, estado, total, tarifa_servicio, valor_devolucion, monto_bruto, ingreso_plataforma | `valor_devolucion` es 0 si no hay cancelación. `monto_bruto` e `ingreso_plataforma` siguen la nota de RF-D-ADM-05 (ver abajo). |
+| `v_demanda` | Reservas | ciudad, tipo, fecha, reservas, monto_bruto, ingreso_plataforma | `v_reserva_reporte` agrupada por ciudad, tipo y **día** de creación (hora de Colombia). Una vista no recibe parámetros: Reportes filtra los días del periodo y suma. |
 
 ## Búsqueda (MOD-03)
 
@@ -297,6 +304,59 @@ Registra `TareasDiarias` en la auditoría y responde
 `{"reservas_completadas", "reservas_canceladas_sin_resolucion", "pagos_conciliados"}`. Para correrlo a mano:
 `python manage.py tareas_diarias`. El workflow `.github/workflows/tareas-diarias.yml` lo llama a diario a las 05:10
 UTC (00:10 en Colombia) con los secretos `API_URL` y `TOKEN_TAREAS`. `/api/v1/salud` sigue pública.
+
+## Tablero y reportes (MOD-09)
+
+**Periodo.** Una reserva pertenece al periodo según su fecha de **creación** (hora de Colombia), no la de llegada.
+`reserva.creada` toma la hora de `apps/comun/reloj.py`, así que las pruebas y la demo pueden crear reservas "en
+octubre" con los services reales. Máximo 12 meses; si `desde > hasta`, 400.
+
+**Ingresos (nota de RF-D-ADM-05).**
+
+| Estado | `monto_bruto` | `ingreso_plataforma` |
+|---|---|---|
+| CONFIRMADA, COMPLETADA, EN_REVISION | `total` | `tarifa_servicio` |
+| CANCELADA | `total - valor_devolucion` | `tarifa_servicio * (1 - valor_devolucion / total)` |
+
+Ejemplo (CA-24.4): una reserva de $740.000 con servicio de $60.000, cancelada con devolución de $370.000, suma $370.000
+al bruto y $30.000 a la plataforma.
+
+**`GET /admin/tablero?desde&hasta`** devuelve:
+- `usuarios_por_rol`: cuentas registradas hasta `hasta`.
+- `publicaciones_activas`.
+- `reservas_por_estado` y `reservas_total` del periodo.
+- `ingresos.bruto` e `ingresos.plataforma` del periodo.
+- `top_ciudades`: las 5 ciudades con más reservas, de `v_demanda`.
+
+**Reportes.** Los cinco (`usuarios`, `publicaciones`, `reservas`, `ingresos`, `demanda`), en PDF o Excel, usan las
+mismas funciones de consulta del tablero (`reservas_del_periodo`, `conteo_por_estado`, `ingresos` y `demanda`), así
+sus totales coinciden (CA-25.1). Cada descarga se registra como `ReporteDescargado`, con el administrador, el reporte,
+el formato y el periodo, **antes** de entregar el archivo. Si no se puede registrar, el archivo no se entrega
+(CA-25.2).
+
+## Administración de usuarios y registro de acciones
+
+**`GET /admin/usuarios?rol&q`** (Identidad) busca por nombre o correo y devuelve cada cuenta con `activa`,
+`restringida`, `motivo_restriccion` y `restriccion_hasta`. Para restringir y quitar la restricción se siguen usando
+`POST` y `DELETE /admin/usuarios/{id}/restriccion`.
+
+**`GET /admin/auditoria`** filtra por `usuario` (actor), `tipo` de acción, `accion`, `desde` y `hasta`. Cada fila trae
+`actor_nombre`, `actor_correo` y `actor_rol` (quién), `entidad` y `entidad_id` o el `detalle` (sobre qué), `fecha`
+(cuándo) y `exitoso` (resultado). La respuesta incluye `tipos`, la lista de tipos de acción para el filtro (CA-23.3):
+
+| `tipo` | Acciones |
+|---|---|
+| `inicio_sesion` | InicioSesion, CierreSesion |
+| `acceso_no_permitido` | AccesoDenegado |
+| `estado_publicacion` | PublicacionEnviadaARevision, PublicacionAprobada, PublicacionDevuelta, PublicacionBloqueada, PublicacionDesbloqueada, PublicacionPausada, PublicacionReactivada |
+| `estado_reserva` | ReservaConfirmada, ReservaEnRevision, ReservaResuelta, ReservaCompletada |
+| `reserva_rechazada` | ReservaRechazada |
+| `cancelacion` | ReservaCancelada |
+| `descarga_reporte` | ReporteDescargado |
+| `accion_administrador` | Cualquier acción cuyo actor tiene rol ADMINISTRADOR |
+| `cuenta`, `pago`, `operacion` | Registro, perfil y restricciones; pagos y devoluciones; fallas y tareas |
+
+Las acciones de reseñas llegan con su módulo.
 
 ## Pagos (MOD-05)
 
