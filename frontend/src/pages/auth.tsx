@@ -1,4 +1,4 @@
-import { ArrowLeft, Building2, Check, Circle, Clock, Compass, Copy, Eye, EyeOff, Luggage, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Building2, Check, Circle, Clock, Compass, Copy, Eye, EyeOff, Luggage } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import { identidadApi, leerError } from "../api";
@@ -27,7 +27,7 @@ function ClaveInput({ value, onChange, placeholder, autoComplete }: {
 
 /* ---------------- CU-USU-02 Iniciar sesión ---------------- */
 export function Login() {
-  const { iniciarSesion, avisoSesion, limpiarAviso } = useStore();
+  const { iniciarSesion, avisoSesion } = useStore();
   const toast = useToast();
   const go = useNavigate();
   const loc = useLocation();
@@ -48,10 +48,6 @@ export function Login() {
     if (r.msg) toast(r.msg);
     go(aviso.volver ?? "/inicio");
   };
-
-  // El acceso del administrador solo llena el correo: la contraseña se escribe (HU-02).
-  // Las demás cuentas de demostración se escriben a mano: el cliente no ve atajos de prueba.
-  const demo = (c: string) => { setCorreo(c); setClave(""); setError(""); limpiarAviso(); };
 
   return (
     <AuthLayout>
@@ -78,12 +74,6 @@ export function Login() {
         <button className="btn btn-primary btn-block" type="submit" disabled={enviando}>{enviando ? "Ingresando…" : "Ingresar"}</button>
       </form>
       <p className="muted" style={{ textAlign: "center" }}>¿No tienes cuenta? <Link to="/registro">Regístrate</Link></p>
-      <div className="demo-accounts">
-        <span className="subtle">¿Administras la plataforma?</span>
-        <div className="chips">
-          <button className="demo-chip" onClick={() => demo("admin@inversioneslr.com")}><ShieldCheck /> Administrador</button>
-        </div>
-      </div>
     </AuthLayout>
   );
 }

@@ -26,8 +26,8 @@ Para generar la versión estática: `npm run build` (queda en `dist/`).
 
 ## Cuentas de prueba
 
-Todas usan la contraseña `Clave1234`. En "Ingresar" solo queda el botón "Administrador", que llena el correo; la
-contraseña se escribe. Las demás cuentas se escriben a mano, porque la pantalla la ve el cliente.
+Todas usan la contraseña `Clave1234`. La pantalla "Ingresar" no muestra atajos a estas cuentas, porque la ve el
+cliente: el correo y la contraseña se escriben a mano.
 
 | Rol | Correo |
 |---|---|
