@@ -124,3 +124,76 @@ export function leerError(e: unknown): { error: string; campo?: string } {
   if (campo) return { error: Array.isArray(valor) ? String(valor[0]) : String(valor), campo };
   return { error: "Ocurrió un error inesperado. Intenta de nuevo." };
 }
+
+/* ---------------- SRV-02 Catálogo: catálogos públicos ---------------- */
+
+export interface ItemCatalogo { id: number; nombre: string }
+
+export const catalogoApi = {
+  ciudades: () => api.get<ItemCatalogo[]>("/catalogo/ciudades"),
+  tipos: () => api.get<ItemCatalogo[]>("/catalogo/tipos-alojamiento"),
+  servicios: () => api.get<ItemCatalogo[]>("/catalogo/servicios"),
+};
+
+/* ---------------- SRV-03 Búsqueda (pública) ---------------- */
+
+export interface Calificacion { promedio: string | null; total: number }
+
+export interface ResultadoBusqueda {
+  id: number; titulo: string; ciudad_id: number; ciudad: string; tipo_alojamiento_id: number; tipo: string;
+  capacidad: number; precio_noche: string; tarifa_limpieza: string; descuento_porcentaje: string | null;
+  descuento_min_noches: number | null; servicios: number[]; imagen_principal: string | null; calificacion: Calificacion;
+}
+
+export interface Tramo { dias_minimos: number; dias_maximos: number | null; porcentaje_devolucion: string }
+
+export interface DetallePublico {
+  id: number; titulo: string; descripcion: string; anfitrion: number; anfitrion_nombre: string | null;
+  ciudad: string; ubicacion_textual: string; tipo: string; capacidad: number; precio_noche: string; tarifa_limpieza: string;
+  descuento_porcentaje: string | null; descuento_min_noches: number | null;
+  servicios: ItemCatalogo[]; servicios_adicionales: { id: number; nombre: string; precio: string }[];
+  reglas: { descripcion: string; orden: number }[]; imagenes: { ruta: string; orden: number }[];
+  politica: { id: number; nombre: string; descripcion: string | null; tramos: Tramo[] } | null;
+  calificacion: Calificacion; disponibilidad: { desde: string; hasta: string; noches_no_disponibles: string[] };
+}
+
+export interface FiltrosBusqueda {
+  ciudad?: number; llegada?: string; salida?: string; huespedes?: number; tipo?: number;
+  precio_min?: number; precio_max?: number; servicios?: number[];
+}
+
+export const busquedaApi = {
+  buscar: (f: FiltrosBusqueda) => {
+    const params: Record<string, string> = {};
+    Object.entries(f).forEach(([k, v]) => {
+      if (v === undefined || v === "" || (Array.isArray(v) && v.length === 0)) return;
+      params[k] = Array.isArray(v) ? v.join(",") : String(v);
+    });
+    return api.get<ResultadoBusqueda[]>("/busqueda/publicaciones", { params });
+  },
+  detalle: (id: number, desde?: string, hasta?: string) =>
+    api.get<DetallePublico>(`/busqueda/publicaciones/${id}`, { params: { desde, hasta } }),
+};
+
+/* ---------------- SRV-04 Reservas: cotizar y reservar (HU-12, HU-13) ---------------- */
+
+export interface CotizacionApi {
+  id: number; publicacion: number; publicacion_titulo: string | null; fecha_llegada: string; fecha_salida: string;
+  num_huespedes: number; noches: number; precio_noche: string; precio_base: string; descuento: string;
+  tarifa_limpieza: string; porcentaje_servicio: string; tarifa_servicio: string;
+  adicionales: { id: number; nombre: string | null; precio_aplicado: string }[]; total_adicionales: string; total: string;
+  creada: string; vence: string; vencida: boolean; reserva: number | null;
+}
+
+export interface ReservaApi {
+  id: number; estado: string; cotizacion: number; publicacion: number; fecha_llegada: string; fecha_salida: string;
+  num_huespedes: number; total: string; clave_idempotencia: string;
+  pagos: { id: number; tipo: string; monto: string; estado: string; referencia_externa: string | null }[];
+}
+
+export const reservasApi = {
+  cotizar: (d: { publicacion: number; fecha_llegada: string; fecha_salida: string; num_huespedes: number; adicionales: number[] }) =>
+    api.post<CotizacionApi>("/reservas/cotizaciones", d),
+  cotizacion: (id: number) => api.get<CotizacionApi>(`/reservas/cotizaciones/${id}`),
+  reservar: (d: { cotizacion: number; clave_idempotencia: string; medio_pago: string }) => api.post<ReservaApi>("/reservas", d),
+};

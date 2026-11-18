@@ -9,6 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@stripe/react-stripe-js": "^2.9.0",
+    "@stripe/stripe-js": "^4.10.0",
     "axios": "^1.7.7",
     "exceljs": "^4.4.0",
     "jspdf": "^2.5.2",

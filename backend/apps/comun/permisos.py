@@ -44,6 +44,7 @@ class TieneRol(BasePermission):
 
 EsAdministrador = TieneRol.de("ADMINISTRADOR")
 EsAnfitrion = TieneRol.de("ANFITRION")
+EsHuesped = TieneRol.de("HUESPED")
 EsAnfitrionOAdministrador = TieneRol.de("ANFITRION", "ADMINISTRADOR")
 EsHuespedOAnfitrion = TieneRol.de("HUESPED", "ANFITRION")
 

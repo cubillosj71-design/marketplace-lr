@@ -2,7 +2,9 @@
 
 Tablas de este servicio: ciudad, tipo_alojamiento, politica_cancelacion, tramo_politica, publicacion,
 servicio, publicacion_servicio, servicio_adicional, regla_alojamiento, imagen_publicacion,
-periodo_calendario, revision_publicacion. Ver las secciones 9 y 10 del documento de diseño.
+revision_publicacion. Ver las secciones 9 y 10 del documento de diseño. periodo_calendario es de
+MOD-04 Reservas (diagrama de clases).
+Vista de solo lectura que publica: v_publicacion_buscable (migración 0004).
 
 Ajuste al modelo relacional: en publicacion, los datos que se piden para enviar a revisión pueden
 quedar vacíos solo mientras la publicación es BORRADOR. Una restricción CHECK exige que estén
@@ -10,6 +12,7 @@ completos en cualquier otro estado, así la regla de RF-D-ALO-01.2 también se c
 """
 
 from django.conf import settings
+from django.contrib.postgres.fields import ArrayField
 from django.db import models
 from django.db.models import Q
 
@@ -20,11 +23,6 @@ class EstadoPublicacion(models.TextChoices):
     ACTIVA = "ACTIVA", "Activa"
     PAUSADA = "PAUSADA", "Pausada"
     BLOQUEADA = "BLOQUEADA", "Bloqueada"
-
-
-class TipoPeriodo(models.TextChoices):
-    DISPONIBLE = "DISPONIBLE", "Disponible"
-    NO_DISPONIBLE = "NO_DISPONIBLE", "No disponible"
 
 
 class AccionModeracion(models.TextChoices):
@@ -193,26 +191,6 @@ class ImagenPublicacion(models.Model):
         ordering = ["orden"]
 
 
-class PeriodoCalendario(models.Model):
-    """Rango [fecha_inicio, fecha_fin) que el anfitrión abre o cierra (RF-D-ALO-02.2)."""
-
-    publicacion = models.ForeignKey(Publicacion, on_delete=models.CASCADE, related_name="periodos")
-    fecha_inicio = models.DateField()
-    fecha_fin = models.DateField()
-    tipo = models.CharField(max_length=15, choices=TipoPeriodo.choices)
-
-    class Meta:
-        db_table = "periodo_calendario"
-        ordering = ["fecha_inicio"]
-        constraints = [
-            models.CheckConstraint(condition=Q(fecha_fin__gt=models.F("fecha_inicio")), name="periodo_rango_valido"),
-            models.CheckConstraint(condition=Q(tipo__in=TipoPeriodo.values), name="periodo_tipo_valido"),
-        ]
-
-    def contiene(self, fecha) -> bool:
-        return self.fecha_inicio <= fecha < self.fecha_fin
-
-
 class RevisionPublicacion(models.Model):
     publicacion = models.ForeignKey(Publicacion, on_delete=models.CASCADE, related_name="revisiones")
     administrador = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
@@ -224,3 +202,26 @@ class RevisionPublicacion(models.Model):
         db_table = "revision_publicacion"
         ordering = ["-fecha", "-id"]
         constraints = [models.CheckConstraint(condition=Q(accion__in=AccionModeracion.values), name="revision_accion_valida")]
+
+
+class PublicacionBuscable(models.Model):
+    """Vista v_publicacion_buscable: publicaciones ACTIVAS cuyo anfitrión tiene la cuenta activa y ninguna
+    restricción vigente (CA-04.3, CA-21.2). Solo lectura."""
+
+    titulo = models.CharField(max_length=120)
+    ciudad_id = models.BigIntegerField()
+    ciudad = models.CharField(max_length=80)
+    tipo_alojamiento_id = models.BigIntegerField()
+    tipo = models.CharField(max_length=40)
+    capacidad = models.SmallIntegerField()
+    precio_noche = models.DecimalField(max_digits=12, decimal_places=2)
+    tarifa_limpieza = models.DecimalField(max_digits=12, decimal_places=2)
+    descuento_porcentaje = models.DecimalField(max_digits=5, decimal_places=2, null=True)
+    descuento_min_noches = models.SmallIntegerField(null=True)
+    politica_id = models.BigIntegerField()
+    servicios = ArrayField(models.BigIntegerField())
+    imagen_principal = models.CharField(max_length=500, null=True)
+
+    class Meta:
+        managed = False
+        db_table = "v_publicacion_buscable"

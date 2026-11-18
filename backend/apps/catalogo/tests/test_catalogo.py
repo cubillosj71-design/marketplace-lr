@@ -97,27 +97,7 @@ def test_ca_08_pausar_y_reactivar_sin_tocar_reservas(demo, entrar):
     assert c.post(f"{BASE}/publicaciones/{_id('Habitación cerca al centro')}/pausar").status_code == 409
 
 
-# ---------------- HU-09 Calendario (PeriodoCalendario)
-def test_ca_09_calendario_por_rangos(demo, entrar):
-    pid = _id("Apartamento con vista a Monserrate")
-    c = entrar("anfitrion@correo.com")
-    url = f"{BASE}/publicaciones/{pid}/calendario"
-    r = c.post(url, {"fecha_inicio": "2026-12-15", "fecha_fin": "2026-12-18", "tipo": "NO_DISPONIBLE"}, format="json")
-    assert r.status_code == 200  # CA-09.1: se une con el periodo del 12 al 15
-    todos = c.get(url, {"desde": "2026-12-01", "hasta": "2027-01-01"}).json()
-    assert todos["periodos"] == [{"fecha_inicio": "2026-12-12", "fecha_fin": "2026-12-18", "tipo": "NO_DISPONIBLE"}]
-    assert "2026-12-05" in todos["noches_reservadas"] and "2026-12-09" not in todos["noches_reservadas"]
-    r = c.post(url, {"fecha_inicio": "2026-12-08", "fecha_fin": "2026-12-10", "tipo": "NO_DISPONIBLE"}, format="json")
-    assert r.status_code == 409 and r.json()["fechas"] == ["2026-12-08"]  # CA-09.2
-    c.post(url, {"fecha_inicio": "2026-12-14", "fecha_fin": "2026-12-16", "tipo": "DISPONIBLE"}, format="json")
-    todos = c.get(url, {"desde": "2026-12-01", "hasta": "2027-01-01"}).json()["periodos"]
-    assert [(p["fecha_inicio"], p["fecha_fin"]) for p in todos] == [("2026-12-12", "2026-12-14"), ("2026-12-16", "2026-12-18")]
-
-
-def test_calendario_solo_del_dueno(demo, entrar):
-    pid = _id("Apartamento con vista a Monserrate")
-    assert entrar("admin@inversioneslr.com").get(f"{BASE}/publicaciones/{pid}/calendario").status_code == 403
-    assert entrar("sofia@correo.com").get(f"{BASE}/publicaciones/{pid}/calendario").status_code == 403
+# HU-09 Calendario: periodo_calendario es de MOD-04 Reservas; sus pruebas están en apps/reservas/tests.
 
 
 # ---------------- RF-D-ADM-01 Moderación

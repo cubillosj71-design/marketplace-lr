@@ -1,12 +1,9 @@
 """Modelos de SRV-04 Reservas.
 
-Tablas de este servicio: tarifa_servicio, cotizacion, cotizacion_servicio_adicional, reserva, cancelacion.
-Ver las secciones 9 y 10 del documento de diseño.
-
-En este incremento se implementan las tablas que necesitan los módulos de Usuarios, Alojamientos y
-Reportes: la tarifa de servicio (RF-D-ADM-03.1), la cotización y la reserva (para el calendario, la
-desactivación de cuentas y los reportes). El flujo de cotizar, reservar y cancelar llega con el
-módulo de Reservas, junto con la tabla cancelacion.
+Tablas de este servicio (MOD-04): periodo_calendario, tarifa_servicio, cotizacion,
+cotizacion_servicio_adicional y reserva (la tabla cancelacion llega con la cancelación).
+Vista de solo lectura que publica: v_noche_no_disponible.
+Ver las secciones 9 y 10 del documento de diseño y el diagrama de clases.
 """
 
 from django.conf import settings
@@ -23,10 +20,28 @@ class EstadoReserva(models.TextChoices):
     EN_REVISION = "EN_REVISION", "En revisión"
 
 
+class PeriodoCalendario(models.Model):
+    """Rango [fecha_inicio, fecha_fin) del calendario de una publicación (RF-D-ALO-02.2).
+    Se guardan los rangos NO disponibles (disponible = false), unidos y sin traslapes."""
+
+    publicacion = models.ForeignKey("catalogo.Publicacion", on_delete=models.CASCADE, related_name="+")
+    fecha_inicio = models.DateField()
+    fecha_fin = models.DateField()
+    disponible = models.BooleanField()
+
+    class Meta:
+        db_table = "periodo_calendario"
+        ordering = ["fecha_inicio"]
+        constraints = [models.CheckConstraint(condition=Q(fecha_fin__gt=F("fecha_inicio")), name="periodo_rango_valido")]
+
+    def contiene(self, fecha) -> bool:
+        return self.fecha_inicio <= fecha < self.fecha_fin
+
+
 class TarifaServicio(models.Model):
     """Historial del porcentaje que cobra la plataforma (0 % a 30 %)."""
 
-    administrador = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    administrador = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
     porcentaje = models.DecimalField(max_digits=5, decimal_places=2)
     vigente_desde = models.DateTimeField()
 
@@ -43,6 +58,8 @@ class Cotizacion(models.Model):
 
     huesped = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
     publicacion = models.ForeignKey("catalogo.Publicacion", on_delete=models.PROTECT, related_name="+")
+    # Tarifa vigente que se usó para calcular tarifa_servicio (CA-22.1: los valores quedan fijos)
+    tarifa_servicio_ref = models.ForeignKey(TarifaServicio, on_delete=models.PROTECT, related_name="+", db_column="tarifa_servicio_id")
     fecha_llegada = models.DateField()
     fecha_salida = models.DateField()
     num_huespedes = models.SmallIntegerField()
@@ -67,9 +84,13 @@ class Cotizacion(models.Model):
 
 
 class CotizacionServicioAdicional(models.Model):
+    """Servicio adicional elegido en la cotización, con el precio que tenía en ese momento.
+    Clave primaria compuesta (cotizacion_id, servicio_adicional_id), igual al modelo relacional."""
+
+    pk = models.CompositePrimaryKey("cotizacion_id", "servicio_adicional_id")
     cotizacion = models.ForeignKey(Cotizacion, on_delete=models.CASCADE, related_name="adicionales")
     servicio_adicional = models.ForeignKey("catalogo.ServicioAdicional", on_delete=models.PROTECT, related_name="+")
-    precio = models.DecimalField(max_digits=12, decimal_places=2)
+    precio_aplicado = models.DecimalField(max_digits=12, decimal_places=2)
 
     class Meta:
         db_table = "cotizacion_servicio_adicional"
@@ -109,3 +130,16 @@ class Reserva(models.Model):
                 condition=Q(estado__in=[EstadoReserva.CONFIRMADA, EstadoReserva.EN_REVISION]),
             ),
         ]
+
+
+class NocheNoDisponible(models.Model):
+    """Vista v_noche_no_disponible (migración 0006): una fila por noche ocupada por una reserva CONFIRMADA o
+    EN_REVISION o cerrada en periodo_calendario. Solo lectura; la usan Búsqueda y Reservas."""
+
+    pk = models.CompositePrimaryKey("publicacion_id", "fecha")
+    publicacion_id = models.BigIntegerField()
+    fecha = models.DateField()
+
+    class Meta:
+        managed = False
+        db_table = "v_noche_no_disponible"
