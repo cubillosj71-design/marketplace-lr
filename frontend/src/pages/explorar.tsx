@@ -177,7 +177,7 @@ function Explorador({ base }: { base: string }) {
 /* ---------------- HU-11 Detalle y formulario de cotización (HU-12) ---------------- */
 function Detalle({ base }: { base: string }) {
   const { id } = useParams();
-  const { usuario } = useStore();
+  const { usuario, tiene } = useStore();
   const go = useNavigate();
   const loc = useLocation();
   const inicial = new URLSearchParams(loc.search);
@@ -205,7 +205,7 @@ function Detalle({ base }: { base: string }) {
     setError("");
     if (!usuario) // CA-05.1: el Visitante debe iniciar sesión para cotizar o reservar
       return go("/ingresar", { state: { aviso: "Inicia sesión como huésped para cotizar y reservar.", volver: loc.pathname + loc.search } });
-    if (usuario.rol !== "HUESPED") return setError("Solo los huéspedes pueden cotizar y reservar.");
+    if (!tiene("reservas.cotizar")) return setError("Tu cuenta no puede cotizar ni reservar.");
     if (!f.llegada || !f.salida) return setError("Elige la fecha de llegada y la de salida.");
     if (f.salida <= f.llegada) return setError("La fecha de salida debe ser posterior a la de llegada.");
     if (f.huespedes > d.capacidad) return setError(`La capacidad máxima de este alojamiento es de ${d.capacidad} huéspedes.`);

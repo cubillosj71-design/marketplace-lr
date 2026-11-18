@@ -1,8 +1,9 @@
 import { ArrowLeft, Building2, Check, Circle, Clock, Compass, Copy, Eye, EyeOff, Luggage, ShieldCheck, UserRound } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
+import { identidadApi, leerError } from "../api";
 import type { Rol } from "../data";
-import { AuthLayout, inicioPorRol } from "../layout";
+import { AuthLayout, usePrimeraPantalla } from "../layout";
 import { useStore, useToast } from "../store";
 import { Alert, Field } from "../ui";
 
@@ -26,7 +27,7 @@ function ClaveInput({ value, onChange, placeholder, autoComplete }: {
 
 /* ---------------- CU-USU-02 Iniciar sesión ---------------- */
 export function Login() {
-  const { iniciarSesion } = useStore();
+  const { iniciarSesion, avisoSesion, limpiarAviso } = useStore();
   const toast = useToast();
   const go = useNavigate();
   const loc = useLocation();
@@ -37,17 +38,19 @@ export function Login() {
   const [error, setError] = useState("");
   const [enviando, setEnviando] = useState(false);
 
-  const entrar = async (c = correo, k = clave) => {
+  const entrar = async () => {
+    if (!correo.trim() || !clave) return setError("Escribe tu correo y tu contraseña.");
     setEnviando(true);
-    const r = await iniciarSesion(c, k);
+    const r = await iniciarSesion(correo, clave);
     setEnviando(false);
+    // CA-02.2: "Correo o contraseña incorrectos". CA-02.3: cuenta restringida, con el motivo (lo trae el detalle)
     if (!r.ok) { setError(r.error); setClave(""); return; }
     if (r.msg) toast(r.msg);
-    // el rol se lee del usuario recién autenticado en el siguiente render
     go(aviso.volver ?? "/inicio");
   };
 
-  const demo = (c: string) => { setCorreo(c); setClave("Clave1234"); setError(""); entrar(c, "Clave1234"); };
+  // Las cuentas de prueba solo llenan el correo: la contraseña se escribe (HU-02).
+  const demo = (c: string) => { setCorreo(c); setClave(""); setError(""); limpiarAviso(); };
 
   return (
     <AuthLayout>
@@ -55,7 +58,8 @@ export function Login() {
         <h1>Bienvenido de nuevo</h1>
         <p>Ingresa con tu cuenta para continuar.</p>
       </div>
-      {aviso.aviso && !error && <Alert tipo="ok">{aviso.aviso}</Alert>}
+      {avisoSesion && !error && <Alert tipo="warn">{avisoSesion}</Alert>}
+      {aviso.aviso && !avisoSesion && !error && <Alert tipo="ok">{aviso.aviso}</Alert>}
       {error && <Alert tipo="error">{error}</Alert>}
       <form className="stack" onSubmit={(e: FormEvent) => { e.preventDefault(); entrar(); }} noValidate>
         <Field label="Correo electrónico">
@@ -74,7 +78,7 @@ export function Login() {
       </form>
       <p className="muted" style={{ textAlign: "center" }}>¿No tienes cuenta? <Link to="/registro">Regístrate</Link></p>
       <div className="demo-accounts">
-        <span className="subtle">Cuentas de prueba (contraseña Clave1234):</span>
+        <span className="subtle">Cuentas de prueba: elige una para llenar el correo y escribe la contraseña.</span>
         <div className="chips">
           <button className="demo-chip" onClick={() => demo("anfitrion@correo.com")}><Building2 /> Anfitrión</button>
           <button className="demo-chip" onClick={() => demo("huesped@correo.com")}><Luggage /> Huésped</button>
@@ -86,15 +90,29 @@ export function Login() {
   );
 }
 
-/** Después de ingresar, cada rol llega a su panel. */
+/** Después de ingresar, cada usuario llega a la primera pantalla que sus permisos le dejan abrir. */
 export function Inicio() {
   const { usuario } = useStore();
-  return <Navigate to={usuario ? inicioPorRol(usuario.rol) : "/ingresar"} replace />;
+  const primera = usePrimeraPantalla();
+  return <Navigate to={usuario ? primera : "/ingresar"} replace />;
 }
 
 /* ---------------- CU-USU-01 Registrarse ---------------- */
+async function registrar({ nombre, correo, telefono, clave, rol, acepta }: {
+  nombre: string; correo: string; telefono: string; clave: string; rol: Rol; acepta: boolean;
+}): Promise<{ ok: true } | { ok: false; error: string; campo?: string }> {
+  try {
+    await identidadApi.registrar({ nombre_completo: nombre.trim(), correo: correo.trim(), telefono: telefono.trim(), password: clave, rol, acepta_datos: acepta });
+    return { ok: true };
+  } catch (e) {
+    const r = leerError(e);
+    // Nombres de campo de la API -> nombres del formulario
+    const campos: Record<string, string> = { nombre_completo: "nombre", password: "clave", acepta_datos: "acepta" };
+    return { ok: false, error: r.error, campo: r.campo ? campos[r.campo] ?? r.campo : undefined };
+  }
+}
+
 export function Registro() {
-  const { registrar } = useStore();
   const go = useNavigate();
   const [f, setF] = useState({ nombre: "", correo: "", telefono: "", clave: "", rol: "HUESPED" as Rol, acepta: false });
   const [err, setErr] = useState<Record<string, string>>({});
@@ -171,8 +189,19 @@ export function Registro() {
 }
 
 /* ---------------- CU-USU-03 Recuperar contraseña ---------------- */
+async function solicitarEnlace(correo: string): Promise<{ ok: true; token: string } | { ok: false; error: string }> {
+  try {
+    const { data } = await identidadApi.solicitarRecuperacion(correo.trim());
+    const token = data.enlace?.split("/restablecer/")[1];
+    // Si el correo no existe, la API no lo revela: responde igual, solo que sin enlace.
+    if (!token) return { ok: false, error: "No apareció un enlace para ese correo. Revisa que esté bien escrito." };
+    return { ok: true, token };
+  } catch (e) {
+    return { ok: false, error: leerError(e).error };
+  }
+}
+
 export function Recuperar() {
-  const { solicitarEnlace } = useStore();
   const toast = useToast();
   const [correo, setCorreo] = useState("");
   const [error, setError] = useState("");
@@ -228,7 +257,6 @@ export function Recuperar() {
 /* ---------------- CU-USU-03 Definir nueva contraseña ---------------- */
 export function Restablecer() {
   const { token = "" } = useParams();
-  const { estadoEnlace, restablecer } = useStore();
   const go = useNavigate();
   const [clave, setClave] = useState("");
   const [conf, setConf] = useState("");
@@ -238,9 +266,11 @@ export function Restablecer() {
   // El servidor dice si el enlace sirve apenas se abre (CA-03.2, CA-03.3).
   useEffect(() => {
     let activo = true;
-    estadoEnlace(token).then((e) => { if (activo) setEst(e); });
+    identidadApi.estadoEnlace(token)
+      .then((r) => { if (activo) setEst(r.data.estado); })
+      .catch(() => { if (activo) setEst("inexistente"); });
     return () => { activo = false; };
-  }, [token, estadoEnlace]);
+  }, [token]);
   const largo = clave.length >= 8;
   const iguales = clave.length > 0 && clave === conf;
 
@@ -272,8 +302,7 @@ export function Restablecer() {
           <form className="stack" noValidate onSubmit={async (e) => {
             e.preventDefault();
             if (!largo || !iguales) return setError("Revisa los requisitos de la contraseña.");
-            const r = await restablecer(token, clave);
-            if (!r.ok) return setError(r.error);
+            try { await identidadApi.restablecer(token, clave); } catch (err) { return setError(leerError(err).error); }
             go("/ingresar", { state: { aviso: "Contraseña actualizada. Ingresa con la nueva." } });
           }}>
             <Field label="Nueva contraseña"><ClaveInput value={clave} onChange={setClave} autoComplete="new-password" /></Field>

@@ -76,12 +76,13 @@ Registro, sesión (`usuario`) y perfil devuelven:
 | Identidad | `GET y PATCH /identidad/perfil` | Huésped, Anfitrión, Administrador | RF-D-USU-01.4 |
 | Identidad | `POST /identidad/perfil/desactivar` | Huésped, Anfitrión | RF-D-USU-01.4 |
 | Identidad | `GET /identidad/permisos` | Todos (sin sesión, los del Visitante) | RF-D-USU-02.1 |
+| Identidad | `GET /identidad/roles` (la matriz completa) | Todos (pública) | RF-D-USU-02.1 |
 | Identidad | `POST y DELETE /admin/usuarios/{id}/restriccion` | Administrador | RF-D-ADM-02.1 |
 | Catálogo | `POST /catalogo/publicaciones` · `GET /catalogo/mis-publicaciones` | Anfitrión | RF-D-ALO-01.1, 02.1 |
 | Catálogo | `GET y PATCH /catalogo/publicaciones/{id}` · `POST .../pausar` · `POST .../reactivar` | Anfitrión dueño, Administrador | RF-D-ALO-02.1, ADM-01.1 |
 | Catálogo | `POST /catalogo/publicaciones/{id}/enviar-revision` | Anfitrión | RF-D-ALO-01.2 |
 | Reservas | `GET y POST /catalogo/publicaciones/{id}/calendario` (la ruta se conserva; la atiende Reservas) | Anfitrión dueño | RF-D-ALO-02.2 |
-| Catálogo | `GET /catalogo/ciudades` · `/tipos-alojamiento` · `/servicios` | Todos | RF-D-RES-01.1, ALO-01.1, ADM-05.2 |
+| Catálogo | `GET /catalogo/ciudades` · `/tipos-alojamiento` · `/servicios` · `/politicas` (con sus tramos) | Todos | RF-D-RES-01.1, ALO-01.1, ADM-05.2 |
 | Catálogo | `GET /admin/publicaciones?estado=` | Administrador | Apoya RF-D-ADM-01.1 |
 | Catálogo | `POST /admin/publicaciones/{id}/revision` (`APROBAR` o `DEVOLVER`) | Administrador | RF-D-ADM-01.1 |
 | Catálogo | `POST y DELETE /admin/publicaciones/{id}/bloqueo` | Administrador | RF-D-ADM-01.2 |
@@ -107,8 +108,10 @@ la restricción vigente), `publicaciones` (filtros `estado`, y `ciudad` y `tipo`
 `demanda`. El periodo máximo es de 12 meses (ADR-009) y, si `desde > hasta`, responde 400. Sin fechas se usa el año
 en curso. Ver la sección "Tablero y reportes".
 
-Fuera de la tabla 3.4, el backend agrega tres rutas que el frontend necesita: `GET /catalogo/publicaciones/{id}`,
-`GET /admin/publicaciones` y `GET /identidad/recuperacion/{token}` (estado del enlace). El cambio de contraseña
+Fuera de la tabla 3.4, el backend agrega rutas que el frontend necesita: `GET /catalogo/publicaciones/{id}`,
+`GET /admin/publicaciones`, `GET /identidad/recuperacion/{token}` (estado del enlace), `GET /catalogo/politicas` y
+`GET /identidad/roles`. `GET /catalogo/mis-publicaciones` y `GET /admin/publicaciones` traen `imagen` (portada) y
+`ultima_revision`; el detalle trae `administrador_nombre` en cada revisión. El cambio de contraseña
 con sesión iniciada va en `PATCH /identidad/perfil` con `password_actual` y `password_nueva`.
 
 ## Permisos por rol (RF-D-USU-02.1)
@@ -124,15 +127,17 @@ permisos basta tener uno.
 - El permiso dice **qué** puede hacer el rol. **Sobre qué** recurso (la regla de dueño, CA-05.3) lo revisa el service:
   un anfitrión con `publicaciones.gestionar_propias` recibe 403 sobre una publicación ajena.
 - `GET /identidad/permisos` devuelve `{"rol", "permisos"}` de quien llama; sin sesión, los del Visitante.
+- `GET /identidad/roles` devuelve la matriz completa `{"roles": [{"rol", "permisos"}]}` (Visitante, Huésped,
+  Anfitrión, Administrador). La pantalla "Roles y permisos" se arma con ella.
 - Rutas sin `RequierePermiso` (lista blanca, verificada por `apps/comun/tests/test_rbac.py`): `salud`, `token`,
-  `token/renovar`, `salir`, `recuperacion`, `recuperacion/{token}`, `permisos` y `interno/tareas/diarias` (su propio
+  `token/renovar`, `salir`, `recuperacion`, `recuperacion/{token}`, `permisos`, `roles` y `interno/tareas/diarias` (su propio
   token). El sitio `/admin/` de Django queda fuera de la API.
 
 | Permiso | Roles | Rutas | RF |
 |---|---|---|---|
 | `busqueda.ver` | Visitante, Huésped | `GET /busqueda/publicaciones` · `GET /busqueda/publicaciones/{id}` | RF-D-RES-01.1, 01.2 |
 | `cuenta.registrar` | Visitante | `POST /identidad/registro` | RF-D-USU-01.1 |
-| `catalogo.ver` | Visitante, Huésped, Anfitrión, Administrador | `GET /catalogo/ciudades` · `/tipos-alojamiento` · `/servicios` | RF-D-RES-01.1, ALO-01.1, ADM-05.2 |
+| `catalogo.ver` | Visitante, Huésped, Anfitrión, Administrador | `GET /catalogo/ciudades` · `/tipos-alojamiento` · `/servicios` · `/politicas` | RF-D-RES-01.1, ALO-01.1, ADM-05.2 |
 | `reservas.cotizar` | Huésped | `POST /reservas/cotizaciones` · `GET /reservas/cotizaciones/{id}` | RF-D-RES-02.1 |
 | `reservas.crear` | Huésped | `POST /reservas` | RF-D-RES-02.2 |
 | `reservas.ver_propias` | Huésped | `GET /reservas/mias` · `GET /reservas/{id}` | RF-D-RES-02.3, HU-14 |

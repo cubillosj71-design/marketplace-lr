@@ -162,6 +162,17 @@ class Permisos(APIView):
         return Response({"rol": rbac.rol_de(request.user), "permisos": sorted(rbac.permisos_de(request.user))})
 
 
+class Roles(APIView):
+    """GET /identidad/roles (RF-D-USU-02.1): la matriz completa de apps.comun.rbac, para la pantalla "Roles y
+    permisos". Es pública: no revela datos de nadie, solo qué puede hacer cada rol."""
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        orden = [rbac.VISITANTE, "HUESPED", "ANFITRION", "ADMINISTRADOR"]
+        return Response({"roles": [{"rol": r, "permisos": sorted(rbac.PERMISOS[r])} for r in orden]})
+
+
 class PerfilSerializer(serializers.Serializer):
     nombre_completo = serializers.CharField(max_length=120, required=False)
     telefono = serializers.CharField(max_length=20, required=False)

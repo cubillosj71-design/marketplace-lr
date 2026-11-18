@@ -15,4 +15,5 @@ urlpatterns = [
     path("ciudades", views.Catalogos.as_view(clave="ciudades"), name="ciudades"),
     path("tipos-alojamiento", views.Catalogos.as_view(clave="tipos"), name="tipos"),
     path("servicios", views.Catalogos.as_view(clave="servicios"), name="servicios"),
+    path("politicas", views.Catalogos.as_view(clave="politicas"), name="politicas"),
 ]

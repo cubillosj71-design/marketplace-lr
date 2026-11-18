@@ -48,6 +48,7 @@ LISTA_BLANCA = {
     "api/v1/identidad/recuperacion": "recuperar la contraseña sin sesión (RF-D-USU-01.3)",
     "api/v1/identidad/recuperacion/<str:token>": "usar el enlace de recuperación sin sesión",
     "api/v1/identidad/permisos": "describe la propia matriz; sin sesión devuelve la del VISITANTE",
+    "api/v1/identidad/roles": "la matriz completa de roles y permisos; no expone datos de nadie",
     "api/v1/interno/tareas/diarias": "tareas programadas con su propio token (X-Token-Tareas)",
 }
 PREFIJOS_FUERA_DE_DRF = ("admin/",)  # sitio de Django: no es parte de la API y exige is_staff
@@ -181,6 +182,7 @@ CASOS = [
     Caso("GET", "api/v1/catalogo/ciudades", TODOS, _fija("/api/v1/catalogo/ciudades")),
     Caso("GET", "api/v1/catalogo/tipos-alojamiento", TODOS, _fija("/api/v1/catalogo/tipos-alojamiento")),
     Caso("GET", "api/v1/catalogo/servicios", TODOS, _fija("/api/v1/catalogo/servicios")),
+    Caso("GET", "api/v1/catalogo/politicas", TODOS, _fija("/api/v1/catalogo/politicas")),
     # Publicaciones del anfitrión (RF-D-ALO-01.x, 02.1); el administrador modifica cualquiera (ALO-02.1, ADM-01.x)
     Caso("POST", "api/v1/catalogo/publicaciones", frozenset({A}), _fija("/api/v1/catalogo/publicaciones", {"titulo": "Nueva"}), 201),
     Caso("GET", "api/v1/catalogo/mis-publicaciones", frozenset({A}), _fija("/api/v1/catalogo/mis-publicaciones")),
@@ -375,6 +377,22 @@ def test_permisos_del_usuario_actual(ctx, rol):
     assert r.json()["permisos"] == sorted(ESPERADOS[rol])
 
 
+# ---------------------------------------------------------------- GET /identidad/roles
+
+@pytest.mark.parametrize("rol", ROLES)
+def test_roles_devuelve_la_matriz_completa_a_cualquiera(ctx, rol):
+    r = _cliente(None if rol == V else ctx["usuarios"][rol]).get("/api/v1/identidad/roles")
+    assert r.status_code == 200
+    assert [x["rol"] for x in r.json()["roles"]] == [V, H, A, ADM]
+    assert {x["rol"]: set(x["permisos"]) for x in r.json()["roles"]} == ESPERADOS
+
+
+def test_politicas_trae_la_moderada_con_sus_tramos(ctx):
+    politicas = _cliente().get("/api/v1/catalogo/politicas").json()
+    moderada = next(p for p in politicas if p["nombre"] == "Moderada")
+    assert moderada["id"] and moderada["tramos"] and all("porcentaje_devolucion" in t for t in moderada["tramos"])
+
+
 # ---------------------------------------------------------------- ninguna vista usa TieneRol
 
 VIEJOS = re.compile(r"\b(TieneRol|EsAdministrador|EsAnfitrion\w*|EsHuesped\w*|IsAuthenticated)\b")
@@ -387,3 +405,37 @@ def test_ninguna_vista_usa_tiene_rol_ni_sus_alias():
     usos = [f"{f.relative_to(base)}: {m.group(0)}" for f in base.rglob("*.py") if "tests" not in f.parts
             for m in VIEJOS.finditer(f.read_text(encoding="utf-8"))]
     assert usos == []
+
+
+# ---------------------------------------------------------------- CA-05.2 desde el frontend
+
+def test_ca_05_2_un_403_por_permiso_queda_en_la_auditoria(ctx):
+    """El Huésped abre la revisión de publicaciones: la pantalla "No tienes permiso" llama a GET /admin/publicaciones,
+    el backend responde 403 y registra el intento con exitoso=False, la ruta y el permiso que faltó."""
+    huesped = ctx["usuarios"][H]
+    r = _cliente(huesped).get("/api/v1/admin/publicaciones")
+    assert r.status_code == 403
+    evento = apps.get_model("auditoria", "EventoAuditoria").objects.filter(actor_id=huesped.id, accion="AccesoDenegado").latest("id")
+    assert evento.exitoso is False
+    assert evento.detalle["ruta"] == "/api/v1/admin/publicaciones"
+    assert evento.detalle["permiso"] == "publicaciones.moderar"
+    assert evento.detalle["rol"] == H
+
+
+APP_TSX = Path(settings.BASE_DIR).parent / "frontend" / "src" / "App.tsx"
+RUTA_FRONT = re.compile(r'\{ path: "([^"]+)", permiso: ("[^"]+"|\[[^\]]+\]), api: "([^"]+)"')
+
+
+@pytest.mark.skipif(not APP_TSX.exists(), reason="el frontend no está en este checkout")
+def test_cada_pantalla_protegida_registra_contra_una_ruta_con_su_mismo_permiso():
+    """Cada ruta de App.tsx declara su ruta de la API; esa ruta debe exigir exactamente los mismos permisos que la
+    pantalla. Si no, un usuario sin la pantalla podría recibir 200 y el intento no quedaría registrado (CA-05.2)."""
+    from django.urls import resolve
+
+    rutas = RUTA_FRONT.findall(APP_TSX.read_text(encoding="utf-8"))
+    assert len(rutas) >= 20
+    for pantalla, permiso, ruta_api in rutas:
+        esperados = set(re.findall(r'"([^"]+)"', permiso))
+        vista = resolve("/api/v1" + re.sub(r":\w+", "1", ruta_api)).func.view_class
+        requeridos = next(p for p in vista.permission_classes if isinstance(p, RequierePermiso)).permisos
+        assert set(requeridos) == esperados, (pantalla, ruta_api, requeridos)
