@@ -1,5 +1,5 @@
 /* =========================================================
-   Alojamientos LR · sistema visual del prototipo
+   Alojamientos LR · sistema visual
    ========================================================= */
 :root {
   --brand-950: #0b2f2d;
@@ -434,4 +434,15 @@ ol.reglas { margin: 0; padding-left: 20px; display: grid; gap: 4px; }
 @media (max-width: 420px) {
   .user-chip { gap: 6px; }
   .user-chip button > span { display: none; }
+}
+
+/* Matriz de roles y permisos: en pantallas angostas los cuatro roles caben sin desplazar la tabla */
+.matriz-roles .corto { display: none; }
+@media (max-width: 560px) {
+  .matriz-roles .largo { display: none; }
+  .matriz-roles .corto { display: inline; }
+  .matriz-roles th, .matriz-roles td { padding: 10px 6px; font-size: 13px; }
+  .matriz-roles th:first-child, .matriz-roles td:first-child { padding-left: 12px; }
+  .matriz-roles code { display: none; }
+  .matriz-roles th { letter-spacing: 0; font-size: 10.5px; }
 }

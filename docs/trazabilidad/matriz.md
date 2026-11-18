@@ -13,7 +13,7 @@ hacer el rol; **sobre qué** recurso (regla de dueño, CA-05.3) lo revisa el ser
 |---|---|---|---|
 | `busqueda.ver` | Visitante, Huésped | `GET /busqueda/publicaciones` · `GET /busqueda/publicaciones/{id}` | RF-D-RES-01.1, 01.2 |
 | `cuenta.registrar` | Visitante | `POST /identidad/registro` | RF-D-USU-01.1 |
-| `catalogo.ver` | Visitante, Huésped, Anfitrión, Administrador | `GET /catalogo/ciudades` · `/tipos-alojamiento` · `/servicios` | RF-D-RES-01.1, ALO-01.1, ADM-05.2 |
+| `catalogo.ver` | Visitante, Huésped, Anfitrión, Administrador | `GET /catalogo/ciudades` · `/tipos-alojamiento` · `/servicios` · `/politicas` | RF-D-RES-01.1, ALO-01.1, ADM-05.2 |
 | `reservas.cotizar` | Huésped | `POST /reservas/cotizaciones` · `GET /reservas/cotizaciones/{id}` | RF-D-RES-02.1 |
 | `reservas.crear` | Huésped | `POST /reservas` | RF-D-RES-02.2 |
 | `reservas.ver_propias` | Huésped | `GET /reservas/mias` · `GET /reservas/{id}` | RF-D-RES-02.3, HU-14 |
@@ -39,7 +39,7 @@ Anfitrión para crear la publicación (RF-D-ALO-01.1) y el Administrador para fi
 
 Rutas sin `RequierePermiso` (lista blanca): `GET /salud`, `POST /identidad/token`, `POST /identidad/token/renovar`,
 `POST /identidad/salir`, `POST /identidad/recuperacion`, `GET y POST /identidad/recuperacion/{token}`,
-`GET /identidad/permisos` y `POST /interno/tareas/diarias` (su propio token `X-Token-Tareas`).
+`GET /identidad/permisos`, `GET /identidad/roles` y `POST /interno/tareas/diarias` (su propio token `X-Token-Tareas`).
 
 ## Criterios de aceptación y pruebas
 
@@ -51,4 +51,6 @@ Rutas sin `RequierePermiso` (lista blanca): `GET /salud`, `POST /identidad/token
 | RF-D-USU-02.1 | Cada ruta con los cuatro roles devuelve 200/201, 403 o 401 según la matriz | `test_rbac.py::test_rol_por_ruta` |
 | RF-D-USU-02.1 | Toda ruta declara `RequierePermiso`, salvo la lista blanca | `test_rbac.py::test_toda_ruta_declara_requiere_permiso_salvo_la_lista_blanca` |
 | RF-D-USU-02.1 | `GET /identidad/permisos` devuelve el rol y sus permisos | `test_rbac.py::test_permisos_del_usuario_actual` |
+| RF-D-USU-02.1 | `GET /identidad/roles` devuelve la matriz completa a cualquiera | `test_rbac.py::test_roles_devuelve_la_matriz_completa_a_cualquiera` |
+| RF-D-USU-02.1 | El frontend decide rutas y menú con `GET /identidad/permisos` (sin comparar roles) | `frontend/src/App.tsx` (`RUTAS`), `frontend/src/layout.tsx` (`ConPermiso`, menú) |
 | HU-05 | Ninguna vista usa `TieneRol` ni sus alias | `test_rbac.py::test_ninguna_vista_usa_tiene_rol_ni_sus_alias` |

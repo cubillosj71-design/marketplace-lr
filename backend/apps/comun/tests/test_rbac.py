@@ -48,6 +48,7 @@ LISTA_BLANCA = {
     "api/v1/identidad/recuperacion": "recuperar la contraseña sin sesión (RF-D-USU-01.3)",
     "api/v1/identidad/recuperacion/<str:token>": "usar el enlace de recuperación sin sesión",
     "api/v1/identidad/permisos": "describe la propia matriz; sin sesión devuelve la del VISITANTE",
+    "api/v1/identidad/roles": "la matriz completa de roles y permisos; no expone datos de nadie",
     "api/v1/interno/tareas/diarias": "tareas programadas con su propio token (X-Token-Tareas)",
 }
 PREFIJOS_FUERA_DE_DRF = ("admin/",)  # sitio de Django: no es parte de la API y exige is_staff
@@ -181,6 +182,7 @@ CASOS = [
     Caso("GET", "api/v1/catalogo/ciudades", TODOS, _fija("/api/v1/catalogo/ciudades")),
     Caso("GET", "api/v1/catalogo/tipos-alojamiento", TODOS, _fija("/api/v1/catalogo/tipos-alojamiento")),
     Caso("GET", "api/v1/catalogo/servicios", TODOS, _fija("/api/v1/catalogo/servicios")),
+    Caso("GET", "api/v1/catalogo/politicas", TODOS, _fija("/api/v1/catalogo/politicas")),
     # Publicaciones del anfitrión (RF-D-ALO-01.x, 02.1); el administrador modifica cualquiera (ALO-02.1, ADM-01.x)
     Caso("POST", "api/v1/catalogo/publicaciones", frozenset({A}), _fija("/api/v1/catalogo/publicaciones", {"titulo": "Nueva"}), 201),
     Caso("GET", "api/v1/catalogo/mis-publicaciones", frozenset({A}), _fija("/api/v1/catalogo/mis-publicaciones")),
@@ -373,6 +375,22 @@ def test_permisos_del_usuario_actual(ctx, rol):
     assert r.status_code == 200
     assert r.json()["rol"] == rol
     assert r.json()["permisos"] == sorted(ESPERADOS[rol])
+
+
+# ---------------------------------------------------------------- GET /identidad/roles
+
+@pytest.mark.parametrize("rol", ROLES)
+def test_roles_devuelve_la_matriz_completa_a_cualquiera(ctx, rol):
+    r = _cliente(None if rol == V else ctx["usuarios"][rol]).get("/api/v1/identidad/roles")
+    assert r.status_code == 200
+    assert [x["rol"] for x in r.json()["roles"]] == [V, H, A, ADM]
+    assert {x["rol"]: set(x["permisos"]) for x in r.json()["roles"]} == ESPERADOS
+
+
+def test_politicas_trae_la_moderada_con_sus_tramos(ctx):
+    politicas = _cliente().get("/api/v1/catalogo/politicas").json()
+    moderada = next(p for p in politicas if p["nombre"] == "Moderada")
+    assert moderada["id"] and moderada["tramos"] and all("porcentaje_devolucion" in t for t in moderada["tramos"])
 
 
 # ---------------------------------------------------------------- ninguna vista usa TieneRol

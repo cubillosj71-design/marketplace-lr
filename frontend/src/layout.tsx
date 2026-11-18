@@ -1,12 +1,12 @@
 import {
   BarChart3, Bell, CalendarCheck, CalendarDays, CheckCircle2, ClipboardList, FileBarChart2, Percent, FileSpreadsheet, ChevronRight, ClipboardCheck, Compass, History, Home, KeyRound, LayoutList, LogOut,
-  PlusCircle, RotateCcw, ShieldCheck, Star, UserRound,
+  PlusCircle, ShieldCheck, Star, UserRound,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { adminApi, notificacionesApi } from "./api";
-import { ROL_TXT, iniciales, type Rol } from "./data";
-import { useStore, useToast } from "./store";
+import { ROL_TXT, iniciales } from "./data";
+import { useStore } from "./store";
 import { ImageTile, Logo } from "./ui";
 
 /* ---------- pantallas de acceso: panel de marca + formulario ---------- */
@@ -33,17 +33,41 @@ export function AuthLayout({ children }: { children: ReactNode }) {
             <div className="hero-pill"><i><CheckCircle2 /></i>Reserva confirmada</div>
           </div>
         </div>
-        <p className="hero-foot">Marketplace de alojamientos · Inversiones LR · Prototipo v1.0</p>
+        <p className="hero-foot">Marketplace de alojamientos · Inversiones LR</p>
       </aside>
       <main className="auth-main"><div className="auth-box">{children}</div></main>
     </div>
   );
 }
 
-/* ---------- navegación por rol ---------- */
-type Item = { to: string; label: string; icon: typeof Home; count?: number; end?: boolean };
+/* ---------- navegación por permisos (RF-D-USU-02.1) ---------- */
+/** Cada opción declara el permiso que necesita, con el mismo nombre que en el backend (apps/comun/rbac.py).
+ *  Sin permiso (null) basta con tener sesión. */
+type Item = { to: string; label: string; icon: typeof Home; permiso: string | null; count?: number; end?: boolean };
 
-/** Número de publicaciones pendientes de revisión, desde la API (solo para el Administrador). */
+const ALOJAMIENTOS: Item[] = [
+  { to: "/explorar", label: "Explorar alojamientos", icon: Compass, permiso: "busqueda.ver" },
+  { to: "/reservas", label: "Mis reservas", icon: CalendarCheck, permiso: "reservas.ver_propias" },
+  { to: "/publicaciones", label: "Mis publicaciones", icon: LayoutList, permiso: "publicaciones.gestionar_propias", end: true },
+  { to: "/publicaciones/nueva", label: "Nueva publicación", icon: PlusCircle, permiso: "publicaciones.gestionar_propias" },
+  { to: "/calendario", label: "Calendario", icon: CalendarDays, permiso: "calendario.gestionar" },
+  { to: "/reservas-alojamientos", label: "Reservas de mis alojamientos", icon: CalendarCheck, permiso: "reservas.ver_de_mis_alojamientos" },
+  { to: "/admin/tablero", label: "Tablero", icon: BarChart3, permiso: "tablero.ver" },
+  { to: "/admin/publicaciones", label: "Todas las publicaciones", icon: LayoutList, permiso: "publicaciones.moderar" },
+  { to: "/admin/revision", label: "Pendientes de revisión", icon: ClipboardCheck, permiso: "publicaciones.moderar" },
+  { to: "/admin/reservas", label: "Reservas en revisión", icon: ClipboardList, permiso: "reservas.resolver" },
+  { to: "/admin/tarifa", label: "Tarifa de servicio", icon: Percent, permiso: "tarifa.configurar" },
+  { to: "/admin/registro", label: "Registro de acciones", icon: History, permiso: "auditoria.consultar" },
+  { to: "/admin/reportes", label: "Reportes", icon: FileSpreadsheet, permiso: "reportes.descargar" },
+];
+const USUARIOS: Item[] = [
+  { to: "/perfil", label: "Mi perfil", icon: UserRound, permiso: "perfil.gestionar" },
+  { to: "/perfil/contrasena", label: "Cambiar contraseña", icon: KeyRound, permiso: "perfil.gestionar" },
+  { to: "/roles", label: "Roles y permisos", icon: ShieldCheck, permiso: null },
+  { to: "/admin/usuarios", label: "Usuarios", icon: FileBarChart2, permiso: "usuarios.ver" },
+];
+
+/** Número de publicaciones pendientes de revisión, desde la API (solo con publicaciones.moderar). */
 function usePendientes(activo: boolean) {
   const loc = useLocation();
   const [n, setN] = useState(0);
@@ -57,43 +81,22 @@ function usePendientes(activo: boolean) {
 }
 
 function useNav(): { titulo: string; items: Item[] }[] {
-  const { usuario } = useStore();
-  const pendientes = usePendientes(usuario?.rol === "ADMINISTRADOR");
+  const { usuario, tiene } = useStore();
+  const pendientes = usePendientes(tiene("publicaciones.moderar"));
   if (!usuario) return [];
-  const cuenta: Item[] = [
-    { to: "/perfil", label: "Mi perfil", icon: UserRound },
-    { to: "/perfil/contrasena", label: "Cambiar contraseña", icon: KeyRound },
-    { to: "/roles", label: "Roles y permisos", icon: ShieldCheck },
-  ];
-  const porRol: Record<Rol, Item[]> = {
-    HUESPED: [
-      { to: "/explorar", label: "Explorar alojamientos", icon: Compass },
-      { to: "/reservas", label: "Mis reservas", icon: CalendarCheck },
-    ],
-    ANFITRION: [
-      { to: "/publicaciones", label: "Mis publicaciones", icon: LayoutList, end: true },
-      { to: "/publicaciones/nueva", label: "Nueva publicación", icon: PlusCircle },
-      { to: "/calendario", label: "Calendario", icon: CalendarDays },
-      { to: "/reservas-alojamientos", label: "Reservas de mis alojamientos", icon: CalendarCheck },
-    ],
-    ADMINISTRADOR: [
-      { to: "/admin/tablero", label: "Tablero", icon: BarChart3 },
-      { to: "/admin/publicaciones", label: "Todas las publicaciones", icon: LayoutList },
-      { to: "/admin/revision", label: "Pendientes de revisión", icon: ClipboardCheck, count: pendientes },
-      { to: "/admin/reservas", label: "Reservas en revisión", icon: ClipboardList },
-      { to: "/admin/tarifa", label: "Tarifa de servicio", icon: Percent },
-      { to: "/admin/registro", label: "Registro de acciones", icon: History },
-      { to: "/admin/reportes", label: "Reportes", icon: FileSpreadsheet },
-    ],
-  };
-  // La administración de cuentas (HU-21) pertenece al módulo Usuarios y solo la ve el Administrador
-  const usuariosItems = usuario.rol === "ADMINISTRADOR"
-    ? [...cuenta, { to: "/admin/usuarios", label: "Usuarios", icon: FileBarChart2 }]
-    : cuenta;
+  const permitidos = (items: Item[]) => items
+    .filter((it) => it.permiso === null || tiene(it.permiso))
+    .map((it) => (it.to === "/admin/revision" ? { ...it, count: pendientes } : it));
   return [
-    { titulo: "Alojamientos", items: porRol[usuario.rol] },
-    { titulo: "Usuarios", items: usuariosItems },
-  ];
+    { titulo: "Alojamientos", items: permitidos(ALOJAMIENTOS) },
+    { titulo: "Usuarios", items: permitidos(USUARIOS) },
+  ].filter((g) => g.items.length);
+}
+
+/** Primera pantalla del menú que el usuario puede abrir: ahí llega al entrar. */
+export function usePrimeraPantalla(): string {
+  const { tiene } = useStore();
+  return [...ALOJAMIENTOS, ...USUARIOS].find((it) => it.permiso !== null && tiene(it.permiso))?.to ?? "/roles";
 }
 
 const MIGAS: [RegExp, string][] = [
@@ -149,12 +152,12 @@ function Campana() {
 }
 
 export function AppLayout() {
-  const { usuario, cerrarSesion, restablecerDatos } = useStore();
-  const toast = useToast();
+  const { usuario, cerrarSesion } = useStore();
   const nav = useNav();
   const loc = useLocation();
   const go = useNavigate();
-  if (!usuario) return <Navigate to="/ingresar" replace />;
+  // Sin sesión (o si se perdió por un 401 sin renovación) se va a "Ingresar"; el aviso lo muestra esa pantalla.
+  if (!usuario) return <Navigate to="/ingresar" replace state={{ volver: loc.pathname + loc.search }} />;
   const miga = MIGAS.find(([r]) => r.test(loc.pathname))?.[1] ?? "";
   const seccion = loc.pathname.startsWith("/perfil") || loc.pathname.startsWith("/roles") || loc.pathname.startsWith("/admin/usuarios") ? "Usuarios"
     : loc.pathname.startsWith("/admin") ? "Administración" : "Alojamientos";
@@ -176,16 +179,6 @@ export function AppLayout() {
             {g.items.map(renderLink)}
           </nav>
         ))}
-        <div className="sidebar-foot">
-          <b>Prototipo con datos de ejemplo</b>
-          Los cambios se guardan solo en este navegador.
-          <button
-            className="btn btn-sm btn-ghost mt-8" style={{ color: "#cfe5df", paddingLeft: 0 }}
-            onClick={() => { restablecerDatos(); toast("Datos de ejemplo restablecidos"); }}
-          >
-            <RotateCcw /> Restablecer datos
-          </button>
-        </div>
       </aside>
       <div className="main">
         <header className="topbar">
@@ -193,8 +186,8 @@ export function AppLayout() {
           <div className="crumbs"><span>{seccion}</span><ChevronRight /><b>{miga}</b></div>
           <div className="user-chip">
             <Campana />
-            <span className="avatar" aria-hidden>{iniciales(usuario.nombre)}</span>
-            <div className="who"><b>{usuario.nombre}</b><span>{ROL_TXT[usuario.rol]}</span></div>
+            <span className="avatar" aria-hidden>{iniciales(usuario.nombre_completo)}</span>
+            <div className="who"><b>{usuario.nombre_completo}</b><span>{ROL_TXT[usuario.rol]}</span></div>
             <button className="btn btn-ghost btn-sm" onClick={async () => { await cerrarSesion(); go("/ingresar"); }}>
               <LogOut /> <span>Salir</span>
             </button>
@@ -217,33 +210,26 @@ export function Page({ req, children }: { req: string; children: ReactNode }) {
   );
 }
 
-/** Protección por rol (RF-D-USU-02.1): quien no tiene el rol ve un aviso, no la función. */
-export function SoloRol({ roles, children }: { roles: Rol[]; children: ReactNode }) {
-  const { usuario } = useStore();
-  if (!usuario) return <Navigate to="/ingresar" replace />;
-  if (!roles.includes(usuario.rol)) return <Denegado titulo="No tienes permiso para esta función" />;
+/** Protección por permiso (RF-D-USU-02.1). Sin sesión lleva a "Ingresar"; sin el permiso muestra el aviso.
+ *  Con varios permisos basta tener uno, igual que RequierePermiso en el backend. */
+export function ConPermiso({ permiso, children }: { permiso: string | string[]; children: ReactNode }) {
+  const { usuario, tiene } = useStore();
+  const loc = useLocation();
+  if (!usuario) return <Navigate to="/ingresar" replace state={{ volver: loc.pathname + loc.search }} />;
+  if (!tiene(...(Array.isArray(permiso) ? permiso : [permiso]))) return <Denegado />;
   return <>{children}</>;
 }
 
-/** Pantalla de acceso negado: además de avisar, deja el intento en el registro de acciones (CA-05.2). */
-export function Denegado({ titulo, texto }: { titulo: string; texto?: string }) {
-  const { usuario, registrarEvento } = useStore();
-  const loc = useLocation();
-  useEffect(() => { registrarEvento("Acceso negado", loc.pathname); }, [loc.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
+/** Pantalla de acceso negado. La API registra en la auditoría cada intento que llega a ella (CA-05.2). */
+export function Denegado({ titulo = "No tienes permiso para ver esta página", texto }: { titulo?: string; texto?: string }) {
   return (
-    <Page req="RF-D-USU-02.1 · HU-05 · CA-05.2">
+    <Page req="RF-D-USU-02.1 · HU-05">
       <div className="card empty-state">
         <ShieldCheck />
         <h2>{titulo}</h2>
-        <p>{texto ?? `Tu rol (${usuario ? ROL_TXT[usuario.rol] : "Visitante"}) no puede usarla.`} El intento quedó registrado.</p>
-        <Link className="btn btn-secondary" to="/">Volver al inicio</Link>
+        {texto && <p>{texto}</p>}
+        <Link className="btn btn-secondary" to="/inicio">Volver al inicio</Link>
       </div>
     </Page>
   );
-}
-
-export function inicioPorRol(rol?: Rol) {
-  if (rol === "ANFITRION") return "/publicaciones";
-  if (rol === "ADMINISTRADOR") return "/admin/publicaciones";
-  return "/explorar";
 }

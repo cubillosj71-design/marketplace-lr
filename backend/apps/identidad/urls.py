@@ -13,6 +13,7 @@ urlpatterns = [
     path("recuperacion", views.Recuperacion.as_view(), name="recuperacion"),
     path("recuperacion/<str:token>", views.RecuperacionToken.as_view(), name="recuperacion-token"),
     path("permisos", views.Permisos.as_view(), name="permisos"),
+    path("roles", views.Roles.as_view(), name="roles"),
     path("perfil", views.Perfil.as_view(), name="perfil"),
     path("perfil/desactivar", views.Desactivar.as_view(), name="desactivar"),
 ]

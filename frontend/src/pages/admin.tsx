@@ -1,16 +1,16 @@
 import {
-  ArrowLeft, Ban, BarChart3, Check, CheckCircle2, ClipboardList, History, PauseCircle, Percent, PlayCircle, Search,
+  ArrowLeft, Ban, BarChart3, Check, CheckCircle2, ClipboardList, FileEdit, History, PauseCircle, Percent, PlayCircle, Search,
   ShieldAlert, ShieldOff, Undo2, Users,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   adminApi, leerError,
-  type EventoAuditoriaApi, type PublicacionAdmin, type PublicacionCompleta, type TableroApi, type UsuarioAdmin,
+  type EventoAuditoriaApi, type PublicacionAdmin, type PublicacionCompleta, type RevisionApi, type TableroApi, type UsuarioAdmin,
 } from "../api";
 import { ROL_TXT, cop, type AccionModeracion, type EstadoPub, type Rol } from "../data";
 import { Page } from "../layout";
-import { useStore, useToast } from "../store";
+import { useToast } from "../store";
 import { Alert, Badge, Field, Modal } from "../ui";
 
 const pesos = (v: string | null | undefined) => (v == null ? "—" : cop(Number(v)));
@@ -211,19 +211,10 @@ export function RevisarPublicacion() {
                 <button className="btn btn-secondary" disabled={enviando} onClick={() => { setObs(""); setDevolver(true); }}><Undo2 /> Devolver</button>
               </div>
             ) : <AccionesPublicacion p={p} alCambiar={cargar} />}
+            {/* RF-D-ALO-02.1: el Administrador puede modificar cualquier publicación (publicaciones.moderar) */}
+            {p.estado !== "BORRADOR" && <Link className="btn btn-secondary btn-sm" to={`/publicaciones/${p.id}/editar`}><FileEdit /> Editar datos</Link>}
           </section>
-          <section className="card stack" style={{ gap: 8 }}>
-            <h3 className="row" style={{ gap: 8 }}><History size={18} /> Historial de revisiones</h3>
-            {p.revisiones.length === 0 ? <p className="subtle">Aún no tiene revisiones del administrador.</p> : (
-              <ul className="list-plain historial">
-                {p.revisiones.map((r, i) => (
-                  <li key={i}><b>{ACCION_TXT[r.accion as AccionModeracion] ?? r.accion}</b>
-                    <span className="subtle">{fechaHora(r.fecha)} · {nombres[r.administrador] ?? ""}</span>
-                    {r.observacion && <span>«{r.observacion}»</span>}</li>
-                ))}
-              </ul>
-            )}
-          </section>
+          <section className="card stack" style={{ gap: 8 }}><HistorialRevisiones revisiones={p.revisiones} /></section>
         </aside>
       </div>
       {devolver && (
@@ -305,6 +296,7 @@ export function UsuariosAdmin() {
                         {u.motivo_restriccion}{u.restriccion_hasta ? ` · hasta ${new Date(u.restriccion_hasta).toLocaleDateString("es-CO")}` : ""}</span>}
                     </td>
                     <td>
+                      {/* Regla del negocio sobre la cuenta listada (la API tampoco restringe administradores), no de acceso */}
                       {u.rol !== "ADMINISTRADOR" && (u.restringida
                         ? <button className="btn btn-secondary btn-sm" onClick={() => quitar(u)}><ShieldOff /> Quitar restricción</button>
                         : <button className="btn btn-danger btn-sm" onClick={() => { setMotivo(""); setHasta(""); setErrModal(""); setRestringir(u); }}><ShieldAlert /> Restringir</button>)}
@@ -415,24 +407,23 @@ export function RegistroAcciones() {
   );
 }
 
-/* Historial local del prototipo: lo usa la pantalla del anfitrión, que aún no está conectada a la API. */
+/* Historial de moderación de una publicación (RevisionPublicacion), tal como lo devuelve la API. */
 export const ACCION_TXT: Record<AccionModeracion, string> = {
   APROBAR: "Aprobada", DEVOLVER: "Devuelta", PAUSAR: "Pausada", REACTIVAR: "Reactivada", BLOQUEAR: "Bloqueada", DESBLOQUEAR: "Desbloqueada",
 };
 
-export function HistorialRevisiones({ pubId }: { pubId: number }) {
-  const { revisionesDe, usuarios } = useStore();
-  const lista = revisionesDe(pubId);
+export function HistorialRevisiones({ revisiones }: { revisiones: RevisionApi[] }) {
   return (
     <div className="stack" style={{ gap: 8 }}>
       <h3 style={{ display: "flex", alignItems: "center", gap: 8 }}><History size={18} /> Historial de revisiones</h3>
-      {lista.length === 0 ? <p className="subtle">Aún no tiene revisiones del administrador.</p> : (
+      {revisiones.length === 0 ? <p className="subtle">Aún no tiene revisiones del administrador.</p> : (
         <ul className="list-plain historial">
-          {lista.map((r) => (
-            <li key={r.id}>
-              <b>{ACCION_TXT[r.accion]}</b>
+          {revisiones.map((r, i) => (
+            <li key={`${r.fecha}-${i}`}>
+              <b>{ACCION_TXT[r.accion] ?? r.accion}</b>
               <span className="subtle">
-                {new Date(r.fecha).toLocaleString("es-CO", { dateStyle: "medium", timeStyle: "short" })} · {usuarios.find((u) => u.id === r.adminId)?.nombre}
+                {new Date(r.fecha).toLocaleString("es-CO", { dateStyle: "medium", timeStyle: "short" })}
+                {r.administrador_nombre && ` · ${r.administrador_nombre}`}
               </span>
               {r.observacion && <span>«{r.observacion}»</span>}
             </li>

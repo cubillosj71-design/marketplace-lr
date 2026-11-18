@@ -1,20 +1,22 @@
-# Prototipo funcional: Usuarios y Alojamientos
+# Frontend: Alojamientos LR
 
-Frontend en React 18 + TypeScript + Vite.
+React 18 + TypeScript + Vite. **Todas las pantallas leen y escriben en la API** (`/api/v1`, ver `backend/API.md`);
+no hay datos locales ni copias en el navegador.
 
-- **Módulo Usuarios: conectado a la API real** (SRV-01 Identidad, `backend/API.md`). Registro, inicio de sesión,
-  cierre de sesión, recuperación de contraseña, perfil, cambio de contraseña y desactivación van contra el backend.
-  El token de acceso vive en memoria y el de renovación en una cookie httpOnly (ADR-005, C4 nivel 2): al recargar la
-  página la sesión se recupera sin pedir la contraseña.
-- **Módulo Alojamientos y administración: siguen con datos de ejemplo** guardados en el `localStorage` del navegador,
-  hasta que se conecten a sus servicios. La cuenta de la API se relaciona con estos datos por el correo.
+- **Sesión real (HU-02, ADR-005).** Se entra solo con `POST /identidad/token`, con el correo y la contraseña que
+  escribe el usuario. El token de acceso vive en memoria (nunca en `localStorage` ni `sessionStorage`) y el de
+  renovación en una cookie httpOnly. Al recargar, la sesión se recupera con `POST /identidad/token/renovar`; si no se
+  puede, se va a "Ingresar". Cualquier 401 intenta renovar una vez; si falla, la sesión se cierra y "Ingresar"
+  muestra "Tu sesión terminó. Vuelve a iniciar sesión.". "Salir" llama a `POST /identidad/salir`.
+- **Rutas y menú por permisos (RF-D-USU-02.1).** Al entrar y al recargar se pide `GET /identidad/permisos`. Cada ruta
+  declara el permiso que necesita (mismo nombre que en `backend/apps/comun/rbac.py`, ver `src/App.tsx`); sin él se ve
+  "No tienes permiso para ver esta página" y sin sesión se va a "Ingresar". El menú lateral muestra solo las opciones
+  cuyo permiso tiene el usuario. El rol solo se muestra en pantalla.
 
 ## Cómo correrlo
 
-Necesita el backend corriendo con los datos de ejemplo (ver `backend/API.md`):
-
 ```bash
-cd backend && python manage.py migrate && python manage.py cargar_demo && python manage.py runserver
+cd backend && python manage.py migrate && python manage.py cargar_demo --reiniciar && python manage.py runserver
 cd frontend
 npm install
 npm run dev        # http://localhost:5173 ; Vite reenvía /api/* a http://localhost:8000
@@ -24,7 +26,8 @@ Para generar la versión estática: `npm run build` (queda en `dist/`).
 
 ## Cuentas de prueba
 
-Todas usan la contraseña `Clave1234`. En la pantalla de ingreso hay botones para entrar con un clic.
+Todas usan la contraseña `Clave1234`. En "Ingresar", los botones de cuentas de prueba solo llenan el correo: la
+contraseña se escribe.
 
 | Rol | Correo |
 |---|---|
@@ -33,67 +36,41 @@ Todas usan la contraseña `Clave1234`. En la pantalla de ingreso hay botones par
 | Administrador | admin@inversioneslr.com |
 | Cuenta restringida | restringido@correo.com |
 
-## Pantallas
+## Pantallas y permiso que exige cada una
 
-| Módulo | Pantalla | Ruta | Trazabilidad |
-|---|---|---|---|
-| USU | Iniciar sesión | `/ingresar` | CU-USU-02, RF-D-USU-01.2 |
-| USU | Registro | `/registro` | CU-USU-01, RF-D-USU-01.1 |
-| USU | Recuperar contraseña (enlace en pantalla, 20 min, un solo uso) | `/recuperar`, `/restablecer/:token` | CU-USU-03, RF-D-USU-01.3 |
-| USU | Mi perfil y desactivar cuenta | `/perfil` | CU-USU-04, CU-USU-05, RF-D-USU-01.4 |
-| USU | Cambiar contraseña | `/perfil/contrasena` | RF-D-USU-01.4 |
-| USU | Roles y permisos | `/roles` | RF-D-USU-02.1 |
-| USU | Reporte de usuarios (solo Administrador): periodo, rol, estado, descarga PDF o Excel | `/admin/reportes?tipo=usuarios` | RF-D-ADM-05.2, HU-25, CA-25.2, CA-25.3 |
-| ALO | Mis publicaciones | `/publicaciones` | CU-ALO-03, RF-D-ALO-02.1 |
-| ALO | Detalle, pausar, reactivar, enviar a revisión | `/publicaciones/:id` | CU-ALO-02, CU-ALO-05 |
-| ALO | Nueva y editar publicación (2 pasos) | `/publicaciones/nueva`, `/publicaciones/:id/editar` | CU-ALO-01, CU-ALO-04, RF-D-ALO-01.1 |
-| ALO | Calendario de disponibilidad | `/calendario` | CU-ALO-06, RF-D-ALO-02.2 |
-| ALO | Reporte de publicaciones (solo Administrador): periodo, estado, ciudad, tipo, reservas, ingresos estimados, demanda por ciudad y tipo, descarga PDF o Excel | `/admin/reportes?tipo=publicaciones` | RF-D-ADM-05.2, RF-D-ADM-05.1, HU-25, CA-25.1, CA-25.2 |
-| (RES) | Explorar alojamientos, huésped y visitante | `/explorar`, `/explorar-publico` | Búsqueda básica; la completa es del módulo RES |
-| (ADM) | Todas las publicaciones, revisar, bloquear | `/admin/...` | RF-D-ADM-01.1, para cerrar el ciclo de estados |
-| (ADM) | Tarifa de servicio: porcentaje vigente (0 % a 30 %) e historial | `/admin/tarifa` | RF-D-ADM-03.1, HU-22, CA-22.1 |
-| (ADM) | Registro de acciones (inicios de sesión, accesos negados, cambios de estado, descargas de reportes) | `/admin/registro` | HU-23, BPMN-07 |
+| Pantalla | Ruta | Permiso |
+|---|---|---|
+| Iniciar sesión, registro, recuperar contraseña | `/ingresar`, `/registro`, `/recuperar`, `/restablecer/:token` | Sin sesión |
+| Explorar sin cuenta y detalle | `/explorar-publico`, `/explorar-publico/:id` | Sin sesión (Visitante: `busqueda.ver`) |
+| Mi perfil y desactivar cuenta · Cambiar contraseña | `/perfil`, `/perfil/contrasena` | `perfil.gestionar` (desactivar: `cuenta.desactivar`) |
+| Roles y permisos (matriz de `GET /identidad/roles`) | `/roles` | Solo sesión |
+| Avisos | `/avisos` | `notificaciones.ver` |
+| Explorar y detalle | `/explorar`, `/explorar/:id` | `busqueda.ver` |
+| Cotización y pago | `/cotizacion/:id` | `reservas.cotizar` |
+| Mis reservas | `/reservas` | `reservas.ver_propias` |
+| Mis publicaciones, nueva, detalle | `/publicaciones`, `/publicaciones/nueva`, `/publicaciones/:id` | `publicaciones.gestionar_propias` |
+| Editar publicación | `/publicaciones/:id/editar` | `publicaciones.gestionar_propias` o `publicaciones.moderar` |
+| Calendario | `/calendario` | `calendario.gestionar` |
+| Reservas de mis alojamientos | `/reservas-alojamientos` | `reservas.ver_de_mis_alojamientos` |
+| Tablero | `/admin/tablero` | `tablero.ver` |
+| Todas las publicaciones, pendientes, revisar | `/admin/publicaciones`, `/admin/revision`, `/admin/.../:id` | `publicaciones.moderar` |
+| Reservas en revisión | `/admin/reservas` | `reservas.resolver` |
+| Usuarios | `/admin/usuarios` | `usuarios.ver` |
+| Tarifa de servicio | `/admin/tarifa` | `tarifa.configurar` |
+| Registro de acciones | `/admin/registro` | `auditoria.consultar` |
+| Reportes | `/admin/reportes` | `reportes.descargar` |
 
-## Roles y permisos
+## Imágenes de las publicaciones
 
-| Rol | Qué puede usar |
-|---|---|
-| Visitante | Iniciar sesión, registrarse, recuperar contraseña, explorar alojamientos activos |
-| Huésped | Su perfil, cambiar contraseña, desactivar su cuenta, roles, explorar y ver detalle |
-| Anfitrión | Lo anterior de su cuenta, más sus publicaciones (crear, editar, enviar a revisión, pausar, reactivar) y su calendario |
-| Administrador | Su perfil, moderar y modificar cualquier publicación, reportes de usuarios y publicaciones, registro de acciones |
-
-Si alguien entra a una ruta que no le corresponde, ve "No tienes permiso" y el intento queda en el registro de acciones.
-
-## Reportes
-
-- Formatos: PDF y Excel .xlsx. Los genera el servidor (ReportLab y openpyxl, ADR-009); el frontend solo descarga el archivo. En Excel los valores en pesos van como número para poder sumarlos.
-- El periodo por defecto es el año en curso. Si la fecha inicial es posterior a la final, la descarga se bloquea.
-- Cada descarga queda en el registro de acciones con quién, fecha, hora, formato, periodo y número de registros.
-- Las activas del reporte de publicaciones coinciden con el tablero de "Todas las publicaciones" (CA-25.1).
-- En la vista publicada como artefacto el navegador bloquea las descargas; corriendo el proyecto o el HTML independiente sí descargan.
-
-## Correspondencia con el diagrama de clases y el modelo relacional
-
-| Clase / tabla | En el prototipo |
-|---|---|
-| Usuario | correo, nombre, teléfono, rol, estado, `fechaRegistro` y `aceptaDatosEn` (fecha y hora en que autorizó la Ley 1581). Sin ciudad, igual que en el diagrama. |
-| RestriccionUsuario | motivo, fecha de inicio y fecha de fin. Al ingresar, la cuenta restringida ve el motivo y hasta cuándo. |
-| TokenRecuperacion | creado, vence a los 20 minutos, un solo uso. |
-| Publicacion | mismos atributos y estados; operaciones enviar a revisión, aprobar, devolver, pausar, reactivar, bloquear y desbloquear. |
-| RevisionPublicacion | historial de moderación (APROBAR, DEVOLVER, PAUSAR, REACTIVAR, BLOQUEAR, DESBLOQUEAR) con observación, fecha y administrador. La observación de una devolución y el motivo de un bloqueo salen de aquí. |
-| ReglaAlojamiento | cada regla es un registro con `descripcion` y `orden`. |
-| ImagenPublicacion, Servicio, ServicioAdicional, PoliticaCancelacion | imágenes en orden, servicios incluidos, adicionales con precio y política Moderada con sus tramos. |
-| Reserva | fechas, número de huéspedes, estado, `total` y `tarifaServicio` fijados al confirmar. |
-| TarifaServicio | historial de porcentajes con `vigenteDesde`; 10 % inicial. El reporte usa el valor guardado en cada reserva, así un cambio no altera las confirmadas (CA-22.1). |
-| EventoAuditoria | acción, entidad, id de la entidad, detalle, resultado y fecha. La IP la llena el backend; en el prototipo queda vacía. |
+La API guarda la dirección (URL) de cada imagen (`imagen_publicacion.ruta`, hasta 500 caracteres). El formulario
+agrega imágenes por URL o con "Agregar imagen de ejemplo". No hay subida de archivos: el backend no tiene un servicio
+de almacenamiento de archivos y el esquema no se cambia.
 
 ## Estructura
 
-- `src/data.ts`: tipos, datos de ejemplo y reglas (datos obligatorios para revisión, noches ocupadas).
-- `src/store.tsx`: estado global y acciones (sesión, validaciones, cambios de estado).
-- `src/layout.tsx`: diseño de acceso, barra lateral por rol y protección por rol.
-- `src/pages/`: una carpeta de pantallas por módulo (`reportes.tsx` descarga los cinco reportes del servidor).
-- `src/styles.css`: sistema visual (colores, tipografía, componentes).
-
-Cuando exista la API, las acciones de `store.tsx` se reemplazan por llamadas con `src/api.ts`.
+- `src/api.ts`: cliente HTTP, sesión (token en memoria, renovación con la cookie) y llamadas por servicio.
+- `src/store.tsx`: sesión actual (usuario y permisos) y avisos. Sin datos locales.
+- `src/data.ts`: tipos, textos (roles, estados, permisos) y formatos.
+- `src/layout.tsx`: diseño, menú por permisos y protección de rutas (`ConPermiso`).
+- `src/pages/`: pantallas por módulo.
+- `src/styles.css`: sistema visual.

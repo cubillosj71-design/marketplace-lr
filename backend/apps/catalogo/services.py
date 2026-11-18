@@ -67,6 +67,12 @@ def catalogos() -> dict:
         "ciudades": list(Ciudad.objects.values("id", "nombre", "departamento")),
         "tipos": list(TipoAlojamiento.objects.values("id", "nombre")),
         "servicios": list(Servicio.objects.values("id", "nombre")),
+        "politicas": [
+            {"id": p.id, "nombre": p.nombre, "descripcion": p.descripcion,
+             "tramos": [{"dias_minimos": t.dias_minimos, "dias_maximos": t.dias_maximos,
+                         "porcentaje_devolucion": f"{t.porcentaje_devolucion:.2f}"} for t in p.tramos.order_by("-dias_minimos")]}
+            for p in PoliticaCancelacion.objects.filter(activa=True).prefetch_related("tramos").order_by("id")
+        ],
     }
 
 

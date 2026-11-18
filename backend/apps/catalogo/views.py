@@ -68,7 +68,8 @@ class PublicacionSalida(serializers.ModelSerializer):
         return [{"ruta": i.ruta, "orden": i.orden} for i in p.imagenes.all()]
 
     def get_revisiones(self, p):
-        return [{"accion": r.accion, "observacion": r.observacion, "fecha": r.fecha, "administrador": r.administrador_id} for r in p.revisiones.all()]
+        return [{"accion": r.accion, "observacion": r.observacion, "fecha": r.fecha, "administrador": r.administrador_id,
+                 "administrador_nombre": r.administrador.nombre_completo} for r in p.revisiones.select_related("administrador")]
 
     def get_faltantes(self, p):
         return services.faltantes(p) if p.estado == EstadoPublicacion.BORRADOR else []
@@ -77,10 +78,21 @@ class PublicacionSalida(serializers.ModelSerializer):
 class PublicacionLista(serializers.ModelSerializer):
     ciudad_nombre = serializers.CharField(source="ciudad.nombre", default=None)
     tipo_nombre = serializers.CharField(source="tipo_alojamiento.nombre", default=None)
+    imagen = serializers.SerializerMethodField()
+    ultima_revision = serializers.SerializerMethodField()
 
     class Meta:
         model = Publicacion
-        fields = ["id", "anfitrion", "titulo", "ciudad", "ciudad_nombre", "tipo_alojamiento", "tipo_nombre", "precio_noche", "estado", "actualizada"]
+        fields = ["id", "anfitrion", "titulo", "ciudad", "ciudad_nombre", "tipo_alojamiento", "tipo_nombre", "precio_noche", "estado",
+                  "actualizada", "imagen", "ultima_revision"]
+
+    def get_imagen(self, p):
+        primera = p.imagenes.order_by("orden").first()
+        return primera.ruta if primera else None
+
+    def get_ultima_revision(self, p):
+        r = p.revisiones.order_by("-fecha", "-id").first()
+        return {"accion": r.accion, "observacion": r.observacion, "fecha": r.fecha} if r else None
 
 
 def _salida(p):
@@ -152,7 +164,7 @@ class EnviarRevision(_CambioEstado):
 
 
 class Catalogos(APIView):
-    """GET /catalogo/ciudades · /tipos-alojamiento · /servicios (todos)."""
+    """GET /catalogo/ciudades · /tipos-alojamiento · /servicios · /politicas (todos)."""
 
     permission_classes = [RequierePermiso("catalogo.ver")]
     clave = ""

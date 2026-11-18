@@ -1,37 +1,48 @@
 import {
-  ArrowLeft, CalendarDays, Check, CheckCircle2, CircleDashed, ClipboardList, Eye, FileEdit, Home, ImagePlus,
-  Lock, PauseCircle, PlayCircle, Plus, Search, Send, Sparkles, Trash2, Upload,
+  ArrowLeft, CalendarDays, Check, CheckCircle2, CircleDashed, ClipboardList, FileEdit, Home, ImagePlus,
+  PauseCircle, PlayCircle, Plus, Search, Send, Sparkles, Trash2,
 } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { isAxiosError } from "axios";
 import {
-  CIUDADES, PALETA, POLITICA_MODERADA, SERVICIOS, TIPOS, cop, faltantesRevision, fechaLarga,
-  type Adicional, type EstadoPub, type Publicacion, type ReglaAlojamiento,
-} from "../data";
+  anfitrionApi, catalogoApi, leerError, misReservasApi, textoTramo,
+  type ItemCatalogo, type PoliticaApi, type PublicacionAdmin, type PublicacionCompleta, type PublicacionEntrada, type ReservaResumen,
+} from "../api";
+import { cop, fechaLarga, imagenDe, type EstadoPub } from "../data";
 import { HistorialRevisiones } from "./admin";
 import { Denegado, Page } from "../layout";
 import { useStore, useToast } from "../store";
 import { Alert, Badge, Field, ImageTile, Modal } from "../ui";
 
+/** Datos que faltan para enviar a revisión: la API los manda en `faltantes` (RF-D-ALO-01.2). */
+const faltantesDe = (e: unknown): string[] =>
+  isAxiosError(e) && Array.isArray((e.response?.data as { faltantes?: unknown })?.faltantes)
+    ? (e.response!.data as { faltantes: string[] }).faltantes : [];
+
+const mayuscula = (t: string) => t[0]!.toUpperCase() + t.slice(1);
+
 /* =========================================================
-   CU-ALO-03 Consultar mis publicaciones
+   CU-ALO-03 Consultar mis publicaciones (GET /catalogo/mis-publicaciones)
    ========================================================= */
 export function MisPublicaciones() {
-  const { usuario, publicaciones, ultimaRevision } = useStore();
   const go = useNavigate();
+  const [mias, setMias] = useState<PublicacionAdmin[] | null>(null);
+  const [error, setError] = useState("");
   const [q, setQ] = useState("");
   const [estado, setEstado] = useState<"" | EstadoPub>("");
   const [tipo, setTipo] = useState("");
-  const mias = publicaciones.filter((p) => p.anfitrionId === usuario!.id);
-  const lista = mias.filter((p) =>
-    (!q || (p.titulo + " " + p.ciudad).toLowerCase().includes(q.toLowerCase())) &&
-    (!estado || p.estado === estado) && (!tipo || p.tipo === tipo));
-  const n = (e: EstadoPub) => mias.filter((p) => p.estado === e).length;
+
+  useEffect(() => { anfitrionApi.mias().then(setMias).catch((e) => setError(leerError(e).error)); }, []);
+
+  const todas = mias ?? [];
+  const lista = todas.filter((p) =>
+    (!q || `${p.titulo} ${p.ciudad_nombre ?? ""}`.toLowerCase().includes(q.toLowerCase())) &&
+    (!estado || p.estado === estado) && (!tipo || p.tipo_nombre === tipo));
+  const n = (e: EstadoPub) => todas.filter((p) => p.estado === e).length;
   // Devuelta = borrador cuya última revisión del administrador es DEVOLVER (RevisionPublicacion)
-  const devueltas = mias.flatMap((p) => {
-    const r = ultimaRevision(p.id);
-    return p.estado === "BORRADOR" && r?.accion === "DEVOLVER" ? [{ p, obs: r.observacion }] : [];
-  });
+  const devueltas = todas.filter((p) => p.estado === "BORRADOR" && p.ultima_revision?.accion === "DEVOLVER");
+  const tipos = [...new Set(todas.map((p) => p.tipo_nombre).filter(Boolean))] as string[];
 
   const stats = [
     { label: "Activas", v: n("ACTIVA"), icon: CheckCircle2, bg: "#dcf3e4", fg: "#166534" },
@@ -46,6 +57,7 @@ export function MisPublicaciones() {
         <div><h1>Mis publicaciones</h1><p>Tus alojamientos y el estado de cada uno.</p></div>
         <Link className="btn btn-primary" to="/publicaciones/nueva"><Plus /> Nueva publicación</Link>
       </div>
+      {error && <Alert tipo="error">{error}</Alert>}
 
       <div className="grid-4">
         {stats.map((s) => (
@@ -56,9 +68,9 @@ export function MisPublicaciones() {
         ))}
       </div>
 
-      {devueltas.map(({ p, obs }) => (
+      {devueltas.map((p) => (
         <Alert key={p.id} tipo="info">
-          <b>{p.titulo}</b> fue devuelta por el administrador: «{obs}»{" "}
+          <b>{p.titulo}</b> fue devuelta por el administrador: «{p.ultima_revision?.observacion}»{" "}
           <Link to={`/publicaciones/${p.id}/editar`}>Corregir</Link>
         </Alert>
       ))}
@@ -71,12 +83,12 @@ export function MisPublicaciones() {
         </select>
         <select className="select" value={tipo} onChange={(e) => setTipo(e.target.value)}>
           <option value="">Tipo: todos</option>
-          {TIPOS.map((t) => <option key={t}>{t}</option>)}
+          {tipos.map((t) => <option key={t}>{t}</option>)}
         </select>
       </div>
 
       <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-        {lista.length === 0 ? (
+        {!mias ? <p className="muted" style={{ padding: 20 }}>{error ? "" : "Cargando…"}</p> : lista.length === 0 ? (
           <div className="empty-state"><Home /><b>No hay publicaciones con esos filtros</b>
             <Link className="btn btn-secondary btn-sm" to="/publicaciones/nueva"><Plus /> Crear una</Link></div>
         ) : (
@@ -84,16 +96,16 @@ export function MisPublicaciones() {
             <table className="table">
               <thead><tr><th>Publicación</th><th>Tipo</th><th>Precio / noche</th><th>Estado</th><th>Actualizada</th></tr></thead>
               <tbody>
-                {lista.map((p) => (
+                {lista.map((p, i) => (
                   <tr key={p.id} className="clickable" onClick={() => go(`/publicaciones/${p.id}`)}>
                     <td>
                       <div className="pub-cell">
-                        <ImageTile img={p.imagenes[0]} style={{ width: 52, height: 40, borderRadius: 8 }} />
-                        <div><Link to={`/publicaciones/${p.id}`} onClick={(e) => e.stopPropagation()}>{p.titulo}</Link><span className="subtle">{p.ciudad || "Sin ciudad"}</span></div>
+                        <ImageTile img={imagenDe(p.imagen, i, p.titulo)} style={{ width: 52, height: 40, borderRadius: 8 }} />
+                        <div><Link to={`/publicaciones/${p.id}`} onClick={(e) => e.stopPropagation()}>{p.titulo || "Sin título"}</Link><span className="subtle">{p.ciudad_nombre || "Sin ciudad"}</span></div>
                       </div>
                     </td>
-                    <td>{p.tipo || "—"}</td>
-                    <td>{cop(p.precioNoche)}</td>
+                    <td>{p.tipo_nombre || "—"}</td>
+                    <td>{cop(p.precio_noche)}</td>
                     <td><Badge estado={p.estado} /></td>
                     <td className="muted">{fechaLarga(p.actualizada)}</td>
                   </tr>
@@ -113,42 +125,62 @@ export function MisPublicaciones() {
    ========================================================= */
 export function DetallePublicacion() {
   const { id } = useParams();
-  const { usuario, publicaciones, reservasConfirmadas, enviarARevision, cambiarEstado, usuarios, ultimaRevision } = useStore();
   const toast = useToast();
   const go = useNavigate();
+  const [p, setP] = useState<PublicacionCompleta | null>(null);
+  const [negado, setNegado] = useState<string | null>(null);
+  const [reservas, setReservas] = useState<ReservaResumen[]>([]);
+  const [politicas, setPoliticas] = useState<PoliticaApi[]>([]);
   const [modal, setModal] = useState<null | "pausar" | "reactivar" | { faltan: string[] }>(null);
-  const p = publicaciones.find((x) => x.id === Number(id));
-  const esAdmin = usuario!.rol === "ADMINISTRADOR";
+  const [ocupado, setOcupado] = useState(false);
 
-  if (!p || (!esAdmin && p.anfitrionId !== usuario!.id))
-    return <Denegado titulo="No puedes ver esta publicación" texto="Solo el anfitrión dueño o un administrador pueden abrirla." />;
+  useEffect(() => {
+    // CA-05.3: la API responde 403 si la publicación es de otro anfitrión
+    anfitrionApi.publicacion(Number(id)).then((r) => setP(r.data)).catch((e) => setNegado(leerError(e).error));
+    misReservasApi.deMisAlojamientos()
+      .then((r) => setReservas(r.data.filter((x) => x.publicacion === Number(id) && x.estado === "CONFIRMADA")))
+      .catch(() => {});
+    catalogoApi.politicas().then((r) => setPoliticas(r.data)).catch(() => {});
+  }, [id]);
 
-  const reservas = reservasConfirmadas(p.id);
-  const ultima = ultimaRevision(p.id);
-  const anfitrion = usuarios.find((u) => u.id === p.anfitrionId);
-  const editable = ["BORRADOR", "ACTIVA", "PAUSADA"].includes(p.estado) || esAdmin;
-  const volver = esAdmin ? "/admin/publicaciones" : "/publicaciones";
+  if (negado) return <Denegado titulo="No puedes ver esta publicación" texto={negado} />;
+  if (!p) return <Page req="RF-D-ALO-02.1"><p className="muted">Cargando…</p></Page>;
 
-  const enviar = () => {
-    const faltan = faltantesRevision(p);
-    if (faltan.length) return setModal({ faltan });
-    enviarARevision(p.id);
-    toast("Publicación enviada a revisión");
+  const ultima = p.revisiones[0];
+  const editable = ["BORRADOR", "ACTIVA", "PAUSADA"].includes(p.estado);
+  const politica = politicas.find((x) => x.id === p.politica);
+
+  const ejecutar = async (accion: () => Promise<{ data: PublicacionCompleta }>, ok: string) => {
+    setOcupado(true);
+    try {
+      setP((await accion()).data);
+      setModal(null);
+      toast(ok);
+    } catch (e) {
+      const faltan = faltantesDe(e);
+      if (faltan.length) setModal({ faltan });
+      else { setModal(null); toast(leerError(e).error, "err"); }
+    } finally {
+      setOcupado(false);
+    }
   };
+  const enviar = () => (p.faltantes.length
+    ? setModal({ faltan: p.faltantes })
+    : ejecutar(() => anfitrionApi.enviarRevision(p.id), "Publicación enviada a revisión"));
 
   return (
     <Page req="RF-D-ALO-02.1 · CU-ALO-02 · CU-ALO-05">
       <div>
-        <Link to={volver} className="back"><ArrowLeft /> {esAdmin ? "Todas las publicaciones" : "Mis publicaciones"}</Link>
+        <Link to="/publicaciones" className="back"><ArrowLeft /> Mis publicaciones</Link>
         <div className="page-head">
-          <div className="row" style={{ gap: 12 }}><h1>{p.titulo}</h1><Badge estado={p.estado} /></div>
+          <div className="row" style={{ gap: 12 }}><h1>{p.titulo || "Sin título"}</h1><Badge estado={p.estado} /></div>
           <div className="row">
             {p.estado === "ACTIVA" && <button className="btn btn-secondary" onClick={() => setModal("pausar")}><PauseCircle /> Pausar</button>}
             {p.estado === "PAUSADA" && <button className="btn btn-secondary" onClick={() => setModal("reactivar")}><PlayCircle /> Reactivar</button>}
-            {p.anfitrionId === usuario!.id && ["ACTIVA", "PAUSADA", "BORRADOR"].includes(p.estado) &&
+            {["ACTIVA", "PAUSADA", "BORRADOR"].includes(p.estado) &&
               <Link className="btn btn-secondary" to={`/calendario?pub=${p.id}`}><CalendarDays /> Calendario</Link>}
             {editable && <Link className={`btn ${p.estado === "BORRADOR" ? "btn-secondary" : "btn-primary"}`} to={`/publicaciones/${p.id}/editar`}><FileEdit /> Editar</Link>}
-            {p.estado === "BORRADOR" && <button className="btn btn-primary" onClick={enviar}><Send /> Enviar a revisión</button>}
+            {p.estado === "BORRADOR" && <button className="btn btn-primary" disabled={ocupado} onClick={enviar}><Send /> Enviar a revisión</button>}
           </div>
         </div>
       </div>
@@ -160,23 +192,22 @@ export function DetallePublicacion() {
 
       <div className="card card-tight">
         <div className="kv">
-          {esAdmin && <div><span>Anfitrión</span><b>{anfitrion?.nombre}</b></div>}
-          <div><span>Ciudad</span><b>{p.ciudad || "—"}</b></div>
-          <div><span>Tipo</span><b>{p.tipo || "—"}</b></div>
+          <div><span>Ciudad</span><b>{p.ciudad_nombre || "—"}</b></div>
+          <div><span>Tipo</span><b>{p.tipo_nombre || "—"}</b></div>
           <div><span>Capacidad</span><b>{p.capacidad ? `${p.capacidad} huéspedes` : "—"}</b></div>
-          <div><span>Precio por noche</span><b>{cop(p.precioNoche)}</b></div>
-          <div><span>Limpieza</span><b>{cop(p.limpieza)}</b></div>
-          <div><span>Descuento</span><b>{p.descuentoPct ? `${p.descuentoPct} % desde ${p.descuentoNoches} noches` : "Sin descuento"}</b></div>
+          <div><span>Precio por noche</span><b>{cop(p.precio_noche)}</b></div>
+          <div><span>Limpieza</span><b>{cop(p.tarifa_limpieza)}</b></div>
+          <div><span>Descuento</span><b>{p.descuento_porcentaje ? `${Number(p.descuento_porcentaje)} % desde ${p.descuento_min_noches} noches` : "Sin descuento"}</b></div>
         </div>
       </div>
 
       <div className="grid-3">
         <section className="card stack">
           <h3>Servicios incluidos</h3>
-          <div className="chips">{p.servicios.length ? p.servicios.map((s) => <span key={s} className="svc"><Check />{s}</span>) : <span className="muted">Ninguno</span>}</div>
+          <div className="chips">{p.servicios.length ? p.servicios.map((s) => <span key={s.id} className="svc"><Check />{s.nombre}</span>) : <span className="muted">Ninguno</span>}</div>
           <h3>Servicios adicionales</h3>
-          {p.adicionales.length ? (
-            <ul className="list-plain">{p.adicionales.map((a) => <li key={a.nombre} className="row-between" style={{ display: "flex" }}><span>{a.nombre}</span><b>{cop(a.precio)}</b></li>)}</ul>
+          {p.servicios_adicionales.length ? (
+            <ul className="list-plain">{p.servicios_adicionales.map((a) => <li key={a.id} className="row-between" style={{ display: "flex" }}><span>{a.nombre}</span><b>{cop(a.precio)}</b></li>)}</ul>
           ) : <span className="muted">Ninguno</span>}
         </section>
         <section className="card stack">
@@ -184,19 +215,19 @@ export function DetallePublicacion() {
           {p.reglas.length
             ? <ol className="reglas">{[...p.reglas].sort((a, b) => a.orden - b.orden).map((r) => <li key={r.orden}>{r.descripcion}</li>)}</ol>
             : <span className="muted">Sin reglas</span>}
-          <p className="muted">{p.ubicacion}</p>
-          <div><span className="label">Política de cancelación: </span><b>{p.politica || "Sin elegir"}</b></div>
-          {p.politica && <ul className="list-plain subtle">{POLITICA_MODERADA.map((t) => <li key={t.tramo}>{t.devolucion} · {t.tramo}</li>)}</ul>}
+          <p className="muted">{p.ubicacion_textual}</p>
+          <div><span className="label">Política de cancelación: </span><b>{p.politica_nombre || "Sin elegir"}</b></div>
+          {politica && <ul className="list-plain subtle">{politica.tramos.map((t) => <li key={t.dias_minimos}>{Number(t.porcentaje_devolucion)} % · {textoTramo(t)}</li>)}</ul>}
         </section>
         <section className="card stack">
           <h3>Imágenes ({p.imagenes.length})</h3>
           {p.imagenes.length ? (
-            <div className="img-grid">{p.imagenes.map((im, i) => <ImageTile key={im.id} img={im} etiqueta={i === 0 ? "Portada" : im.nombre} />)}</div>
+            <div className="img-grid">{p.imagenes.map((im, i) => <ImageTile key={im.orden} img={imagenDe(im.ruta, i)} etiqueta={i === 0 ? "Portada" : undefined} />)}</div>
           ) : <Alert tipo="warn">Falta al menos una imagen para enviar a revisión.</Alert>}
         </section>
       </div>
 
-      <section className="card"><HistorialRevisiones pubId={p.id} /></section>
+      <section className="card"><HistorialRevisiones revisiones={p.revisiones} /></section>
 
       <section className="card stack">
         <div className="card-head" style={{ margin: 0 }}>
@@ -206,7 +237,7 @@ export function DetallePublicacion() {
         {reservas.length ? (
           <ul className="list-plain">
             {reservas.map((r) => (
-              <li key={r.id}><CalendarDays color="var(--brand-700)" />{fechaLarga(r.llegada)} al {fechaLarga(r.salida)} · {usuarios.find((u) => u.id === r.huespedId)?.nombre}</li>
+              <li key={r.id}><CalendarDays color="var(--brand-700)" />{fechaLarga(r.fecha_llegada)} al {fechaLarga(r.fecha_salida)} · {r.huesped_nombre}</li>
             ))}
           </ul>
         ) : <p className="muted">No tiene reservas confirmadas.</p>}
@@ -222,7 +253,7 @@ export function DetallePublicacion() {
           {reservas.length > 0 && <Alert tipo="ok">Tus {reservas.length} reservas confirmadas se mantienen igual.</Alert>}
           <div className="modal-actions">
             <button className="btn btn-secondary" onClick={() => setModal(null)}>Cancelar</button>
-            <button className="btn btn-primary" onClick={() => { cambiarEstado(p.id, "PAUSADA"); setModal(null); toast("Publicación pausada"); }}>Pausar publicación</button>
+            <button className="btn btn-primary" disabled={ocupado} onClick={() => ejecutar(() => anfitrionApi.pausar(p.id), "Publicación pausada")}>Pausar publicación</button>
           </div>
         </Modal>
       )}
@@ -234,7 +265,7 @@ export function DetallePublicacion() {
           <p className="muted">Vuelve a aparecer en las búsquedas y a recibir reservas.</p>
           <div className="modal-actions">
             <button className="btn btn-secondary" onClick={() => setModal(null)}>Cancelar</button>
-            <button className="btn btn-primary" onClick={() => { cambiarEstado(p.id, "ACTIVA"); setModal(null); toast("Publicación activa de nuevo"); }}>Reactivar</button>
+            <button className="btn btn-primary" disabled={ocupado} onClick={() => ejecutar(() => anfitrionApi.reactivar(p.id), "Publicación activa de nuevo")}>Reactivar</button>
           </div>
         </Modal>
       )}
@@ -243,7 +274,7 @@ export function DetallePublicacion() {
           <span className="ico-big" style={{ background: "var(--err-soft)", color: "var(--err)" }}><Send /></span>
           <h2>Aún no se puede enviar a revisión</h2>
           <p className="muted">La publicación sigue en BORRADOR. Completa lo siguiente:</p>
-          <ul className="list-plain">{modal.faltan.map((f) => <li key={f}><CircleDashed color="var(--err)" />{f[0]!.toUpperCase() + f.slice(1)}</li>)}</ul>
+          <ul className="list-plain">{modal.faltan.map((f) => <li key={f}><CircleDashed color="var(--err)" />{mayuscula(f)}</li>)}</ul>
           <div className="modal-actions">
             <button className="btn btn-secondary" onClick={() => setModal(null)}>Cerrar</button>
             <button className="btn btn-primary" onClick={() => go(`/publicaciones/${p.id}/editar`)}>Completar datos</button>
@@ -256,31 +287,75 @@ export function DetallePublicacion() {
 
 /* =========================================================
    CU-ALO-01 Crear publicación · CU-ALO-04 Editar publicación
+   POST /catalogo/publicaciones · PATCH /catalogo/publicaciones/{id}
    ========================================================= */
-const vacia = (anfitrionId: number): Publicacion => ({
-  id: 0, anfitrionId, titulo: "", descripcion: "", tipo: "", ciudad: "", ubicacion: "", capacidad: null,
-  precioNoche: null, limpieza: null, descuentoPct: null, descuentoNoches: null, servicios: [], adicionales: [],
-  reglas: [], imagenes: [], politica: "", estado: "BORRADOR", bloqueos: [], actualizada: "",
+interface Formulario {
+  titulo: string; descripcion: string; ciudad: number | null; tipo_alojamiento: number | null; politica: number | null;
+  ubicacion_textual: string; capacidad: number | null; precio_noche: number | null; tarifa_limpieza: number | null;
+  descuento_porcentaje: number | null; descuento_min_noches: number | null; servicios: number[];
+  servicios_adicionales: { nombre: string; precio: number }[]; reglas: string[]; imagenes: string[];
+}
+
+const VACIO: Formulario = {
+  titulo: "", descripcion: "", ciudad: null, tipo_alojamiento: null, politica: null, ubicacion_textual: "", capacidad: null,
+  precio_noche: null, tarifa_limpieza: null, descuento_porcentaje: null, descuento_min_noches: null, servicios: [],
+  servicios_adicionales: [], reglas: [], imagenes: [],
+};
+
+const n = (v: string | null | undefined) => (v == null || v === "" ? null : Number(v));
+const desdeApi = (p: PublicacionCompleta): Formulario => ({
+  titulo: p.titulo, descripcion: p.descripcion ?? "", ciudad: p.ciudad, tipo_alojamiento: p.tipo_alojamiento, politica: p.politica,
+  ubicacion_textual: p.ubicacion_textual ?? "", capacidad: p.capacidad, precio_noche: n(p.precio_noche), tarifa_limpieza: n(p.tarifa_limpieza),
+  descuento_porcentaje: n(p.descuento_porcentaje), descuento_min_noches: p.descuento_min_noches,
+  servicios: p.servicios.map((s) => s.id), servicios_adicionales: p.servicios_adicionales.map((a) => ({ nombre: a.nombre, precio: Number(a.precio) })),
+  reglas: [...p.reglas].sort((a, b) => a.orden - b.orden).map((r) => r.descripcion), imagenes: p.imagenes.map((i) => i.ruta),
 });
 
 const num = (v: string) => (v.trim() === "" ? null : Number(v.replace(/\D/g, "")));
+const esUrl = (t: string) => /^https?:\/\/\S+$/i.test(t.trim());
 
 export function FormPublicacion() {
   const { id } = useParams();
-  const { usuario, publicaciones, guardarPublicacion, enviarARevision, reservasConfirmadas } = useStore();
+  const { tiene } = useStore();
   const toast = useToast();
   const go = useNavigate();
-  const existente = id ? publicaciones.find((x) => x.id === Number(id)) : undefined;
-  const [p, setP] = useState<Publicacion>(() => existente ? structuredClone(existente) : vacia(usuario!.id));
+  const [existente, setExistente] = useState<PublicacionCompleta | null>(null);
+  const [negado, setNegado] = useState<string | null>(null);
+  const [p, setP] = useState<Formulario>(VACIO);
+  const [cat, setCat] = useState<{ ciudades: ItemCatalogo[]; tipos: ItemCatalogo[]; servicios: ItemCatalogo[]; politicas: PoliticaApi[] }>(
+    { ciudades: [], tipos: [], servicios: [], politicas: [] });
   const [paso, setPaso] = useState<1 | 2>(1);
   const [err, setErr] = useState<Record<string, string>>({});
   const [faltan, setFaltan] = useState<string[]>([]);
-  const fileRef = useRef<HTMLInputElement>(null);
-  const set = <K extends keyof Publicacion>(k: K, v: Publicacion[K]) => setP((x) => ({ ...x, [k]: v }));
-  const nReservas = useMemo(() => (existente ? reservasConfirmadas(existente.id).length : 0), [existente, reservasConfirmadas]);
+  const [general, setGeneral] = useState("");
+  const [url, setUrl] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  const [nReservas, setNReservas] = useState(0);
+  // El Administrador también edita (publicaciones.moderar, RF-D-ALO-02.1): al terminar vuelve a su pantalla
+  const esDueno = tiene("publicaciones.gestionar_propias");
+  const detalle = (pid: number) => (esDueno ? `/publicaciones/${pid}` : `/admin/publicaciones/${pid}`);
 
-  if (id && (!existente || (usuario!.rol !== "ADMINISTRADOR" && existente.anfitrionId !== usuario!.id)))
-    return <Denegado titulo="No puedes editar esta publicación" texto="Solo el anfitrión dueño o un administrador pueden modificarla (CA-05.3)." />;
+  useEffect(() => {
+    Promise.all([catalogoApi.ciudades(), catalogoApi.tipos(), catalogoApi.servicios(), catalogoApi.politicas()])
+      .then(([c, t, s, po]) => setCat({ ciudades: c.data, tipos: t.data, servicios: s.data, politicas: po.data }))
+      .catch((e) => setGeneral(leerError(e).error));
+    if (!id) return;
+    anfitrionApi.publicacion(Number(id))
+      .then((r) => { setExistente(r.data); setP(desdeApi(r.data)); })
+      .catch((e) => setNegado(leerError(e).error));  // CA-05.3: 403 si es de otro anfitrión
+    if (esDueno)
+      misReservasApi.deMisAlojamientos()
+        .then((r) => setNReservas(r.data.filter((x) => x.publicacion === Number(id) && x.estado === "CONFIRMADA").length))
+        .catch(() => {});
+  }, [id, esDueno]);
+
+  const set = <K extends keyof Formulario>(k: K, v: Formulario[K]) => setP((x) => ({ ...x, [k]: v }));
+
+  if (negado) return <Denegado titulo="No puedes editar esta publicación" texto={negado} />;
+  if (id && !existente) return <Page req="RF-D-ALO-02.1"><p className="muted">Cargando…</p></Page>;
+
+  const estado: EstadoPub = existente?.estado ?? "BORRADOR";
+  const politica = cat.politicas.find((x) => x.id === p.politica);
 
   const validarPaso1 = () => {
     const e: Record<string, string> = {};
@@ -290,61 +365,69 @@ export function FormPublicacion() {
   };
   const validarPaso2 = () => {
     const e: Record<string, string> = {};
-    if (p.precioNoche !== null && p.precioNoche <= 0) e.precioNoche = "Debe ser mayor que cero.";
-    if ((p.descuentoPct == null) !== (p.descuentoNoches == null)) e.descuento = "Indica el porcentaje y desde cuántas noches, o deja ambos vacíos.";
-    if (p.descuentoPct != null && (p.descuentoPct <= 0 || p.descuentoPct > 100)) e.descuento = "El descuento debe estar entre 1 y 100 %.";
-    if (p.descuentoNoches != null && p.descuentoNoches < 2) e.descuento = "El descuento aplica desde 2 noches o más.";
-    if (p.adicionales.some((a) => !a.nombre.trim())) e.adicionales = "Cada servicio adicional necesita un nombre.";
+    if (p.precio_noche !== null && p.precio_noche <= 0) e.precio_noche = "Debe ser mayor que cero.";
+    if ((p.descuento_porcentaje == null) !== (p.descuento_min_noches == null)) e.descuento = "Indica el porcentaje y desde cuántas noches, o deja ambos vacíos.";
+    if (p.servicios_adicionales.some((a) => !a.nombre.trim())) e.adicionales = "Cada servicio adicional necesita un nombre.";
     return e;
   };
 
-  const guardar = (enviar: boolean) => {
+  const guardar = async (enviar: boolean) => {
     const e = { ...validarPaso1(), ...validarPaso2() };
-    setErr(e);
+    setErr(e); setFaltan([]); setGeneral("");
     if (Object.keys(e).length) {
       if (validarPaso1().titulo || validarPaso1().capacidad) setPaso(1);
       return;
     }
-    // Cada regla es un registro con su orden (ReglaAlojamiento); las vacías no se guardan
-    const reglas: ReglaAlojamiento[] = p.reglas.filter((r) => r.descripcion.trim()).map((r, i) => ({ descripcion: r.descripcion.trim(), orden: i + 1 }));
-    const g = guardarPublicacion({ ...p, reglas });
-    if (!enviar) {
-      toast(existente ? "Cambios guardados" : "Publicación guardada como BORRADOR");
-      return go(`/publicaciones/${g.id}`);
+    const datos: PublicacionEntrada = { ...p, reglas: p.reglas.map((r) => r.trim()).filter(Boolean) };
+    setGuardando(true);
+    try {
+      const g = (existente ? await anfitrionApi.actualizar(existente.id, datos) : await anfitrionApi.crear(datos)).data;
+      setExistente(g);
+      if (!enviar) {
+        toast(id ? "Cambios guardados" : "Publicación guardada como BORRADOR");
+        return go(detalle(g.id));
+      }
+      if (g.faltantes.length) { setFaltan(g.faltantes); return; }
+      await anfitrionApi.enviarRevision(g.id);
+      toast("Publicación enviada a revisión");
+      go(detalle(g.id));
+    } catch (ex) {
+      const f = faltantesDe(ex);
+      if (f.length) setFaltan(f);
+      else {
+        const r = leerError(ex);
+        const campo = r.campo === "descuento_porcentaje" || r.campo === "descuento_min_noches" ? "descuento" : r.campo;
+        if (campo && ["titulo", "capacidad", "precio_noche", "descuento"].includes(campo)) {
+          setErr({ [campo]: r.error });
+          setPaso(campo === "titulo" || campo === "capacidad" ? 1 : 2);
+        } else setGeneral(r.error);
+      }
+    } finally {
+      setGuardando(false);
     }
-    const f = faltantesRevision(g);
-    if (f.length) { setFaltan(f); setP(g); return; }
-    enviarARevision(g.id, g);
-    toast("Publicación enviada a revisión");
-    go(`/publicaciones/${g.id}`);
   };
 
-  const subir = (files: FileList | null) => {
-    if (!files) return;
-    Array.from(files).forEach((file) => {
-      const r = new FileReader();
-      r.onload = () => setP((x) => ({
-        ...x,
-        imagenes: [...x.imagenes, { id: crypto.randomUUID(), nombre: file.name.replace(/\.\w+$/, ""), color: PALETA[x.imagenes.length % PALETA.length]!, src: String(r.result) }],
-      }));
-      r.readAsDataURL(file);
-    });
+  const agregarUrl = () => {
+    if (!esUrl(url)) return setErr({ ...err, imagen: "Escribe una dirección que empiece por http:// o https://." });
+    set("imagenes", [...p.imagenes, url.trim()]);
+    setUrl(""); setErr({ ...err, imagen: "" });
   };
   const ejemplo = () => {
     const nombres = ["Sala", "Habitación", "Cocina", "Baño", "Fachada", "Vista"];
-    set("imagenes", [...p.imagenes, { id: crypto.randomUUID(), nombre: nombres[p.imagenes.length % nombres.length]!, color: PALETA[p.imagenes.length % PALETA.length]! }]);
+    const nombre = nombres[p.imagenes.length % nombres.length]!;
+    set("imagenes", [...p.imagenes, `https://placehold.co/600x400?text=${encodeURIComponent(nombre)}`]);
   };
 
-  const enEdicionActiva = existente && existente.estado !== "BORRADOR";
+  const enEdicionActiva = existente && estado !== "BORRADOR";
 
   return (
     <Page req={existente ? "RF-D-ALO-02.1 · CU-ALO-04 · editar una publicación ACTIVA no la devuelve a revisión" : "RF-D-ALO-01.1 · CU-ALO-01 · queda en BORRADOR"}>
       <div>
-        <Link to={existente ? `/publicaciones/${existente.id}` : "/publicaciones"} className="back"><ArrowLeft /> {existente ? "Volver al detalle" : "Mis publicaciones"}</Link>
+        <Link to={existente ? detalle(existente.id) : "/publicaciones"} className="back"><ArrowLeft /> {existente ? "Volver al detalle" : "Mis publicaciones"}</Link>
         <div className="page-head">
           <div className="row" style={{ gap: 12 }}>
-            <h1>{existente ? "Editar publicación" : "Nueva publicación"}</h1>
-            <Badge estado={p.estado} />
+            <h1>{id ? "Editar publicación" : "Nueva publicación"}</h1>
+            <Badge estado={estado} />
           </div>
         </div>
       </div>
@@ -361,10 +444,11 @@ export function FormPublicacion() {
 
       {enEdicionActiva && (
         <Alert tipo="info">
-          La publicación sigue {existente!.estado}, sin volver a revisión.
+          La publicación sigue {estado}, sin volver a revisión.
           {nReservas > 0 && ` Los cambios de precio o de política no afectan sus ${nReservas} reservas confirmadas.`}
         </Alert>
       )}
+      {general && <Alert tipo="error">{general}</Alert>}
       {faltan.length > 0 && (
         <Alert tipo="error"><b>No se puede enviar a revisión.</b> Falta: {faltan.join(", ")}. Se guardó como BORRADOR.</Alert>
       )}
@@ -379,21 +463,21 @@ export function FormPublicacion() {
           </Field>
           <div className="grid-3">
             <Field label="Tipo de alojamiento">
-              <select className="select" value={p.tipo} onChange={(e) => set("tipo", e.target.value as Publicacion["tipo"])}>
-                <option value="">Selecciona</option>{TIPOS.map((t) => <option key={t}>{t}</option>)}
+              <select className="select" value={p.tipo_alojamiento ?? ""} onChange={(e) => set("tipo_alojamiento", n(e.target.value))}>
+                <option value="">Selecciona</option>{cat.tipos.map((t) => <option key={t.id} value={t.id}>{t.nombre}</option>)}
               </select>
             </Field>
             <Field label="Capacidad (huéspedes)" error={err.capacidad}>
               <input className="input" inputMode="numeric" placeholder="Mayor que 0" value={p.capacidad ?? ""} onChange={(e) => set("capacidad", num(e.target.value))} />
             </Field>
             <Field label="Ciudad">
-              <select className="select" value={p.ciudad} onChange={(e) => set("ciudad", e.target.value)}>
-                <option value="">Selecciona</option>{CIUDADES.map((c) => <option key={c}>{c}</option>)}
+              <select className="select" value={p.ciudad ?? ""} onChange={(e) => set("ciudad", n(e.target.value))}>
+                <option value="">Selecciona</option>{cat.ciudades.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
               </select>
             </Field>
           </div>
           <Field label="Ubicación" hint="Dirección o referencia en texto.">
-            <input className="input" placeholder="Ej. Vereda El Roble, a 5 min de la plaza" value={p.ubicacion} onChange={(e) => set("ubicacion", e.target.value)} />
+            <input className="input" placeholder="Ej. Vereda El Roble, a 5 min de la plaza" value={p.ubicacion_textual} onChange={(e) => set("ubicacion_textual", e.target.value)} />
           </Field>
           <div className="stack" style={{ gap: 8 }}>
             <span className="label">Reglas del alojamiento <span className="subtle">(una por línea, en el orden en que se muestran)</span></span>
@@ -401,17 +485,17 @@ export function FormPublicacion() {
               <div className="regla-row" key={i}>
                 <span className="regla-n">{i + 1}</span>
                 <input className="input" aria-label={`Regla ${i + 1}`} placeholder={["Ej. No fumar", "Ej. Sin fiestas", "Ej. Silencio después de las 10 p. m."][i] ?? "Escribe la regla"}
-                  value={r.descripcion} onChange={(e) => set("reglas", p.reglas.map((x, j) => j === i ? { ...x, descripcion: e.target.value } : x))} />
-                <button type="button" className="icon-btn" aria-label="Quitar regla" onClick={() => set("reglas", p.reglas.filter((_, j) => j !== i).map((x, j) => ({ ...x, orden: j + 1 })))}><Trash2 /></button>
+                  value={r} onChange={(e) => set("reglas", p.reglas.map((x, j) => (j === i ? e.target.value : x)))} />
+                <button type="button" className="icon-btn" aria-label="Quitar regla" onClick={() => set("reglas", p.reglas.filter((_, j) => j !== i))}><Trash2 /></button>
               </div>
             ))}
-            <button type="button" className="link-btn" style={{ alignSelf: "flex-start" }} onClick={() => set("reglas", [...p.reglas, { descripcion: "", orden: p.reglas.length + 1 }])}>
+            <button type="button" className="link-btn" style={{ alignSelf: "flex-start" }} onClick={() => set("reglas", [...p.reglas, ""])}>
               + Agregar regla
             </button>
           </div>
           <div className="row">
-            <Link className="btn btn-ghost" to="/publicaciones">Cancelar</Link>
-            <button className="btn btn-secondary right" onClick={() => guardar(false)}>Guardar borrador</button>
+            <Link className="btn btn-ghost" to={existente ? detalle(existente.id) : "/publicaciones"}>Cancelar</Link>
+            <button className="btn btn-secondary right" disabled={guardando} onClick={() => guardar(false)}>{estado === "BORRADOR" ? "Guardar borrador" : "Guardar cambios"}</button>
             <button className="btn btn-primary" onClick={() => { const e = validarPaso1(); setErr(e); if (!Object.keys(e).length) setPaso(2); }}>Siguiente</button>
           </div>
         </section>
@@ -421,28 +505,29 @@ export function FormPublicacion() {
             <section className="card stack">
               <h3>Precios</h3>
               <div className="grid-2">
-                <Field label="Precio por noche (COP)" error={err.precioNoche}>
-                  <div className="input-prefix"><span>$</span><input className="input" inputMode="numeric" placeholder="Mayor que 0" value={p.precioNoche ?? ""} onChange={(e) => set("precioNoche", num(e.target.value))} /></div>
+                <Field label="Precio por noche (COP)" error={err.precio_noche}>
+                  <div className="input-prefix"><span>$</span><input className="input" inputMode="numeric" placeholder="Mayor que 0" value={p.precio_noche ?? ""} onChange={(e) => set("precio_noche", num(e.target.value))} /></div>
                 </Field>
                 <Field label="Tarifa de limpieza (COP)">
-                  <div className="input-prefix"><span>$</span><input className="input" inputMode="numeric" placeholder="0" value={p.limpieza ?? ""} onChange={(e) => set("limpieza", num(e.target.value))} /></div>
+                  <div className="input-prefix"><span>$</span><input className="input" inputMode="numeric" placeholder="0" value={p.tarifa_limpieza ?? ""} onChange={(e) => set("tarifa_limpieza", num(e.target.value))} /></div>
                 </Field>
                 <Field label="Descuento (%)" opcional error={err.descuento} hint="Por estancia larga.">
-                  <input className="input" inputMode="numeric" placeholder="Ej. 10" value={p.descuentoPct ?? ""} onChange={(e) => set("descuentoPct", num(e.target.value))} />
+                  <input className="input" inputMode="numeric" placeholder="Ej. 10" value={p.descuento_porcentaje ?? ""} onChange={(e) => set("descuento_porcentaje", num(e.target.value))} />
                 </Field>
                 <Field label="Desde cuántas noches" opcional>
-                  <input className="input" inputMode="numeric" placeholder="Ej. 7" value={p.descuentoNoches ?? ""} onChange={(e) => set("descuentoNoches", num(e.target.value))} />
+                  <input className="input" inputMode="numeric" placeholder="Ej. 7" value={p.descuento_min_noches ?? ""} onChange={(e) => set("descuento_min_noches", num(e.target.value))} />
                 </Field>
               </div>
               <p className="subtle">La tarifa de servicio de la plataforma la fija el administrador y se suma en la cotización del huésped.</p>
-              <Field label="Política de cancelación" hint="En el MVP la única política disponible es la Moderada.">
-                <select className="select" value={p.politica} onChange={(e) => set("politica", e.target.value as Publicacion["politica"])}>
-                  <option value="">Selecciona una política</option><option value="Moderada">Moderada</option>
+              <Field label="Política de cancelación">
+                <select className="select" value={p.politica ?? ""} onChange={(e) => set("politica", n(e.target.value))}>
+                  <option value="">Selecciona una política</option>
+                  {cat.politicas.map((x) => <option key={x.id} value={x.id}>{x.nombre}</option>)}
                 </select>
               </Field>
-              {p.politica && (
+              {politica && (
                 <div className="card card-tight" style={{ boxShadow: "none", background: "var(--brand-50)" }}>
-                  <ul className="list-plain">{POLITICA_MODERADA.map((t) => <li key={t.tramo}><b style={{ width: 52 }}>{t.devolucion}</b><span>{t.tramo}</span></li>)}</ul>
+                  <ul className="list-plain">{politica.tramos.map((t) => <li key={t.dias_minimos}><b style={{ width: 52 }}>{Number(t.porcentaje_devolucion)} %</b><span>{textoTramo(t)}</span></li>)}</ul>
                 </div>
               )}
             </section>
@@ -450,26 +535,26 @@ export function FormPublicacion() {
             <section className="card stack">
               <h3>Servicios incluidos <span className="subtle">(sin costo)</span></h3>
               <div className="chips">
-                {SERVICIOS.map((s) => {
-                  const on = p.servicios.includes(s);
+                {cat.servicios.map((s) => {
+                  const on = p.servicios.includes(s.id);
                   return (
-                    <button key={s} type="button" className={`chip-toggle ${on ? "on" : ""}`} aria-pressed={on}
-                      onClick={() => set("servicios", on ? p.servicios.filter((x) => x !== s) : [...p.servicios, s])}>
-                      {on && <Check />}{s}
+                    <button key={s.id} type="button" className={`chip-toggle ${on ? "on" : ""}`} aria-pressed={on}
+                      onClick={() => set("servicios", on ? p.servicios.filter((x) => x !== s.id) : [...p.servicios, s.id])}>
+                      {on && <Check />}{s.nombre}
                     </button>
                   );
                 })}
               </div>
               <h3>Servicios adicionales <span className="subtle">(se cobran aparte)</span></h3>
-              {p.adicionales.map((a, i) => (
+              {p.servicios_adicionales.map((a, i) => (
                 <div className="addon-row" key={i}>
-                  <input className="input" placeholder="Ej. Desayuno" value={a.nombre} onChange={(e) => set("adicionales", p.adicionales.map((x, j): Adicional => j === i ? { ...x, nombre: e.target.value } : x))} />
-                  <div className="input-prefix"><span>$</span><input className="input" inputMode="numeric" value={a.precio || ""} placeholder="0" onChange={(e) => set("adicionales", p.adicionales.map((x, j): Adicional => j === i ? { ...x, precio: num(e.target.value) ?? 0 } : x))} /></div>
-                  <button type="button" className="icon-btn" aria-label="Quitar servicio" onClick={() => set("adicionales", p.adicionales.filter((_, j) => j !== i))}><Trash2 /></button>
+                  <input className="input" placeholder="Ej. Desayuno" value={a.nombre} onChange={(e) => set("servicios_adicionales", p.servicios_adicionales.map((x, j) => (j === i ? { ...x, nombre: e.target.value } : x)))} />
+                  <div className="input-prefix"><span>$</span><input className="input" inputMode="numeric" value={a.precio || ""} placeholder="0" onChange={(e) => set("servicios_adicionales", p.servicios_adicionales.map((x, j) => (j === i ? { ...x, precio: num(e.target.value) ?? 0 } : x)))} /></div>
+                  <button type="button" className="icon-btn" aria-label="Quitar servicio" onClick={() => set("servicios_adicionales", p.servicios_adicionales.filter((_, j) => j !== i))}><Trash2 /></button>
                 </div>
               ))}
               {err.adicionales && <span className="error-text">{err.adicionales}</span>}
-              <button type="button" className="link-btn" style={{ alignSelf: "flex-start" }} onClick={() => set("adicionales", [...p.adicionales, { nombre: "", precio: 0 }])}>
+              <button type="button" className="link-btn" style={{ alignSelf: "flex-start" }} onClick={() => set("servicios_adicionales", [...p.servicios_adicionales, { nombre: "", precio: 0 }])}>
                 + Agregar servicio adicional
               </button>
             </section>
@@ -481,29 +566,30 @@ export function FormPublicacion() {
               <button type="button" className="btn btn-ghost btn-sm" onClick={ejemplo}><Sparkles /> Agregar imagen de ejemplo</button>
             </div>
             <div className="img-grid">
-              {p.imagenes.map((im, i) => (
-                <ImageTile key={im.id} img={im} etiqueta={i === 0 ? "Portada" : im.nombre}
-                  onRemove={() => set("imagenes", p.imagenes.filter((x) => x.id !== im.id))} />
+              {p.imagenes.map((ruta, i) => (
+                <ImageTile key={`${i}-${ruta}`} img={imagenDe(ruta, i)} etiqueta={i === 0 ? "Portada" : undefined}
+                  onRemove={() => set("imagenes", p.imagenes.filter((_, j) => j !== i))} />
               ))}
-              <button type="button" className="img-add" onClick={() => fileRef.current?.click()}>
-                <span style={{ display: "grid", placeItems: "center", gap: 4 }}>{p.imagenes.length ? <ImagePlus /> : <Upload />}Subir imagen</span>
-              </button>
-              <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => { subir(e.target.files); e.target.value = ""; }} />
             </div>
+            <Field label="Dirección (URL) de la imagen" error={err.imagen} hint="La plataforma guarda la dirección de cada imagen.">
+              <div className="row" style={{ gap: 8, flexWrap: "nowrap" }}>
+                <input className="input" placeholder="https://…" value={url} onChange={(e) => setUrl(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); agregarUrl(); } }} />
+                <button type="button" className="btn btn-secondary" onClick={agregarUrl}><ImagePlus /> Agregar</button>
+              </div>
+            </Field>
           </section>
 
           <div className="row">
             <button className="btn btn-ghost" onClick={() => setPaso(1)}><ArrowLeft /> Paso anterior</button>
-            <button className="btn btn-secondary right" onClick={() => guardar(false)}>{p.estado === "BORRADOR" ? "Guardar borrador" : "Guardar cambios"}</button>
-            {p.estado === "BORRADOR" && <button className="btn btn-primary" onClick={() => guardar(true)}><Send /> Enviar a revisión</button>}
+            <button className="btn btn-secondary right" disabled={guardando} onClick={() => guardar(false)}>{estado === "BORRADOR" ? "Guardar borrador" : "Guardar cambios"}</button>
+            {estado === "BORRADOR" && esDueno && <button className="btn btn-primary" disabled={guardando} onClick={() => guardar(true)}><Send /> Enviar a revisión</button>}
           </div>
         </>
       )}
-      <p className="subtle" style={{ display: "inline-flex", gap: 6, alignItems: "center" }}><Eye size={14} /> Los datos se guardan solo en este navegador (prototipo).</p>
     </Page>
   );
 }
-
 
 /** Reinicia el formulario al pasar de una publicación a otra. */
 export function FormPublicacionRuta() {

@@ -9,7 +9,8 @@ import axios, { AxiosError, isAxiosError, type InternalAxiosRequestConfig } from
  *   la sesión.
  * - El token de renovación lo guarda el navegador en la cookie httpOnly `renovacion`,
  *   que JavaScript no puede leer. withCredentials hace que viaje con las peticiones.
- * - Si una petición responde 401 porque el access venció, se renueva una vez y se repite.
+ * - Si una petición responde 401 porque el access venció, se renueva una vez y se repite. Si no se
+ *   puede renovar, la sesión se cierra y la aplicación lleva a "Ingresar" (HU-02).
  *
  * La ruta base es relativa: en desarrollo Vite reenvía /api a Django (vite.config.ts) y
  * en Render lo hace la regla de reescritura del sitio estático. Así el navegador ve un
@@ -27,7 +28,7 @@ export function guardarTokenAcceso(token: string | null) {
   tokenAcceso = token;
 }
 
-/** El store registra aquí qué hacer cuando la sesión ya no se puede renovar. */
+/** La sesión registra aquí qué hacer cuando ya no se puede renovar. */
 export function cuandoSePierdaLaSesion(accion: () => void) {
   alPerderSesion = accion;
 }
@@ -37,7 +38,8 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-const RUTAS_DE_SESION = ["/identidad/token", "/identidad/salir"];
+// Rutas que no se reintentan: las de sesión, y las públicas que se piden también sin sesión.
+const RUTAS_DE_SESION = ["/identidad/token", "/identidad/salir", "/identidad/permisos", "/identidad/roles"];
 let renovacionEnCurso: Promise<string | null> | null = null;
 
 api.interceptors.response.use(undefined, async (error: AxiosError) => {
@@ -107,6 +109,10 @@ export const identidadApi = {
     api.post(`/identidad/recuperacion/${encodeURIComponent(token)}`, { password }),
   actualizarPerfil: (cambios: Record<string, string | null>) => api.patch<UsuarioApi>("/identidad/perfil", cambios),
   desactivar: () => api.post("/identidad/perfil/desactivar"),
+  /** GET /identidad/permisos: rol y permisos de quien llama (sin sesión, los del VISITANTE). */
+  permisos: () => api.get<{ rol: string; permisos: string[] }>("/identidad/permisos"),
+  /** GET /identidad/roles: la matriz completa de rbac.PERMISOS (pública). */
+  roles: () => api.get<{ roles: { rol: string; permisos: string[] }[] }>("/identidad/roles"),
 };
 
 /**
@@ -129,11 +135,24 @@ export function leerError(e: unknown): { error: string; campo?: string } {
 
 export interface ItemCatalogo { id: number; nombre: string }
 
+export interface PoliticaApi {
+  id: number; nombre: string; descripcion: string | null;
+  tramos: { dias_minimos: number; dias_maximos: number | null; porcentaje_devolucion: string }[];
+}
+
 export const catalogoApi = {
   ciudades: () => api.get<ItemCatalogo[]>("/catalogo/ciudades"),
   tipos: () => api.get<ItemCatalogo[]>("/catalogo/tipos-alojamiento"),
   servicios: () => api.get<ItemCatalogo[]>("/catalogo/servicios"),
+  politicas: () => api.get<PoliticaApi[]>("/catalogo/politicas"),
 };
+
+/** "7 días o más antes de la llegada" para un tramo de la política. */
+export function textoTramo(t: PoliticaApi["tramos"][number]) {
+  if (t.dias_maximos == null) return `${t.dias_minimos} días o más antes de la llegada`;
+  if (t.dias_minimos === 0) return `Menos de ${t.dias_maximos + 1} días antes`;
+  return `Entre ${t.dias_minimos} y ${t.dias_maximos} días antes`;
+}
 
 /* ---------------- SRV-03 Búsqueda (pública) ---------------- */
 
@@ -241,19 +260,56 @@ export const notificacionesApi = {
 
 /* ---------------- Administración (MOD-09 y moderación, HU-19 a HU-25) ---------------- */
 
+export interface RevisionApi {
+  accion: "APROBAR" | "DEVOLVER" | "PAUSAR" | "REACTIVAR" | "BLOQUEAR" | "DESBLOQUEAR"; observacion: string | null; fecha: string;
+  administrador?: number; administrador_nombre?: string;
+}
+
 export interface PublicacionAdmin {
   id: number; anfitrion: number; titulo: string; ciudad: number | null; ciudad_nombre: string | null;
   tipo_alojamiento: number | null; tipo_nombre: string | null; precio_noche: string | null;
   estado: "BORRADOR" | "PENDIENTE_REVISION" | "ACTIVA" | "PAUSADA" | "BLOQUEADA"; actualizada: string;
+  imagen: string | null; ultima_revision: RevisionApi | null;
 }
 
-export interface PublicacionCompleta extends PublicacionAdmin {
+export interface PublicacionCompleta extends Omit<PublicacionAdmin, "imagen" | "ultima_revision"> {
   descripcion: string; ubicacion_textual: string; capacidad: number | null; tarifa_limpieza: string | null;
-  descuento_porcentaje: string | null; descuento_min_noches: number | null; politica_nombre: string | null;
+  descuento_porcentaje: string | null; descuento_min_noches: number | null; politica: number | null; politica_nombre: string | null;
   servicios: ItemCatalogo[]; servicios_adicionales: { id: number; nombre: string; precio: string }[];
   reglas: { descripcion: string; orden: number }[]; imagenes: { ruta: string; orden: number }[];
-  revisiones: { accion: string; observacion: string | null; fecha: string; administrador: number }[]; faltantes: string[];
+  revisiones: RevisionApi[]; faltantes: string[];
 }
+
+/** Lo que recibe POST y PATCH /catalogo/publicaciones (RF-D-ALO-01.1). */
+export interface PublicacionEntrada {
+  titulo: string; descripcion: string; ciudad: number | null; tipo_alojamiento: number | null; politica: number | null;
+  ubicacion_textual: string; capacidad: number | null; precio_noche: number | null; tarifa_limpieza: number | null;
+  descuento_porcentaje: number | null; descuento_min_noches: number | null; servicios: number[];
+  servicios_adicionales: { nombre: string; precio: number }[]; reglas: string[]; imagenes: string[];
+}
+
+export interface CalendarioApi {
+  publicacion: number;
+  periodos: { fecha_inicio: string; fecha_fin: string; disponible: boolean; tipo: string }[];
+  noches_reservadas: string[];
+}
+
+/* ---------------- SRV-02 Catálogo: publicaciones del anfitrión (HU-06 a HU-10) ---------------- */
+export const anfitrionApi = {
+  mias: () => todas<PublicacionAdmin>("/catalogo/mis-publicaciones", {}),
+  publicacion: (id: number) => api.get<PublicacionCompleta>(`/catalogo/publicaciones/${id}`),
+  crear: (d: PublicacionEntrada) => api.post<PublicacionCompleta>("/catalogo/publicaciones", d),
+  actualizar: (id: number, d: Partial<PublicacionEntrada>) => api.patch<PublicacionCompleta>(`/catalogo/publicaciones/${id}`, d),
+  enviarRevision: (id: number) => api.post<PublicacionCompleta>(`/catalogo/publicaciones/${id}/enviar-revision`),
+  pausar: (id: number) => api.post<PublicacionCompleta>(`/catalogo/publicaciones/${id}/pausar`),
+  reactivar: (id: number) => api.post<PublicacionCompleta>(`/catalogo/publicaciones/${id}/reactivar`),
+  /** RF-D-ALO-02.2: la ruta se conserva en Catálogo, pero la atiende Reservas. */
+  calendario: (id: number, desde: string, hasta: string) =>
+    api.get<CalendarioApi>(`/catalogo/publicaciones/${id}/calendario`, { params: { desde, hasta } }),
+  /** fecha_fin es exclusiva: el rango cubre las noches de fecha_inicio a fecha_fin - 1. */
+  modificarCalendario: (id: number, fecha_inicio: string, fecha_fin: string, tipo: "DISPONIBLE" | "NO_DISPONIBLE") =>
+    api.post<CalendarioApi>(`/catalogo/publicaciones/${id}/calendario`, { fecha_inicio, fecha_fin, tipo }),
+};
 
 export interface UsuarioAdmin extends UsuarioApi { motivo_restriccion: string | null; restriccion_hasta: string | null }
 

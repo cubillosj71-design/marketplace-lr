@@ -1,31 +1,61 @@
 import { CalendarDays, ChevronLeft, ChevronRight, Info, Lock, Unlock } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { isAxiosError } from "axios";
+import { anfitrionApi, leerError, misReservasApi, type PublicacionAdmin, type ReservaResumen } from "../api";
 import { fechaLarga, isoDia } from "../data";
 import { Page } from "../layout";
-import { useStore, useToast } from "../store";
+import { useToast } from "../store";
 import { Alert, Badge } from "../ui";
 
 const DOW = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 
+const siguiente = (iso: string) => { const d = new Date(iso + "T12:00:00"); d.setDate(d.getDate() + 1); return isoDia(d); };
+
+/** Noches de [inicio, fin): la noche de fin no se incluye (así guarda la API los periodos). */
+function noches(inicio: string, fin: string): string[] {
+  const out: string[] = [];
+  for (let f = inicio; f < fin; f = siguiente(f)) out.push(f);
+  return out;
+}
+
 /* =========================================================
-   CU-ALO-06 Bloquear o liberar fechas del calendario
+   CU-ALO-06 Bloquear o liberar fechas del calendario (GET y POST /catalogo/publicaciones/{id}/calendario)
    ========================================================= */
 export function Calendario() {
-  const { usuario, publicaciones, nochesOcupadas, bloquearFechas, liberarFechas, reservasConfirmadas, hoy, usuarios } = useStore();
   const toast = useToast();
   const [params, setParams] = useSearchParams();
-  const mias = publicaciones.filter((p) => p.anfitrionId === usuario!.id && p.estado !== "BLOQUEADA");
-  const pubId = Number(params.get("pub")) || mias[0]?.id;
-  const pub = mias.find((p) => p.id === pubId);
-
+  const hoy = isoDia(new Date());
+  const [mias, setMias] = useState<PublicacionAdmin[] | null>(null);
+  const [reservas, setReservas] = useState<ReservaResumen[]>([]);
+  const [ocupadas, setOcupadas] = useState<Set<string>>(new Set());
+  const [bloqueadas, setBloqueadas] = useState<Set<string>>(new Set());
   const base = new Date(hoy + "T12:00:00");
   const [mes, setMes] = useState({ y: base.getFullYear(), m: base.getMonth() });
   const [sel, setSel] = useState<{ a: string; b?: string } | null>(null);
   const [error, setError] = useState("");
+  const [guardando, setGuardando] = useState(false);
 
-  const ocupadas = useMemo(() => (pub ? nochesOcupadas(pub.id) : new Set<string>()), [pub, nochesOcupadas]);
-  const bloqueadas = new Set(pub?.bloqueos ?? []);
+  useEffect(() => {
+    anfitrionApi.mias().then((l) => setMias(l.filter((p) => p.estado !== "BLOQUEADA"))).catch((e) => setError(leerError(e).error));
+    misReservasApi.deMisAlojamientos().then((r) => setReservas(r.data)).catch(() => {});
+  }, []);
+
+  const pubId = Number(params.get("pub")) || mias?.[0]?.id;
+  const pub = mias?.find((p) => p.id === pubId);
+  const desde = isoDia(new Date(mes.y, mes.m, 1, 12));
+  const hasta = isoDia(new Date(mes.y, mes.m + 1, 1, 12));
+
+  const cargar = useCallback(() => {
+    if (!pub) return;
+    anfitrionApi.calendario(pub.id, desde, hasta)
+      .then(({ data }) => {
+        setOcupadas(new Set(data.noches_reservadas));
+        setBloqueadas(new Set(data.periodos.filter((x) => !x.disponible).flatMap((x) => noches(x.fecha_inicio, x.fecha_fin))));
+      })
+      .catch((e) => setError(leerError(e).error));
+  }, [pub, desde, hasta]);
+  useEffect(cargar, [cargar]);
 
   const dias = useMemo(() => {
     const primero = new Date(mes.y, mes.m, 1, 12);
@@ -40,10 +70,7 @@ export function Calendario() {
   const rango = (): string[] => {
     if (!sel) return [];
     const [a, b] = [sel.a, sel.b ?? sel.a].sort();
-    const out: string[] = [];
-    const d = new Date(a + "T12:00:00");
-    while (isoDia(d) <= b!) { out.push(isoDia(d)); d.setDate(d.getDate() + 1); }
-    return out;
+    return noches(a!, siguiente(b!));
   };
   const seleccion = new Set(rango());
 
@@ -54,25 +81,33 @@ export function Calendario() {
     else setSel({ a: sel.a, b: f });
   };
 
-  const accion = (tipo: "bloquear" | "liberar") => {
-    if (!pub || !sel) return;
-    const fechas = rango();
-    const r = tipo === "bloquear" ? bloquearFechas(pub.id, fechas) : liberarFechas(pub.id, fechas);
-    if (!r.ok) {
-      const choque = fechas.filter((f) => ocupadas.has(f));
-      setError(`No se puede bloquear ${choque.length > 1 ? `del ${fechaLarga(choque[0]!)} al ${fechaLarga(choque[choque.length - 1]!)}` : `el ${fechaLarga(choque[0]!)}`}: ${choque.length > 1 ? "tienen" : "tiene"} una reserva CONFIRMADA.`);
-      return;
+  const accion = async (tipo: "NO_DISPONIBLE" | "DISPONIBLE") => {
+    const r = rango();
+    if (!pub || !r.length) return;
+    setGuardando(true);
+    try {
+      await anfitrionApi.modificarCalendario(pub.id, r[0]!, siguiente(r[r.length - 1]!), tipo);
+      toast(tipo === "NO_DISPONIBLE" ? "Fechas marcadas como no disponibles" : "Fechas disponibles de nuevo");
+      setSel(null);
+      cargar();
+    } catch (e) {
+      // CA-09.2: no se bloquean noches con una reserva CONFIRMADA; la API manda cuáles
+      const choque = isAxiosError(e) ? ((e.response?.data as { fechas?: string[] })?.fechas ?? []) : [];
+      setError(choque.length
+        ? `No se puede bloquear ${choque.length > 1 ? `del ${fechaLarga(choque[0]!)} al ${fechaLarga(choque[choque.length - 1]!)}` : `el ${fechaLarga(choque[0]!)}`}: ${choque.length > 1 ? "tienen" : "tiene"} una reserva CONFIRMADA.`
+        : leerError(e).error);
+    } finally {
+      setGuardando(false);
     }
-    toast(tipo === "bloquear" ? "Fechas marcadas como no disponibles" : "Fechas disponibles de nuevo");
-    setSel(null);
   };
 
-  const mover = (d: number) => setMes(({ y, m }) => { const n = new Date(y, m + d, 1); return { y: n.getFullYear(), m: n.getMonth() }; });
+  const mover = (d: number) => setMes(({ y, m }) => { const nd = new Date(y, m + d, 1); return { y: nd.getFullYear(), m: nd.getMonth() }; });
   const t0 = new Date(mes.y, mes.m, 1).toLocaleDateString("es-CO", { month: "long", year: "numeric" });
   const titulo = t0[0]!.toUpperCase() + t0.slice(1);
   const r = rango();
-  const futuras = pub ? reservasConfirmadas(pub.id).filter((x) => x.salida >= hoy) : [];
+  const futuras = pub ? reservas.filter((x) => x.publicacion === pub.id && x.estado === "CONFIRMADA" && x.fecha_salida >= hoy) : [];
 
+  if (!mias) return <Page req="RF-D-ALO-02.2"><p className="muted">{error || "Cargando…"}</p></Page>;
   if (!mias.length)
     return <Page req="RF-D-ALO-02.2"><div className="card empty-state"><CalendarDays /><b>Aún no tienes publicaciones con calendario</b><Link className="btn btn-primary" to="/publicaciones/nueva">Crear publicación</Link></div></Page>;
 
@@ -80,10 +115,10 @@ export function Calendario() {
     <Page req="RF-D-ALO-02.2 · CU-ALO-06 · HU-09">
       <div className="page-head">
         <div><h1>Calendario de disponibilidad</h1><p>Marca las fechas en que recibes y en las que no recibirás huéspedes.</p></div>
-        <div className="field" style={{ minWidth: 300 }}>
+        <div className="field" style={{ minWidth: 0, flex: "1 1 260px", maxWidth: 360 }}>
           <span className="label">Alojamiento</span>
           <select className="select" value={pub?.id} onChange={(e) => { setParams({ pub: e.target.value }); setSel(null); setError(""); }}>
-            {mias.map((p) => <option key={p.id} value={p.id}>{p.titulo}</option>)}
+            {mias.map((p) => <option key={p.id} value={p.id}>{p.titulo || "Sin título"}</option>)}
           </select>
         </div>
       </div>
@@ -128,8 +163,8 @@ export function Calendario() {
             ) : (
               <p className="muted">Haz clic en un día para empezar y en otro para cerrar el rango.</p>
             )}
-            <button className="btn btn-primary btn-block" disabled={!r.length} onClick={() => accion("bloquear")}><Lock /> Marcar como no disponible</button>
-            <button className="btn btn-secondary btn-block" disabled={!r.length} onClick={() => accion("liberar")}><Unlock /> Marcar como disponible</button>
+            <button className="btn btn-primary btn-block" disabled={!r.length || guardando} onClick={() => accion("NO_DISPONIBLE")}><Lock /> Marcar como no disponible</button>
+            <button className="btn btn-secondary btn-block" disabled={!r.length || guardando} onClick={() => accion("DISPONIBLE")}><Unlock /> Marcar como disponible</button>
             {error && <Alert tipo="error">{error}</Alert>}
             <p className="subtle" style={{ display: "flex", gap: 6 }}>
               <Info size={15} style={{ flex: "none", marginTop: 2 }} />
@@ -141,7 +176,7 @@ export function Calendario() {
             {futuras.length ? (
               <ul className="list-plain">
                 {futuras.map((x) => (
-                  <li key={x.id}><CalendarDays color="var(--err)" />{fechaLarga(x.llegada)} al {fechaLarga(x.salida)} · {usuarios.find((u) => u.id === x.huespedId)?.nombre}</li>
+                  <li key={x.id}><CalendarDays color="var(--err)" />{fechaLarga(x.fecha_llegada)} al {fechaLarga(x.fecha_salida)} · {x.huesped_nombre}</li>
                 ))}
               </ul>
             ) : <p className="muted">Sin reservas próximas.</p>}
