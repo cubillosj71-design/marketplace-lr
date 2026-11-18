@@ -14,10 +14,10 @@ from datetime import timedelta
 from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
-from django.core.mail import send_mail
 from django.db import transaction
 from django.db.models import Count
 from django.utils import timezone
+from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from rest_framework_simplejwt.tokens import RefreshToken
 
@@ -139,11 +139,31 @@ def iniciar_sesion(correo: str, password: str, ip=None) -> dict:
             **({"aviso": "Tu cuenta se reactivó. ¡Bienvenido de nuevo!"} if reactivada else {})}
 
 
-def cerrar_sesion(refresh: str) -> None:
+def renovar_sesion(refresh: str) -> dict:
+    """Rota el token de renovación (ADR-005). Solo renueva si la cuenta sigue ACTIVA: así una
+    cuenta restringida o desactivada no recupera la sesión aunque conserve la cookie."""
     try:
-        RefreshToken(refresh).blacklist()
-    except Exception as e:  # noqa: BLE001
-        raise ErrorNegocio("El token de renovación no es válido.") from e
+        anterior = RefreshToken(refresh)  # verifica firma, vencimiento y lista negra
+    except TokenError as e:
+        raise ErrorNegocio("Tu sesión terminó. Inicia sesión de nuevo.", codigo=401) from e
+    usuario_id = int(anterior["user_id"])
+    sincronizar_estado(usuario_id)
+    u = Usuario.objects.filter(pk=usuario_id).first()
+    anterior.blacklist()
+    if not u or u.estado != EstadoCuenta.ACTIVA:
+        raise ErrorNegocio("Tu sesión terminó. Inicia sesión de nuevo.", codigo=401)
+    nuevo = RefreshToken.for_user(u)
+    return {"access": str(nuevo.access_token), "refresh": str(nuevo), "usuario": _dict(u)}
+
+
+def cerrar_sesion(refresh: str, ip=None) -> None:
+    """Pone el refresh en la lista negra. Si ya no servía, no hay nada que cerrar."""
+    try:
+        token = RefreshToken(refresh)
+        token.blacklist()
+    except TokenError:
+        return
+    publicar("CierreSesion", usuario_id=int(token["user_id"]), entidad="Usuario", entidad_id=int(token["user_id"]), ip=ip)
 
 
 def _cerrar_todas_las_sesiones(u: Usuario) -> None:
@@ -158,25 +178,23 @@ def _hash(token: str) -> str:
 
 
 def solicitar_recuperacion(correo: str, ip=None) -> str | None:
-    """Crea el enlace y lo envía por correo. Devuelve el token (solo para pruebas y desarrollo).
-    Si el correo no existe no se revela: la respuesta de la API es la misma."""
+    """Crea el enlace de recuperación y devuelve el token en claro (en la base solo queda su hash).
+    Si el correo no existe devuelve None."""
     u = Usuario.objects.filter(correo__iexact=(correo or "").strip()).first()
     if not u:
         publicar("RecuperacionSolicitada", resultado="FALLO", detalle={"motivo": "Correo no registrado"}, ip=ip)
         return None
     token = secrets.token_urlsafe(32)
-    TokenRecuperacion.objects.create(
-        usuario=u, token_hash=_hash(token), vence=timezone.now() + timedelta(minutes=settings.MINUTOS_ENLACE_RECUPERACION)
-    )
-    enlace = f"{settings.FRONTEND_URL}/#/restablecer/{token}"
-    send_mail(
-        "Recupera tu contraseña · Alojamientos LR",
-        f"Hola, {u.nombre_completo}.\n\nPara crear una nueva contraseña abre este enlace. "
-        f"Sirve una sola vez y vence en {settings.MINUTOS_ENLACE_RECUPERACION} minutos:\n\n{enlace}\n\n"
-        "Si no lo pediste, ignora este mensaje.",
-        settings.DEFAULT_FROM_EMAIL, [u.correo], fail_silently=True,
-    )
-    publicar("RecuperacionSolicitada", usuario_id=u.id, entidad="Usuario", entidad_id=u.id, ip=ip)
+    ahora = timezone.now()
+    with transaction.atomic():
+        # Un solo enlace vivo por cuenta: los anteriores sin usar dejan de servir.
+        TokenRecuperacion.objects.filter(usuario=u, usado_en__isnull=True, vence__gt=ahora).update(vence=ahora)
+        TokenRecuperacion.objects.create(
+            usuario=u, token_hash=_hash(token), vence=ahora + timedelta(minutes=settings.MINUTOS_ENLACE_RECUPERACION)
+        )
+        publicar("RecuperacionSolicitada", usuario_id=u.id, entidad="Usuario", entidad_id=u.id, ip=ip)
+    # No se envía correo: la recuperación es simulada y el enlace se muestra en pantalla
+    # (AMB-08, AMB-12, CA-03.1). La vista lo devuelve en la respuesta.
     return token
 
 

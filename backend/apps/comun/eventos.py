@@ -36,8 +36,12 @@ def publicar(
 
 
 def ip_de(request) -> str | None:
-    """IP del cliente; en Render llega en X-Forwarded-For."""
+    """IP del cliente; en Render llega en X-Forwarded-For.
+
+    El proxy de Render AGREGA la IP real al final de la lista. Se toma la última y no la
+    primera, porque la primera la puede escribir el propio cliente para fingir otra IP.
+    """
     if request is None:
         return None
     reenviada = request.META.get("HTTP_X_FORWARDED_FOR")
-    return reenviada.split(",")[0].strip() if reenviada else request.META.get("REMOTE_ADDR")
+    return reenviada.split(",")[-1].strip() if reenviada else request.META.get("REMOTE_ADDR")
