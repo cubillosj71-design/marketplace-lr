@@ -188,3 +188,72 @@ forbidden_modules =
     apps.resenas
     apps.notificaciones
     apps.reportes
+
+
+# MOD-03 Búsqueda no tiene tablas ni auditoría: solo lee las vistas v_publicacion_buscable,
+# v_noche_no_disponible y v_calificacion_publicacion a través de los services de quien las publica.
+[importlinter:contract:busqueda-solo-vistas-y-services]
+name = Búsqueda solo lee vistas y services (MOD-03)
+type = forbidden
+allow_indirect_imports = True
+source_modules =
+    apps.busqueda
+forbidden_modules =
+    apps.identidad.models
+    apps.identidad.views
+    apps.identidad.admin
+    apps.identidad.migrations
+    apps.identidad.urls
+    apps.identidad.urls_admin
+    apps.catalogo.models
+    apps.catalogo.views
+    apps.catalogo.admin
+    apps.catalogo.migrations
+    apps.catalogo.urls
+    apps.catalogo.urls_admin
+    apps.reservas.models
+    apps.reservas.views
+    apps.reservas.admin
+    apps.reservas.migrations
+    apps.reservas.urls
+    apps.reservas.urls_admin
+    apps.pagos.models
+    apps.pagos.views
+    apps.pagos.admin
+    apps.pagos.migrations
+    apps.pagos.urls
+    apps.resenas.models
+    apps.resenas.views
+    apps.resenas.admin
+    apps.resenas.migrations
+    apps.resenas.urls
+    apps.notificaciones.models
+    apps.notificaciones.views
+    apps.notificaciones.admin
+    apps.notificaciones.migrations
+    apps.notificaciones.urls
+    apps.auditoria.models
+    apps.auditoria.views
+    apps.auditoria.admin
+    apps.auditoria.migrations
+    apps.auditoria.urls
+    apps.auditoria.urls_admin
+    apps.reportes.models
+    apps.reportes.views
+    apps.reportes.admin
+    apps.reportes.migrations
+    apps.reportes.urls
+    apps.reportes.urls_admin
+    apps.auditoria
+# Las pruebas sí consultan la auditoría para comprobar que la búsqueda no registra nada
+ignore_imports =
+    apps.busqueda.tests.** -> apps.auditoria.**
+
+# MOD-05 Pagos no conoce a Reservas: recibe la cotización y el id de la reserva (sección 3.3)
+[importlinter:contract:pagos-no-depende-de-reservas]
+name = Pagos no depende de Reservas (sección 3.3)
+type = forbidden
+source_modules =
+    apps.pagos
+forbidden_modules =
+    apps.reservas

@@ -1,6 +1,6 @@
-# API de los módulos Usuarios, Alojamientos y Reportes
+# API de los módulos Usuarios, Alojamientos, Búsqueda, Reservas, Pagos y Reportes
 
-Backend en Django 5.1 + Django REST Framework sobre PostgreSQL 16, según el documento de diseño v1.1
+Backend en Django 5.2 LTS + Django REST Framework sobre PostgreSQL 16, según el documento de diseño v1.1
 (`docs/diseno`), sección 3.4, y los ADR de `docs/adr`. Todas las rutas van bajo `/api/v1` y responden JSON.
 
 ## Cómo correrlo
@@ -78,11 +78,15 @@ Registro, sesión (`usuario`) y perfil devuelven:
 | Catálogo | `POST /catalogo/publicaciones` · `GET /catalogo/mis-publicaciones` | Anfitrión | RF-D-ALO-01.1, 02.1 |
 | Catálogo | `GET y PATCH /catalogo/publicaciones/{id}` · `POST .../pausar` · `POST .../reactivar` | Anfitrión dueño, Administrador | RF-D-ALO-02.1, ADM-01.1 |
 | Catálogo | `POST /catalogo/publicaciones/{id}/enviar-revision` | Anfitrión | RF-D-ALO-01.2 |
-| Catálogo | `GET y POST /catalogo/publicaciones/{id}/calendario` | Anfitrión dueño | RF-D-ALO-02.2 |
+| Reservas | `GET y POST /catalogo/publicaciones/{id}/calendario` (la ruta se conserva; la atiende Reservas) | Anfitrión dueño | RF-D-ALO-02.2 |
 | Catálogo | `GET /catalogo/ciudades` · `/tipos-alojamiento` · `/servicios` | Todos | Catálogos |
 | Catálogo | `GET /admin/publicaciones?estado=` | Administrador | Apoya RF-D-ADM-01.1 |
 | Catálogo | `POST /admin/publicaciones/{id}/revision` (`APROBAR` o `DEVOLVER`) | Administrador | RF-D-ADM-01.1 |
 | Catálogo | `POST y DELETE /admin/publicaciones/{id}/bloqueo` | Administrador | RF-D-ADM-01.2 |
+| Búsqueda | `GET /busqueda/publicaciones?ciudad&llegada&salida&huespedes&tipo&precio_min&precio_max&servicios` | Todos (pública) | RF-D-RES-01.1 |
+| Búsqueda | `GET /busqueda/publicaciones/{id}?desde&hasta` | Todos (pública) | RF-D-RES-01.2 |
+| Reservas | `POST /reservas/cotizaciones` · `GET /reservas/cotizaciones/{id}` | Huésped | RF-D-RES-02.1 |
+| Reservas | `POST /reservas` | Huésped | RF-D-RES-02.2 |
 | Reservas | `GET y PUT /admin/tarifa-servicio` | Administrador | RF-D-ADM-03.1 |
 | Auditoría | `GET /admin/auditoria?usuario&accion&desde&hasta` (opcional `exitoso`) | Administrador | RF-D-ADM-04.1, CA-23.1 |
 | Reportes | `GET /admin/tablero?desde&hasta` | Administrador | RF-D-ADM-05.1 |
@@ -99,9 +103,9 @@ con sesión iniciada va en `PATCH /identidad/perfil` con `password_actual` y `pa
 ## Decisiones de implementación
 
 - **Fronteras entre servicios (ADR-001).** Cada servicio expone `services.py`; nadie importa los modelos de otro.
-  `lint-imports` verifica 12 reglas, entre ellas que Catálogo no depende de Reservas, Identidad solo consulta a
-  Reservas (sección 3.3) y Auditoría no importa ninguna otra app salvo `apps.comun` (C4 nivel 3, vista b). El calendario muestra las noches reservadas porque Reservas le entrega a Catálogo su
-  consulta al iniciar (inversión de dependencia).
+  `lint-imports` verifica 14 reglas, entre ellas que Catálogo no depende de Reservas, Identidad solo consulta a
+  Reservas (sección 3.3), Auditoría no importa ninguna otra app salvo `apps.comun` (C4 nivel 3, vista b), Búsqueda
+  solo lee vistas y `services` (MOD-03) y Pagos no depende de Reservas.
 - **Eventos de dominio (ADR-007).** `apps/comun/eventos.publicar()` se usa solo para los eventos de dominio del
   diagrama: `PublicacionAprobada`, `PublicacionDevuelta`, `PublicacionBloqueada`, `PublicacionDesbloqueada`,
   `PublicacionPausada` y `PublicacionReactivada` (más adelante `ReservaConfirmada`, `ReservaCancelada`,
@@ -116,20 +120,121 @@ con sesión iniciada va en `PATCH /identidad/perfil` con `password_actual` y `pa
   VARCHAR(30) NULL, `entidad_id` BIGINT NULL, `exitoso` BOOLEAN, `detalle` JSONB NULL, `ip` INET NULL y `fecha`.
   La API la devuelve con esos mismos nombres.
 - **Auditoría de solo inserción (RNF-E-CON-01, CA-23.2).** Un trigger por fila rechaza UPDATE y DELETE, y otro a
-  nivel de sentencia (`BEFORE TRUNCATE ... FOR EACH STATEMENT`) rechaza TRUNCATE. Por eso `cargar_demo --reiniciar`
-  (que vacía la base con `flush`) solo corre con `DJANGO_DEBUG=1` y apaga el trigger de TRUNCATE mientras dura, y las
-  pruebas no usan `transaction=True` (su limpieza también es un TRUNCATE).
+  nivel de sentencia (`BEFORE TRUNCATE ... FOR EACH STATEMENT`) rechaza TRUNCATE.
+- **Tablas protegidas y `flush`.** `evento_auditoria`, `reserva` y `pago` rechazan TRUNCATE. Django vacía la base con
+  TRUNCATE en `flush`, así que `apps/comun/bd.vaciado_permitido()` apaga esos tres triggers solo mientras corre:
+  lo usan `cargar_demo --reiniciar` (exige `DJANGO_DEBUG=1`) y la limpieza de las pruebas con `transaction=True`
+  (`conftest.py`). Ningún flujo de la aplicación los apaga.
 - **Doble reserva (sección 10.1).** Restricción `EXCLUDE USING gist` en `reserva` con la extensión btree_gist.
 - **Publicación en borrador.** El modelo relacional marca como obligatorios los datos de la publicación. Mientras es
   BORRADOR pueden faltar; una restricción CHECK exige que estén completos en cualquier otro estado.
-- **Calendario.** `periodo_calendario` guarda rangos `[fecha_inicio, fecha_fin)` de noches NO_DISPONIBLE, unidos
-  y sin traslapes. `POST` con `tipo: DISPONIBLE` vuelve a abrir un rango.
+- **Calendario (MOD-04).** `periodo_calendario` es de Reservas: `id`, `publicacion_id`, `fecha_inicio`, `fecha_fin`,
+  `disponible` BOOLEAN y `CHECK fecha_fin > fecha_inicio`. Guarda rangos `[fecha_inicio, fecha_fin)` con
+  `disponible = false`, unidos y sin traslapes. `POST` con `tipo: DISPONIBLE` vuelve a abrir un rango. No se cierran
+  noches con reserva CONFIRMADA o EN_REVISION (CA-09.2). La respuesta conserva `tipo` y agrega `disponible`.
+- **Límite de 12 meses (RF-D-ALO-02.2).** Calendario, búsqueda, cotización y reserva rechazan con 400 una fecha de
+  salida posterior a hoy + 12 meses (`apps/comun/fechas.py`). Búsqueda, cotización y reserva tampoco aceptan llegadas
+  en el pasado.
 - **Recuperación de contraseña.** Se guarda solo el hash SHA-256 del enlace. Como la recuperación es simulada y el
   MVP no envía correos (AMB-08, AMB-12), la respuesta trae `enlace` para mostrarlo en pantalla, también en producción
   (CA-03.1). Con un correo no registrado la respuesta es igual, pero sin `enlace`. Pedir un enlace nuevo anula los
   anteriores sin usar.
 - **Reportes (ADR-009).** ReportLab y openpyxl en el servidor, con las mismas funciones del tablero (CA-25.1).
   Cada descarga queda en la auditoría como `ReporteDescargado` (CA-25.2).
-- **Alcance de Reservas.** En este incremento existen la tarifa de servicio, la cotización y la reserva (para el
-  calendario, la desactivación y los reportes). Cotizar, reservar con pago y cancelar llegan con el módulo de Reservas.
+- **Alcance de Reservas.** Existen calendario, tarifa de servicio, cotización y reserva con pago. La cancelación con
+  devolución (`ServicioPagos.devolver`) llega en el paso siguiente.
 - **Imágenes.** Se guardan como rutas o URL (`imagen_publicacion.ruta`). La subida de archivos queda para el despliegue.
+
+
+## Vistas de solo lectura
+
+Se crean con `RunSQL` (`CREATE OR REPLACE VIEW`) y se leen con modelos `managed = False` del módulo que las publica.
+Búsqueda las combina a través de los `services`, sin importar modelos ajenos.
+
+| Vista | La publica | Columnas | Regla |
+|---|---|---|---|
+| `v_publicacion_buscable` | Catálogo | id, titulo, ciudad_id, ciudad, tipo_alojamiento_id, tipo, capacidad, precio_noche, tarifa_limpieza, descuento_porcentaje, descuento_min_noches, politica_id, servicios (arreglo de ids), imagen_principal | Publicaciones ACTIVAS cuyo anfitrión tiene `activa = true` y ninguna restricción vigente (CA-04.3, CA-21.2). La vigencia se compara con `statement_timestamp()`. |
+| `v_noche_no_disponible` | Reservas | publicacion_id, fecha | Una fila por noche de reserva CONFIRMADA o EN_REVISION y por noche de `periodo_calendario` con `disponible = false` (`generate_series`). La noche de salida queda libre (CA-09.3). |
+| `v_calificacion_publicacion` | Reseñas | publicacion_id, promedio, total | **Provisional:** devuelve `promedio NULL` y `total 0` hasta que llegue el módulo de Reseñas. |
+
+## Búsqueda (MOD-03)
+
+Pública (Visitante y Huésped), sin tablas propias y sin auditoría.
+
+- `GET /busqueda/publicaciones` devuelve las publicaciones buscables con `capacidad >= huespedes` (por defecto 1) y
+  sin noches no disponibles en `[llegada, salida)`. `ciudad`, `tipo` y `servicios` son ids (`servicios=1,3` exige
+  todos). `precio_min` y `precio_max` filtran el precio por noche. Todos los filtros se combinan (CA-10.4). Si
+  `salida <= llegada` responde 400 y no busca (CA-10.3). Cada resultado trae `imagen_principal` y `calificacion`.
+- `GET /busqueda/publicaciones/{id}?desde&hasta` devuelve todos los datos del alojamiento, `politica` con sus tramos
+  (CA-11.3), `disponibilidad.noches_no_disponibles` del rango (por defecto hoy + 90 días, CA-11.2), `calificacion`,
+  servicios incluidos, servicios adicionales con precio, reglas en orden e imágenes. Si la publicación no está en
+  `v_publicacion_buscable` responde 404.
+
+## Cotización y reserva (MOD-04)
+
+**`POST /reservas/cotizaciones`** (solo Huésped; un Visitante recibe 401, CA-05.1)
+
+```json
+{"publicacion": 7, "fecha_llegada": "2027-01-10", "fecha_salida": "2027-01-13", "num_huespedes": 2, "adicionales": [4]}
+```
+
+Valida que la publicación sea buscable (404), la capacidad (400 con `capacidad_maxima`, CA-12.3), que las noches
+estén libres (409 con `fechas`) y el límite de 12 meses. Calcula: `precio_base = noches x precio_noche`;
+`descuento = %` sobre el precio base si `noches >= descuento_min_noches`; `tarifa_servicio = %` vigente sobre
+`(precio_base - descuento)`; `total = base - descuento + limpieza + servicio + adicionales` (cada adicional una vez por
+estancia). Guarda `tarifa_servicio_id` (la tarifa usada) y cada adicional con su `precio_aplicado`. Vence a los 30
+minutos. Los montos van como texto (`"740000.00"`).
+
+**`POST /reservas`** (solo Huésped)
+
+```json
+{"cotizacion": 12, "clave_idempotencia": "2f6c2f2e-6a43-4c8e-9a0b-1d5e3b7a9c10", "medio_pago": "pm_... o simulado"}
+```
+
+1. Si ya hay una reserva con esa clave devuelve la misma con **200**, sin cobrar otra vez (CA-13.4, RNF-P-FIA-02).
+2. Dentro de `transaction.atomic` bloquea la publicación (`SELECT ... FOR UPDATE`) y recalcula. Si el total cambió
+   responde **409** con `cotizacion` (la nueva) y no reserva.
+3. Si alguna noche ya no está libre responde **409** "Las fechas ya no están disponibles." (CA-13.2).
+4. Inserta la reserva CONFIRMADA (copia `politica_id` y los valores de la cotización), cobra con `ServicioPagos` e
+   inserta el pago ya con `reserva_id`. La reserva va antes del pago porque el trigger de `pago` no permite cambiar
+   `reserva_id` después. Si el pago no queda APROBADO, la transacción se revierte, no queda reserva ni pago
+   (RNF-P-FIA-03) y la respuesta es **402** con `motivo`. El intento se registra como `ReservaRechazada` fuera de la
+   transacción (CA-13.3).
+5. Registra `ReservaConfirmada` en la auditoría y publica el evento de dominio `ReservaConfirmada`. Responde **201**.
+
+La restricción `EXCLUDE` de `reserva` es la última defensa: si salta, también responde 409.
+
+**Trigger de `reserva`:** sin DELETE ni TRUNCATE. UPDATE solo de `estado` (y `actualizada`), y solo con las
+transiciones de la sección 3.6 del SRS: CONFIRMADA→CANCELADA, CONFIRMADA→COMPLETADA, CONFIRMADA→EN_REVISION,
+EN_REVISION→CONFIRMADA y EN_REVISION→CANCELADA.
+
+**Tablas:** `cotizacion.tarifa_servicio_id` NOT NULL. `cotizacion_servicio_adicional` tiene
+`PRIMARY KEY (cotizacion_id, servicio_adicional_id)` y `precio_aplicado` (por eso Django 5.2, que trae
+`CompositePrimaryKey`). `tarifa_servicio.administrador_id` es NOT NULL: si al migrar no hay administrador, la tarifa
+inicial del 10 % la crea `cargar_demo`.
+
+## Pagos (MOD-05)
+
+Tabla `pago`: `id`, `cotizacion_id`, `reserva_id` NULL, `tipo` (`COBRO`, `DEVOLUCION`), `monto > 0`, `estado`
+(`APROBADO`, `RECHAZADO`, `EN_VERIFICACION`), `referencia_externa` NULL, `clave_idempotencia` UUID único y `fecha`.
+Un trigger impide DELETE y TRUNCATE, y solo permite cambiar `estado` y `referencia_externa` (RNF-E-CON-01).
+
+- `PasarelaPagos` (`apps/pagos/pasarela.py`) con `cobrar(monto, clave, medio)` y `consultar(clave)`.
+  - `AdaptadorStripe`: Stripe en modo prueba. Crea y confirma un PaymentIntent con el `payment_method` que manda el
+    frontend desde Stripe Elements e `idempotency_key = clave`. El monto va en centavos de COP.
+    `succeeded` → APROBADO, `processing`/`requires_action` → EN_VERIFICACION, el resto → RECHAZADO.
+  - `AdaptadorSimulado`: aprueba siempre, salvo que `medio_pago` sea `"rechazar"` (para probar CA-13.3).
+  - Se elige por variable de entorno: con `STRIPE_SECRET_KEY` se usa Stripe; sin ella, el simulado. Las pruebas
+    usan siempre el simulado.
+- `ServicioPagos.cobrar(cotizacion, clave, medio, reserva_id=...)` guarda el pago y lo registra en la auditoría
+  (`PagoAprobado` o `PagoNoAprobado`) en la misma transacción. `ServicioPagos.devolver(...)` llega con la cancelación.
+
+## Variables de entorno
+
+| Variable | Dónde | Uso |
+|---|---|---|
+| `STRIPE_SECRET_KEY` | `backend/.env` o Render | Llave secreta de Stripe en modo prueba (`sk_test_...`). Vacía = pago simulado. |
+| `VITE_STRIPE_PUBLIC_KEY` | `frontend/.env` o Render | Llave publicable (`pk_test_...`) para Stripe Elements. Vacía = pago simulado con opción de forzar rechazo. |
+
+Las llaves van **solo** en variables de entorno: nunca en el código, en los `.env.example` (solo el nombre vacío) ni
+en commits. Tarjeta de prueba de Stripe: 4242 4242 4242 4242.

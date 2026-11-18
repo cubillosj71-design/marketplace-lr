@@ -15,10 +15,11 @@ from django.apps import apps
 from django.conf import settings
 from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
-from django.db import connection, transaction
+from django.db import transaction
 from django.utils import timezone
 
 from apps.catalogo import services as catalogo
+from apps.comun.bd import vaciado_permitido
 from apps.identidad import services as identidad
 from apps.reservas import services as reservas
 
@@ -94,21 +95,14 @@ class Command(BaseCommand):
     def handle(self, *args, reiniciar=False, **_):
         Usuario = apps.get_model("identidad", "Usuario")
         if reiniciar:
-            # El registro de auditoría es de solo inserción (RNF-E-CON-01): un trigger rechaza UPDATE, DELETE
-            # y TRUNCATE. flush vacía la base con TRUNCATE, así que solo en desarrollo se apaga el trigger de
-            # vaciado mientras corre y se vuelve a encender al terminar, falle o no.
+            # evento_auditoria, reserva y pago tienen un trigger que rechaza TRUNCATE (RNF-E-CON-01). flush vacía
+            # la base con TRUNCATE, así que solo en desarrollo se apagan esos triggers mientras corre.
             if not settings.DEBUG:
                 raise CommandError("--reiniciar solo se permite en desarrollo (DJANGO_DEBUG=1).")
-            with connection.cursor() as c:
-                c.execute("ALTER TABLE evento_auditoria DISABLE TRIGGER evento_auditoria_sin_vaciar")
-            try:
+            with vaciado_permitido():
                 call_command("flush", interactive=False, verbosity=0)
-            finally:
-                with connection.cursor() as c:
-                    c.execute("ALTER TABLE evento_auditoria ENABLE TRIGGER evento_auditoria_sin_vaciar")
-        # Catálogos fijos y tarifa inicial (las mismas cargas de las migraciones; no duplican datos)
-        for modulo in ("apps.catalogo.migrations.0002_catalogos_iniciales", "apps.reservas.migrations.0002_tarifa_inicial"):
-            import_module(modulo).cargar(apps, None)
+        # Catálogos fijos (la misma carga de la migración; no duplica datos)
+        import_module("apps.catalogo.migrations.0002_catalogos_iniciales").cargar(apps, None)
         if not reiniciar and Usuario.objects.filter(correo="admin@inversioneslr.com").exists():
             self.stdout.write(self.style.WARNING("Los datos de demostración ya existen. Usa --reiniciar para vaciar la base y cargarlos de nuevo."))
             return
@@ -130,6 +124,8 @@ class Command(BaseCommand):
             correo="admin@inversioneslr.com", password=CLAVE, nombre_completo="Admin LR", telefono="601 555 0100",
             rol="ADMINISTRADOR", ciudad="Bogotá", autorizacion_datos=timezone.now(),
         )
+        # Tarifa inicial del 10 %: la fija el administrador (tarifa_servicio.administrador_id NOT NULL)
+        reservas.asegurar_tarifa_inicial(admin)
         cuentas = {"admin@inversioneslr.com": admin}
         fechas = {"admin@inversioneslr.com": "2026-01-10"}
         for correo, nombre, tel, rol, ciu, registro in USUARIOS:
@@ -163,7 +159,7 @@ class Command(BaseCommand):
             Revision.objects.filter(publicacion_id=p.id).update(fecha=momento + timedelta(days=1))
 
         # Fechas no disponibles de ejemplo en el primer alojamiento
-        catalogo.modificar_calendario(cuentas["anfitrion@correo.com"], creadas[0], date(2026, 12, 12), date(2026, 12, 15), "NO_DISPONIBLE")
+        reservas.modificar_calendario(cuentas["anfitrion@correo.com"], creadas[0], date(2026, 12, 12), date(2026, 12, 15), "NO_DISPONIBLE")
 
         for i, llegada, salida, huespedes in RESERVAS:
             reservas.crear_reserva_confirmada(

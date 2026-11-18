@@ -6,6 +6,7 @@ import { Calendario } from "./pages/calendario";
 import { Explorar, ExplorarDetalle, ExplorarPublico, ExplorarPublicoDetalle } from "./pages/explorar";
 import { DetallePublicacion, FormPublicacionRuta, MisPublicaciones } from "./pages/publicaciones";
 import { ReportePublicaciones, ReporteUsuarios } from "./pages/reportes";
+import { CotizacionPage } from "./pages/reservar";
 import { CambiarContrasena, Perfil, Roles } from "./pages/usuarios";
 import { useStore } from "./store";
 
@@ -32,6 +33,7 @@ export default function App() {
 
         <Route path="/explorar" element={<SoloRol roles={["HUESPED"]}><Explorar /></SoloRol>} />
         <Route path="/explorar/:id" element={<SoloRol roles={["HUESPED"]}><ExplorarDetalle /></SoloRol>} />
+        <Route path="/cotizacion/:id" element={<SoloRol roles={["HUESPED"]}><CotizacionPage /></SoloRol>} />
 
         <Route path="/publicaciones" element={<SoloRol roles={["ANFITRION"]}><MisPublicaciones /></SoloRol>} />
         <Route path="/publicaciones/nueva" element={<SoloRol roles={["ANFITRION"]}><FormPublicacionRuta /></SoloRol>} />

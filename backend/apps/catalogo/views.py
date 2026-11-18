@@ -1,7 +1,5 @@
 """Vistas REST de SRV-02 Catálogo (sección 3.4: /api/v1/catalogo/... y /api/v1/admin/publicaciones/...)."""
 
-from datetime import date, timedelta
-
 from rest_framework import serializers, status
 from rest_framework.generics import ListAPIView
 from rest_framework.permissions import AllowAny
@@ -11,7 +9,7 @@ from rest_framework.views import APIView
 from apps.comun.permisos import EsAdministrador, EsAnfitrion, EsAnfitrionOAdministrador
 
 from . import services
-from .models import EstadoPublicacion, Publicacion, TipoPeriodo
+from .models import EstadoPublicacion, Publicacion
 
 # ---------------------------------------------------------------- serializadores
 
@@ -150,27 +148,8 @@ class EnviarRevision(_CambioEstado):
     destino = EstadoPublicacion.PENDIENTE_REVISION
 
 
-class CalendarioEntrada(serializers.Serializer):
-    fecha_inicio = serializers.DateField()
-    fecha_fin = serializers.DateField()
-    tipo = serializers.ChoiceField(choices=TipoPeriodo.choices)
-
-
-class Calendario(APIView):
-    """GET y POST /catalogo/publicaciones/{id}/calendario (RF-D-ALO-02.2)."""
-
-    permission_classes = [EsAnfitrion]
-
-    def get(self, request, pk):
-        desde = serializers.DateField().to_internal_value(request.query_params.get("desde") or date.today().isoformat())
-        hasta = serializers.DateField().to_internal_value(request.query_params.get("hasta") or (desde + timedelta(days=90)).isoformat())
-        return Response(services.calendario(request.user, pk, desde, hasta))
-
-    def post(self, request, pk):
-        s = CalendarioEntrada(data=request.data)
-        s.is_valid(raise_exception=True)
-        d = s.validated_data
-        return Response(services.modificar_calendario(request.user, pk, d["fecha_inicio"], d["fecha_fin"], d["tipo"]))
+# El calendario (GET y POST /catalogo/publicaciones/{id}/calendario) lo atiende MOD-04 Reservas:
+# ver apps.reservas.views.Calendario y config/urls.py.
 
 
 class Catalogos(APIView):

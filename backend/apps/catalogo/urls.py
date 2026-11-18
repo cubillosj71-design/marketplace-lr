@@ -12,7 +12,6 @@ urlpatterns = [
     path("publicaciones/<int:pk>/pausar", views.Pausar.as_view(), name="pausar"),
     path("publicaciones/<int:pk>/reactivar", views.Reactivar.as_view(), name="reactivar"),
     path("publicaciones/<int:pk>/enviar-revision", views.EnviarRevision.as_view(), name="enviar-revision"),
-    path("publicaciones/<int:pk>/calendario", views.Calendario.as_view(), name="calendario"),
     path("ciudades", views.Catalogos.as_view(clave="ciudades"), name="ciudades"),
     path("tipos-alojamiento", views.Catalogos.as_view(clave="tipos"), name="tipos"),
     path("servicios", views.Catalogos.as_view(clave="servicios"), name="servicios"),

@@ -30,7 +30,8 @@ export function Login() {
   const toast = useToast();
   const go = useNavigate();
   const loc = useLocation();
-  const aviso = (loc.state as { aviso?: string; correo?: string } | null) ?? {};
+  // volver: página a la que se regresa después de entrar (p. ej. el detalle que el visitante quería cotizar, CA-05.1)
+  const aviso = (loc.state as { aviso?: string; correo?: string; volver?: string } | null) ?? {};
   const [correo, setCorreo] = useState(aviso.correo ?? "");
   const [clave, setClave] = useState("");
   const [error, setError] = useState("");
@@ -43,7 +44,7 @@ export function Login() {
     if (!r.ok) { setError(r.error); setClave(""); return; }
     if (r.msg) toast(r.msg);
     // el rol se lee del usuario recién autenticado en el siguiente render
-    go("/inicio");
+    go(aviso.volver ?? "/inicio");
   };
 
   const demo = (c: string) => { setCorreo(c); setClave("Clave1234"); setError(""); entrar(c, "Clave1234"); };

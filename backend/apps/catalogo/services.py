@@ -7,7 +7,6 @@ con import-linter en el pipeline, ADR-001).
 
 from __future__ import annotations
 
-from datetime import date, timedelta
 from decimal import Decimal
 
 from django.db import transaction
@@ -21,16 +20,15 @@ from .models import (
     AccionModeracion,
     Ciudad,
     ImagenPublicacion,
-    PeriodoCalendario,
     PoliticaCancelacion,
     Publicacion,
+    PublicacionBuscable,
     PublicacionServicio,
     ReglaAlojamiento,
     RevisionPublicacion,
     Servicio,
     ServicioAdicional,
     TipoAlojamiento,
-    TipoPeriodo,
 )
 from .models import (
     EstadoPublicacion as E,
@@ -57,16 +55,6 @@ EVENTO = {
     AccionModeracion.PAUSAR: "PublicacionPausada", AccionModeracion.REACTIVAR: "PublicacionReactivada",
 }
 EDITABLE_POR_ANFITRION = {E.BORRADOR, E.ACTIVA, E.PAUSADA}
-
-# Catálogo no depende de Reservas (sección 3.3). Para mostrar las noches reservadas en el calendario
-# y no bloquear fechas con reserva (CA-09.2), Reservas registra aquí su consulta al iniciar la app.
-_noches_ocupadas = lambda publicacion_id, desde, hasta: set()  # noqa: E731
-
-
-def registrar_consulta_ocupacion(funcion) -> None:
-    global _noches_ocupadas
-    _noches_ocupadas = funcion
-
 
 # ================================================================ consultas para otros servicios
 
@@ -111,6 +99,64 @@ def conteo_por_estado() -> dict[str, int]:
     base = {e: 0 for e in E.values}
     base.update(dict(Publicacion.objects.values_list("estado").annotate(n=Count("id"))))
     return base
+
+
+def buscables():
+    """Vista v_publicacion_buscable (solo lectura): ACTIVAS de anfitriones con cuenta activa y sin
+    restricción vigente (CA-04.3, CA-21.2). Búsqueda la combina con otras vistas."""
+    return PublicacionBuscable.objects.all()
+
+
+def es_buscable(publicacion_id: int) -> bool:
+    return PublicacionBuscable.objects.filter(pk=publicacion_id).exists()
+
+
+def datos_para_cotizar(publicacion_id: int, bloquear: bool = False) -> dict | None:
+    """Precios y reglas que usa Reservas para cotizar y reservar (RF-D-RES-02.1).
+    Con bloquear=True toma la fila con SELECT ... FOR UPDATE (debe ir dentro de transaction.atomic):
+    así dos reservas de la misma publicación se procesan una después de la otra (CA-13.2)."""
+    qs = Publicacion.objects.select_for_update() if bloquear else Publicacion.objects
+    p = qs.filter(pk=publicacion_id).first()
+    if not p:
+        return None
+    return {
+        "id": p.id, "titulo": p.titulo, "anfitrion": p.anfitrion_id, "estado": p.estado, "politica": p.politica_id,
+        "capacidad": p.capacidad, "precio_noche": p.precio_noche, "tarifa_limpieza": p.tarifa_limpieza,
+        "descuento_porcentaje": p.descuento_porcentaje, "descuento_min_noches": p.descuento_min_noches,
+        "buscable": es_buscable(p.id),
+        "adicionales": {a.id: {"nombre": a.nombre, "precio": a.precio} for a in p.servicios_adicionales.filter(activo=True)},
+    }
+
+
+def detalle_publico(publicacion_id: int) -> dict | None:
+    """Datos completos para el detalle público (HU-11): servicios, adicionales con precio, reglas en
+    orden, imágenes y la política de cancelación con sus tramos (CA-11.3)."""
+    p = (Publicacion.objects.select_related("ciudad", "tipo_alojamiento", "politica")
+         .filter(pk=publicacion_id).first())
+    if not p:
+        return None
+    politica = p.politica
+    return {
+        "id": p.id, "titulo": p.titulo, "descripcion": p.descripcion, "anfitrion": p.anfitrion_id,
+        "ciudad": p.ciudad.nombre if p.ciudad else None, "ciudad_id": p.ciudad_id, "ubicacion_textual": p.ubicacion_textual,
+        "tipo": p.tipo_alojamiento.nombre if p.tipo_alojamiento else None, "tipo_alojamiento_id": p.tipo_alojamiento_id,
+        "capacidad": p.capacidad, "precio_noche": p.precio_noche, "tarifa_limpieza": p.tarifa_limpieza,
+        "descuento_porcentaje": p.descuento_porcentaje, "descuento_min_noches": p.descuento_min_noches,
+        "servicios": list(p.servicios.order_by("nombre").values("id", "nombre")),
+        "servicios_adicionales": [{"id": a.id, "nombre": a.nombre, "precio": a.precio}
+                                  for a in p.servicios_adicionales.filter(activo=True).order_by("id")],
+        "reglas": [{"descripcion": r.descripcion, "orden": r.orden} for r in p.reglas.order_by("orden")],
+        "imagenes": [{"ruta": i.ruta, "orden": i.orden} for i in p.imagenes.order_by("orden")],
+        "politica": {
+            "id": politica.id, "nombre": politica.nombre, "descripcion": politica.descripcion,
+            "tramos": [{"dias_minimos": t.dias_minimos, "dias_maximos": t.dias_maximos,
+                        "porcentaje_devolucion": t.porcentaje_devolucion} for t in politica.tramos.order_by("-dias_minimos")],
+        } if politica else None,
+    }
+
+
+def nombres_adicionales(ids) -> dict[int, str]:
+    return dict(ServicioAdicional.objects.filter(pk__in=list(ids)).values_list("id", "nombre"))
 
 
 def nombres_ciudades() -> dict[int, str]:
@@ -319,66 +365,3 @@ def listar_admin(estado: str | None = None):
 def mis_publicaciones(anfitrion, estado=None):
     qs = Publicacion.objects.filter(anfitrion=anfitrion).select_related("ciudad", "tipo_alojamiento")
     return qs.filter(estado=estado) if estado else qs
-
-
-# ================================================================ CU-ALO-06 Calendario (PeriodoCalendario)
-
-def _dias(inicio: date, fin: date):
-    d = inicio
-    while d < fin:
-        yield d
-        d += timedelta(days=1)
-
-
-def _rangos(dias: set[date]) -> list[tuple[date, date]]:
-    out: list[tuple[date, date]] = []
-    for d in sorted(dias):
-        if out and out[-1][1] == d:
-            out[-1] = (out[-1][0], d + timedelta(days=1))
-        else:
-            out.append((d, d + timedelta(days=1)))
-    return out
-
-
-def calendario(usuario, publicacion_id: int, desde: date, hasta: date) -> dict:
-    p = _publicacion_del_anfitrion(usuario, publicacion_id)
-    periodos = p.periodos.filter(fecha_fin__gt=desde, fecha_inicio__lt=hasta)
-    return {
-        "publicacion": p.id,
-        "periodos": [{"fecha_inicio": x.fecha_inicio, "fecha_fin": x.fecha_fin, "tipo": x.tipo} for x in periodos],
-        "noches_reservadas": sorted(_noches_ocupadas(p.id, desde, hasta)),
-    }
-
-
-def modificar_calendario(usuario, publicacion_id: int, inicio: date, fin: date, tipo: str) -> dict:
-    """NO_DISPONIBLE cierra [inicio, fin); DISPONIBLE lo vuelve a abrir. Los periodos se guardan
-    unificados en rangos de noches no disponibles (RF-D-ALO-02.2)."""
-    if fin <= inicio:
-        raise ErrorNegocio("La fecha final debe ser posterior a la inicial.", campo="fecha_fin")
-    p = _publicacion_del_anfitrion(usuario, publicacion_id)
-    nuevas = set(_dias(inicio, fin))
-    with transaction.atomic():
-        Publicacion.objects.select_for_update().filter(pk=p.pk).first()
-        if tipo == TipoPeriodo.NO_DISPONIBLE:
-            choque = nuevas & _noches_ocupadas(p.id, inicio, fin)
-            if choque:  # CA-09.2
-                raise Conflicto("No se pueden bloquear fechas con una reserva CONFIRMADA.", extra={"fechas": sorted(choque)})
-        actuales = {d for x in p.periodos.filter(tipo=TipoPeriodo.NO_DISPONIBLE) for d in _dias(x.fecha_inicio, x.fecha_fin)}
-        resultado = actuales | nuevas if tipo == TipoPeriodo.NO_DISPONIBLE else actuales - nuevas
-        p.periodos.all().delete()
-        PeriodoCalendario.objects.bulk_create(
-            [PeriodoCalendario(publicacion=p, fecha_inicio=a, fecha_fin=b, tipo=TipoPeriodo.NO_DISPONIBLE) for a, b in _rangos(resultado)]
-        )
-        auditoria.registrar(usuario.id, "CalendarioActualizado", entidad="Publicacion", entidad_id=p.id,
-                            detalle={"tipo": tipo, "desde": inicio.isoformat(), "hasta": fin.isoformat()})
-    return calendario(usuario, publicacion_id, inicio, fin)
-
-
-def _publicacion_del_anfitrion(usuario, publicacion_id: int) -> Publicacion:
-    p = Publicacion.objects.filter(pk=publicacion_id).first()
-    if not p:
-        raise NoEncontrado("La publicación no existe.")
-    if p.anfitrion_id != usuario.id:
-        _negar(usuario, p, "Calendario de una publicación ajena")
-        raise SinPermiso("Solo el anfitrión dueño administra el calendario.")
-    return p
