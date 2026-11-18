@@ -28,7 +28,7 @@ load_dotenv(BASE_DIR / ".env")
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "solo-para-desarrollo-local")
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "solo-para-desarrollo-local-no-usar-en-produccion")
 
 # SECURITY WARNING: don"t run with debug turned on in production!
 DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
@@ -109,17 +109,14 @@ DATABASES = {
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
 
 AUTH_PASSWORD_VALIDATORS = [
-    {
-        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
-    },
+    # RF-D-USU-01.1 pide solo "al menos 8 caracteres". Los demás validadores que
+    # trae Django (contraseñas comunes, solo números, parecida al correo)
+    # rechazarían contraseñas que el requerimiento acepta, y las pruebas de
+    # aceptación fallarían. Si el equipo decide endurecer la regla, se
+    # agregan aquí y se actualiza el requerimiento.
     {
         "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
-    },
-    {
-        "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
-    },
-    {
-        "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
+        "OPTIONS": {"min_length": 8},
     },
 ]
 
@@ -157,8 +154,17 @@ PASSWORD_HASHERS = [
 ]
 
 REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": ["rest_framework_simplejwt.authentication.JWTAuthentication"],
+    # JWT + revisión del estado de la cuenta en cada petición (ADR-005).
+    "DEFAULT_AUTHENTICATION_CLASSES": ["apps.identidad.autenticacion.JWTConEstadoDeCuenta"],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
+    # Límite de intentos por IP en las rutas sensibles: frena a quien prueba
+    # contraseñas por fuerza bruta. Solo aplica a las vistas con throttle_scope.
+    "DEFAULT_THROTTLE_CLASSES": ["rest_framework.throttling.ScopedRateThrottle"],
+    "DEFAULT_THROTTLE_RATES": {
+        "inicio_sesion": os.environ.get("LIMITE_INICIO_SESION", "10/min"),
+        "recuperacion": os.environ.get("LIMITE_RECUPERACION", "5/min"),
+        "registro": os.environ.get("LIMITE_REGISTRO", "10/min"),
+    },
 }
 
 # JWT: acceso de 30 minutos, renovación de 24 horas y lista negra al cerrar sesión (ADR-005)
@@ -167,6 +173,16 @@ SIMPLE_JWT = {
     "REFRESH_TOKEN_LIFETIME": timedelta(hours=24),
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
+    # El inicio de sesión ya actualiza last_login en services.iniciar_sesion.
+    "UPDATE_LAST_LOGIN": False,
+}
+
+# Cookie httpOnly con el token de renovación (C4 nivel 2). Solo viaja a las rutas
+# de identidad y, fuera de desarrollo, solo por HTTPS.
+IDENTIDAD_COOKIE_RENOVACION = {
+    "nombre": "renovacion",
+    "ruta": "/api/v1/identidad/",
+    "segura": not DEBUG,
 }
 
 # La aplicación web corre en otro dominio (ADR-003, ADR-005)

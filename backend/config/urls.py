@@ -12,7 +12,16 @@ def salud(request):
 
 SERVICIOS = ["identidad", "catalogo", "busqueda", "reservas", "resenas", "notificaciones", "auditoria", "reportes"]
 
-urlpatterns = [
-    path("admin/", admin.site.urls),
-    path("api/v1/salud", salud),
-] + [path(f"api/v1/{s}/", include(f"apps.{s}.urls")) for s in SERVICIOS]
+# Servicios con rutas de administración (/api/v1/admin/...). Cada uno las define
+# en su propio urls_admin.py; Django prueba los include en orden, así que varios
+# servicios pueden compartir el prefijo admin/ sin pisarse.
+SERVICIOS_CON_ADMIN = ["identidad"]
+
+urlpatterns = (
+    [
+        path("admin/", admin.site.urls),
+        path("api/v1/salud", salud),
+    ]
+    + [path(f"api/v1/{s}/", include(f"apps.{s}.urls")) for s in SERVICIOS]
+    + [path("api/v1/admin/", include(f"apps.{s}.urls_admin")) for s in SERVICIOS_CON_ADMIN]
+)
