@@ -2,9 +2,9 @@ import {
   BarChart3, Bell, CalendarCheck, CalendarDays, CheckCircle2, ClipboardList, FileBarChart2, Percent, FileSpreadsheet, ChevronRight, ClipboardCheck, Compass, History, Home, KeyRound, LayoutList, LogOut,
   PlusCircle, ShieldCheck, Star, UserRound,
 } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
-import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { adminApi, notificacionesApi } from "./api";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
+import { adminApi, api, notificacionesApi } from "./api";
 import { ROL_TXT, iniciales } from "./data";
 import { useStore } from "./store";
 import { ImageTile, Logo } from "./ui";
@@ -212,16 +212,32 @@ export function Page({ req, children }: { req: string; children: ReactNode }) {
 
 /** Protección por permiso (RF-D-USU-02.1). Sin sesión lleva a "Ingresar"; sin el permiso muestra el aviso.
  *  Con varios permisos basta tener uno, igual que RequierePermiso en el backend. */
-export function ConPermiso({ permiso, children }: { permiso: string | string[]; children: ReactNode }) {
+export function ConPermiso({ permiso, api: rutaApi, children }: { permiso: string | string[]; api?: string; children: ReactNode }) {
   const { usuario, tiene } = useStore();
   const loc = useLocation();
   if (!usuario) return <Navigate to="/ingresar" replace state={{ volver: loc.pathname + loc.search }} />;
-  if (!tiene(...(Array.isArray(permiso) ? permiso : [permiso]))) return <Denegado />;
+  if (!tiene(...(Array.isArray(permiso) ? permiso : [permiso]))) return <Denegado api={rutaApi} />;
   return <>{children}</>;
 }
 
-/** Pantalla de acceso negado. La API registra en la auditoría cada intento que llega a ella (CA-05.2). */
-export function Denegado({ titulo = "No tienes permiso para ver esta página", texto }: { titulo?: string; texto?: string }) {
+/** CA-05.2: el frontend no registra nada por su cuenta. Hace UN GET a la ruta de la API de la pantalla; el backend
+ *  responde 403 y deja el intento en la auditoría con la ruta y el permiso que faltó. La respuesta no se usa. */
+function useRegistrarIntento(rutaApi?: string) {
+  const params = useParams();
+  const hecho = useRef<string | null>(null);
+  const ruta = rutaApi?.replace(/:(\w+)/g, (_, k: string) => encodeURIComponent(params[k] ?? "0"));
+  useEffect(() => {
+    if (!ruta || hecho.current === ruta) return;  // una sola petición por pantalla (también en StrictMode)
+    hecho.current = ruta;
+    api.get(ruta).catch(() => { /* 403 esperado: no se muestra nada de la respuesta */ });
+  }, [ruta]);
+}
+
+/** Pantalla de acceso negado. */
+export function Denegado({ titulo = "No tienes permiso para ver esta página", texto, api: rutaApi }: {
+  titulo?: string; texto?: string; api?: string;
+}) {
+  useRegistrarIntento(rutaApi);
   return (
     <Page req="RF-D-USU-02.1 · HU-05">
       <div className="card empty-state">

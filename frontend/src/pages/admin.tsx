@@ -338,7 +338,7 @@ function sobreQue(e: EventoAuditoriaApi): string {
 
 function detalleCorto(e: EventoAuditoriaApi): string {
   const d = e.detalle ?? {};
-  const partes = ["motivo", "observacion", "valor_devolucion", "formato", "estado_pago", "correo"]
+  const partes = ["permiso", "motivo", "observacion", "valor_devolucion", "formato", "estado_pago", "correo"]
     .filter((k) => d[k] != null && d[k] !== "").map((k) => `${k.replace("_", " ")}: ${String(d[k])}`);
   if (typeof d.desde === "string" && typeof d.hasta === "string") partes.push(`periodo: ${d.desde} a ${d.hasta}`);
   return partes.join(" · ");
