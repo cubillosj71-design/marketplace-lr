@@ -12,9 +12,10 @@ from decimal import Decimal
 from importlib import import_module
 
 from django.apps import apps
+from django.conf import settings
 from django.core.management import call_command
-from django.core.management.base import BaseCommand
-from django.db import transaction
+from django.core.management.base import BaseCommand, CommandError
+from django.db import connection, transaction
 from django.utils import timezone
 
 from apps.catalogo import services as catalogo
@@ -93,9 +94,18 @@ class Command(BaseCommand):
     def handle(self, *args, reiniciar=False, **_):
         Usuario = apps.get_model("identidad", "Usuario")
         if reiniciar:
-            # El registro de auditoría es de solo inserción (RNF-E-CON-01): no se borran filas una a una.
-            # Se vacía toda la base y se vuelven a cargar los catálogos fijos y la tarifa inicial.
-            call_command("flush", interactive=False, verbosity=0)
+            # El registro de auditoría es de solo inserción (RNF-E-CON-01): un trigger rechaza UPDATE, DELETE
+            # y TRUNCATE. flush vacía la base con TRUNCATE, así que solo en desarrollo se apaga el trigger de
+            # vaciado mientras corre y se vuelve a encender al terminar, falle o no.
+            if not settings.DEBUG:
+                raise CommandError("--reiniciar solo se permite en desarrollo (DJANGO_DEBUG=1).")
+            with connection.cursor() as c:
+                c.execute("ALTER TABLE evento_auditoria DISABLE TRIGGER evento_auditoria_sin_vaciar")
+            try:
+                call_command("flush", interactive=False, verbosity=0)
+            finally:
+                with connection.cursor() as c:
+                    c.execute("ALTER TABLE evento_auditoria ENABLE TRIGGER evento_auditoria_sin_vaciar")
         # Catálogos fijos y tarifa inicial (las mismas cargas de las migraciones; no duplican datos)
         for modulo in ("apps.catalogo.migrations.0002_catalogos_iniciales", "apps.reservas.migrations.0002_tarifa_inicial"):
             import_module(modulo).cargar(apps, None)
@@ -118,18 +128,18 @@ class Command(BaseCommand):
 
         admin = Usuario.objects.create_user(
             correo="admin@inversioneslr.com", password=CLAVE, nombre_completo="Admin LR", telefono="601 555 0100",
-            rol="ADMINISTRADOR", ciudad_id=ciudad["Bogotá"], acepta_datos_en=timezone.now(),
+            rol="ADMINISTRADOR", ciudad="Bogotá", autorizacion_datos=timezone.now(),
         )
         cuentas = {"admin@inversioneslr.com": admin}
         fechas = {"admin@inversioneslr.com": "2026-01-10"}
         for correo, nombre, tel, rol, ciu, registro in USUARIOS:
             datos = identidad.registrar(nombre_completo=nombre, correo=correo, telefono=tel, password=CLAVE, rol=rol,
-                                        acepta_datos=True, ciudad_id=ciudad[ciu])
+                                        acepta_datos=True, ciudad=ciu)
             cuentas[correo] = Usuario.objects.get(pk=datos.id)
             fechas[correo] = registro
         for correo, f in fechas.items():
             momento = timezone.make_aware(datetime.fromisoformat(f + "T10:00:00"))
-            Usuario.objects.filter(correo=correo).update(fecha_registro=momento, acepta_datos_en=momento)
+            Usuario.objects.filter(correo=correo).update(fecha_registro=momento, autorizacion_datos=momento)
 
         creadas = []
         for dueno, creada, estado, d, moderacion in PUBLICACIONES:

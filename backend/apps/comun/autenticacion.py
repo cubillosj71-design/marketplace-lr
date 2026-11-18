@@ -1,18 +1,13 @@
 """Autenticación JWT que revisa el estado de la cuenta en cada petición (ADR-005).
 
-SimpleJWT ya rechaza usuarios con is_active = False (cuenta DESACTIVADA o RESTRINGIDA). Además,
-antes de esa revisión se sincroniza el estado con las restricciones: si una restricción venció,
-la cuenta vuelve a ACTIVA; si empezó una nueva, pasa a RESTRINGIDA.
+SimpleJWT carga el usuario en cada petición y lo rechaza si is_active es False. En Usuario,
+is_active = activa y sin restricción vigente, así que una cuenta desactivada o restringida pierde
+el acceso en la siguiente petición, y lo recupera sola cuando la restricción vence o se levanta.
+No se escribe nada en la cuenta: "restringida" se deriva de RestriccionUsuario.
 """
 
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
 
 class JWTConEstadoDeCuenta(JWTAuthentication):
-    def get_user(self, validated_token):
-        from apps.identidad import services as identidad  # import tardío: evita ciclos al cargar apps
-
-        usuario_id = validated_token.get("user_id")
-        if usuario_id is not None:
-            identidad.sincronizar_estado(int(usuario_id))
-        return super().get_user(validated_token)
+    """Se mantiene como punto único de configuración (settings.REST_FRAMEWORK)."""

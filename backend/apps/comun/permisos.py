@@ -1,16 +1,22 @@
-"""Permisos de DRF por rol (ADR-005). Cada acceso negado publica AccesoDenegado para la auditoría."""
+"""Permisos de DRF por rol (ADR-005). Cada acceso negado queda en la auditoría (CA-05.2).
+
+El registro se hace con auditoria.services.registrar() fuera de cualquier transaction.atomic
+("transacción propia"): queda guardado aunque la petición termine en 403.
+"""
 
 from rest_framework.permissions import BasePermission
 
-from .eventos import ip_de, publicar
+from .eventos import ip_de
 
 
 def _negar(request, view, motivo: str) -> bool:
+    from apps.auditoria import services as auditoria  # import tardío: comun se carga antes que las apps
+
     usuario = getattr(request, "user", None)
-    publicar(
+    auditoria.registrar(
+        getattr(usuario, "id", None),
         "AccesoDenegado",
-        usuario_id=getattr(usuario, "id", None),
-        resultado="FALLO",
+        exitoso=False,
         detalle={"ruta": request.path, "metodo": request.method, "motivo": motivo},
         ip=ip_de(request),
     )

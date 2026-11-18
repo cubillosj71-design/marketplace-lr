@@ -11,25 +11,25 @@ from . import services
 class EventoSerializer(serializers.Serializer):
     id = serializers.IntegerField()
     fecha = serializers.DateTimeField()
-    usuario_id = serializers.IntegerField(allow_null=True)
+    actor_id = serializers.IntegerField(allow_null=True)
     accion = serializers.CharField()
     entidad = serializers.CharField(allow_null=True)
     entidad_id = serializers.IntegerField(allow_null=True)
-    resultado = serializers.CharField()
+    exitoso = serializers.BooleanField()
     detalle = serializers.JSONField(allow_null=True)
     ip = serializers.IPAddressField(allow_null=True)
 
 
 class FiltrosSerializer(serializers.Serializer):
-    usuario = serializers.IntegerField(required=False)
+    usuario = serializers.IntegerField(required=False)  # actor_id
     accion = serializers.CharField(required=False)
-    resultado = serializers.ChoiceField(choices=["EXITO", "FALLO"], required=False)
+    exitoso = serializers.BooleanField(required=False, allow_null=True, default=None)
     desde = serializers.DateField(required=False)
     hasta = serializers.DateField(required=False)
 
 
 class AuditoriaAdmin(ListAPIView):
-    """GET /admin/auditoria?usuario&accion&desde&hasta (RF-D-ADM-04.1)."""
+    """GET /admin/auditoria?usuario&accion&desde&hasta (RF-D-ADM-04.1, CA-23.1)."""
 
     permission_classes = [EsAdministrador]
     serializer_class = EventoSerializer
@@ -39,6 +39,6 @@ class AuditoriaAdmin(ListAPIView):
         f.is_valid(raise_exception=True)
         d = f.validated_data
         return services.consultar(
-            usuario_id=d.get("usuario"), accion=d.get("accion"), resultado=d.get("resultado"),
+            actor_id=d.get("usuario"), accion=d.get("accion"), exitoso=d.get("exitoso"),
             desde=d.get("desde"), hasta=d.get("hasta"),
         )

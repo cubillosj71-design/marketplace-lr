@@ -22,12 +22,6 @@ class RolUsuario(models.TextChoices):
     ADMINISTRADOR = "ADMINISTRADOR", "Administrador"
 
 
-class EstadoCuenta(models.TextChoices):
-    ACTIVA = "ACTIVA", "Activa"
-    DESACTIVADA = "DESACTIVADA", "Desactivada"
-    RESTRINGIDA = "RESTRINGIDA", "Restringida"
-
-
 class UsuarioManager(BaseUserManager):
     def create_user(self, correo, password=None, **campos):
         if not correo:
@@ -46,23 +40,24 @@ class Usuario(AbstractBaseUser):
     correo = models.EmailField(max_length=254, unique=True)
     nombre_completo = models.CharField(max_length=120)
     telefono = models.CharField(max_length=20)
-    # Asociación opcional con el catálogo de ciudades (usuario.ciudad_id en el modelo relacional)
-    ciudad = models.ForeignKey("catalogo.Ciudad", on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    ciudad = models.CharField(max_length=80, null=True, blank=True)  # texto opcional (MOD-01)
     rol = models.CharField(max_length=15, choices=RolUsuario.choices)
-    estado = models.CharField(max_length=12, choices=EstadoCuenta.choices, default=EstadoCuenta.ACTIVA)
-    acepta_datos_en = models.DateTimeField(help_text="Autorización de tratamiento de datos (Ley 1581)")
+    # Falsa solo cuando el usuario desactivó su cuenta. "Restringida" NO es una columna:
+    # se deriva de una RestriccionUsuario vigente (esta_vigente).
+    activa = models.BooleanField(default=True)
+    autorizacion_datos = models.DateTimeField(help_text="Autorización de tratamiento de datos (Ley 1581)")
     fecha_registro = models.DateTimeField(auto_now_add=True)
 
     objects = UsuarioManager()
 
     USERNAME_FIELD = "correo"
-    REQUIRED_FIELDS = ["nombre_completo", "telefono", "rol", "acepta_datos_en"]
+    REQUIRED_FIELDS = ["nombre_completo", "telefono", "rol", "autorizacion_datos"]
 
     class Meta:
         db_table = "usuario"
         constraints = [
+            # CHECK rol IN ('HUESPED','ANFITRION','ADMINISTRADOR')
             models.CheckConstraint(condition=models.Q(rol__in=RolUsuario.values), name="usuario_rol_valido"),
-            models.CheckConstraint(condition=models.Q(estado__in=EstadoCuenta.values), name="usuario_estado_valido"),
         ]
 
     def __str__(self) -> str:
@@ -74,8 +69,15 @@ class Usuario(AbstractBaseUser):
         return self.rol == RolUsuario.ADMINISTRADOR
 
     @property
+    def restringida(self) -> bool:
+        """Derivada: hay una RestriccionUsuario vigente."""
+        return any(r.esta_vigente() for r in RestriccionUsuario.objects.filter(usuario_id=self.pk))
+
+    @property
     def is_active(self) -> bool:  # type: ignore[override]
-        return self.estado == EstadoCuenta.ACTIVA
+        """SimpleJWT la revisa en cada petición: una cuenta desactivada o restringida pierde el
+        acceso en la siguiente petición (ADR-005)."""
+        return self.activa and not self.restringida
 
     def has_perm(self, perm, obj=None) -> bool:
         return self.is_staff
@@ -85,8 +87,8 @@ class Usuario(AbstractBaseUser):
 
 
 class RestriccionUsuario(models.Model):
-    """Restricción impuesta por un administrador (RF-D-ADM-02.1). El estado RESTRINGIDA de la cuenta
-    se deriva de la restricción vigente y se escribe en la misma transacción (DA-04)."""
+    """Restricción impuesta por un administrador (RF-D-ADM-02.1). La cuenta está restringida mientras
+    haya una vigente (esta_vigente). Restringir no modifica la cuenta ni sus reservas."""
 
     usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="restricciones")
     administrador = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
@@ -120,6 +122,7 @@ class TokenRecuperacion(models.Model):
 
     class Meta:
         db_table = "token_recuperacion"
+        constraints = [models.CheckConstraint(condition=Q(vence__gt=models.F("creado")), name="token_vence_despues_de_creado")]
 
     def es_valido(self, ahora=None) -> bool:
         ahora = ahora or timezone.now()

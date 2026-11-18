@@ -16,9 +16,9 @@ from decimal import Decimal
 
 from django.conf import settings
 
+from apps.auditoria import services as auditoria
 from apps.catalogo import services as catalogo
 from apps.comun.errores import ErrorNegocio
-from apps.comun.eventos import publicar
 from apps.identidad import services as identidad
 from apps.reservas import services as reservas
 
@@ -28,7 +28,10 @@ TIPOS = ("usuarios", "publicaciones", "reservas", "ingresos", "demanda")
 FORMATOS = ("pdf", "xlsx")
 CUENTAN = ("CONFIRMADA", "COMPLETADA")  # reservas que generan ingreso
 ROL_TXT = {"HUESPED": "Huésped", "ANFITRION": "Anfitrión", "ADMINISTRADOR": "Administrador"}
+# Estado de la cuenta para mostrar en el reporte. No es una columna: se deriva de usuario.activa y de
+# una restricción vigente (MOD-01).
 ESTADO_CUENTA_TXT = {"ACTIVA": "Activa", "DESACTIVADA": "Desactivada", "RESTRINGIDA": "Restringida"}
+FILTRO_ESTADO_CUENTA = {"ACTIVA": {"activa": True, "restringida": False}, "DESACTIVADA": {"activa": False}, "RESTRINGIDA": {"restringida": True}}
 ESTADO_PUB_TXT = {"PENDIENTE_REVISION": "En revisión", "ACTIVA": "Activa", "PAUSADA": "Pausada", "BLOQUEADA": "Bloqueada", "BORRADOR": "Borrador"}
 
 
@@ -88,9 +91,16 @@ def tablero(desde: date, hasta: date) -> dict:
 
 # ---------------------------------------------------------------- contenido de cada reporte
 
+def _estado_cuenta(u: dict) -> str:
+    return "RESTRINGIDA" if u["restringida"] else ("ACTIVA" if u["activa"] else "DESACTIVADA")
+
+
 def _reporte_usuarios(desde, hasta, f) -> archivos.Reporte:
-    lista = identidad.usuarios_registrados(desde, hasta, f.get("rol"), f.get("estado"))
-    ciudades = catalogo.nombres_ciudades()
+    if f.get("estado") and f["estado"] not in FILTRO_ESTADO_CUENTA:
+        raise ErrorNegocio("El estado de la cuenta debe ser ACTIVA, DESACTIVADA o RESTRINGIDA.", campo="estado")
+    lista = identidad.usuarios_registrados(desde, hasta, f.get("rol"), **FILTRO_ESTADO_CUENTA.get(f.get("estado"), {}))
+    for u in lista:
+        u["estado"] = _estado_cuenta(u)
     cuenta = lambda clave, valor: sum(1 for u in lista if u[clave] == valor)  # noqa: E731
     return archivos.Reporte(
         titulo="Reporte de usuarios",
@@ -98,8 +108,8 @@ def _reporte_usuarios(desde, hasta, f) -> archivos.Reporte:
         + [(plural, cuenta("rol", r)) for r, plural in (("HUESPED", "Huéspedes"), ("ANFITRION", "Anfitriones"), ("ADMINISTRADOR", "Administradores"))]
         + [(f"Cuentas {ESTADO_CUENTA_TXT[e].lower()}s", cuenta("estado", e)) for e in ESTADO_CUENTA_TXT],
         columnas=["Nombre", "Correo", "Rol", "Ciudad", "Teléfono", "Estado", "Motivo de restricción", "Fecha de registro", "Autorizó datos"],
-        filas=[[u["nombre_completo"], u["correo"], ROL_TXT[u["rol"]], ciudades.get(u["ciudad"], ""), u["telefono"],
-                ESTADO_CUENTA_TXT[u["estado"]], u["motivo_restriccion"] or "", u["fecha_registro"][:10], u["acepta_datos_en"][:16].replace("T", " ")]
+        filas=[[u["nombre_completo"], u["correo"], ROL_TXT[u["rol"]], u["ciudad"] or "", u["telefono"],
+                ESTADO_CUENTA_TXT[u["estado"]], u["motivo_restriccion"] or "", u["fecha_registro"][:10], u["autorizacion_datos"][:16].replace("T", " ")]
                for u in lista],
     )
 
@@ -180,7 +190,7 @@ GENERADORES = {
 
 
 def generar(admin, tipo: str, formato: str, desde: date, hasta: date, filtros: dict | None = None, ip=None) -> tuple[bytes, str, str]:
-    """Devuelve (contenido, nombre de archivo, tipo MIME) y publica ReporteDescargado (CA-25.2)."""
+    """Devuelve (contenido, nombre de archivo, tipo MIME) y registra ReporteDescargado en la auditoría (CA-25.2)."""
     if tipo not in GENERADORES:
         raise ErrorNegocio(f"Tipo de reporte no válido. Usa: {', '.join(TIPOS)}.", codigo=404)
     if formato not in FORMATOS:
@@ -191,8 +201,8 @@ def generar(admin, tipo: str, formato: str, desde: date, hasta: date, filtros: d
     r.generado_por = f"{admin.nombre_completo} ({admin.correo})"
     contenido = archivos.pdf(r) if formato == "pdf" else archivos.xlsx(r)
     nombre = f"reporte-{tipo}_{desde.isoformat()}_{hasta.isoformat()}.{formato}"
-    publicar("ReporteDescargado", usuario_id=admin.id, entidad="Reporte",
-             detalle={"tipo": tipo, "formato": formato, "desde": desde.isoformat(), "hasta": hasta.isoformat(),
-                      "registros": len(r.filas), "archivo": nombre}, ip=ip)
+    auditoria.registrar(admin.id, "ReporteDescargado", entidad="Reporte", ip=ip,
+                        detalle={"tipo": tipo, "formato": formato, "desde": desde.isoformat(), "hasta": hasta.isoformat(),
+                                 "registros": len(r.filas), "archivo": nombre})
     mime = "application/pdf" if formato == "pdf" else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     return contenido, nombre, mime

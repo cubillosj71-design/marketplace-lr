@@ -21,15 +21,15 @@ def test_salud(cliente):
 def test_registro_guarda_autorizacion_y_clave_argon2(cliente, django_user_model):
     r = cliente.post(REGISTRO, NUEVO, format="json")
     assert r.status_code == 201
-    assert r.json()["acepta_datos_en"] and r.json()["fecha_registro"]
+    assert r.json()["autorizacion_datos"] and r.json()["fecha_registro"]
     assert django_user_model.objects.get(correo="marta@correo.com").password.startswith("argon2")
 
 
-def test_registro_con_ciudad_del_catalogo(cliente):
-    ciudad = cliente.get("/api/v1/catalogo/ciudades").json()[0]["id"]
-    assert cliente.post(REGISTRO, {**NUEVO, "ciudad": ciudad}, format="json").json()["ciudad"] == ciudad
-    r = cliente.post(REGISTRO, {**NUEVO, "correo": "otra@correo.com", "ciudad": 99999}, format="json")
-    assert r.status_code == 400 and r.json()["campo"] == "ciudad"
+def test_registro_con_ciudad_como_texto_opcional(cliente):
+    assert cliente.post(REGISTRO, {**NUEVO, "ciudad": "Medellín"}, format="json").json()["ciudad"] == "Medellín"
+    assert cliente.post(REGISTRO, {**NUEVO, "correo": "sin@correo.com"}, format="json").json()["ciudad"] is None
+    r = cliente.post(REGISTRO, {**NUEVO, "correo": "otra@correo.com", "ciudad": "x" * 81}, format="json")
+    assert r.status_code == 400 and "ciudad" in r.json()
 
 
 def test_ca_01_2_correo_repetido(cliente):
@@ -98,7 +98,8 @@ def test_ca_03_2_enlace_vencido_a_los_20_minutos(demo, cliente):
     from django.apps import apps
 
     token = services.solicitar_recuperacion("huesped@correo.com")
-    apps.get_model("identidad", "TokenRecuperacion").objects.update(vence=timezone.now() - timedelta(minutes=1))
+    ahora = timezone.now()  # CHECK vence > creado: se mueven las dos fechas al pasado
+    apps.get_model("identidad", "TokenRecuperacion").objects.update(creado=ahora - timedelta(minutes=21), vence=ahora - timedelta(minutes=1))
     r = cliente.post(f"/api/v1/identidad/recuperacion/{token}", {"password": "NuevaClave2026"}, format="json")
     assert r.status_code == 410 and "venció" in r.json()["detalle"]
 
@@ -125,9 +126,19 @@ def test_cambiar_clave_exige_la_actual(demo, entrar):
 
 
 def test_ca_04_2_no_desactiva_con_reservas_confirmadas(demo, entrar):
+    for correo in ("huesped@correo.com", "anfitrion@correo.com"):  # como huésped y en sus alojamientos
+        r = entrar(correo).post("/api/v1/identidad/perfil/desactivar")
+        assert r.status_code == 409 and {x["estado"] for x in r.json()["reservas"]} == {"CONFIRMADA"}
+
+
+def test_ca_04_5_tampoco_desactiva_con_reservas_en_revision(demo, entrar):
+    from django.apps import apps
+
+    apps.get_model("reservas", "Reserva").objects.update(estado="EN_REVISION")
     for correo in ("huesped@correo.com", "anfitrion@correo.com"):
         r = entrar(correo).post("/api/v1/identidad/perfil/desactivar")
-        assert r.status_code == 409 and r.json()["reservas"]
+        assert r.status_code == 409 and {x["estado"] for x in r.json()["reservas"]} == {"EN_REVISION"}
+        assert "EN_REVISION" in r.json()["detalle"]
 
 
 def test_ca_04_4_desactivar_y_reactivar_al_ingresar(demo, entrar):
@@ -135,7 +146,7 @@ def test_ca_04_4_desactivar_y_reactivar_al_ingresar(demo, entrar):
     assert c.post("/api/v1/identidad/perfil/desactivar").status_code == 200
     assert c.get("/api/v1/identidad/perfil").status_code == 401  # el token deja de servir
     nuevo = entrar("pedro@correo.com")
-    assert nuevo.usuario["estado"] == "ACTIVA"
+    assert nuevo.usuario["activa"] is True and nuevo.usuario["restringida"] is False
 
 
 def test_administrador_no_se_desactiva(demo, entrar):
@@ -158,7 +169,8 @@ def test_restriccion_vencida_libera_la_cuenta(demo, entrar):
 
     ahora = timezone.now()
     apps.get_model("identidad", "RestriccionUsuario").objects.update(fecha_inicio=ahora - timedelta(days=2), fecha_fin=ahora - timedelta(minutes=1))
-    assert entrar("restringido@correo.com").usuario["estado"] == "ACTIVA"
+    u = entrar("restringido@correo.com").usuario
+    assert u["activa"] is True and u["restringida"] is False
 
 
 def test_solo_el_administrador_restringe(demo, entrar):

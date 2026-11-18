@@ -5,8 +5,8 @@ from .models import RestriccionUsuario, Usuario
 
 @admin.register(Usuario)
 class UsuarioAdmin(admin.ModelAdmin):
-    list_display = ("correo", "nombre_completo", "rol", "estado", "fecha_registro")
-    list_filter = ("rol", "estado")
+    list_display = ("correo", "nombre_completo", "rol", "activa", "fecha_registro")
+    list_filter = ("rol", "activa")
     search_fields = ("correo", "nombre_completo")
     exclude = ("password",)
 

@@ -2,6 +2,7 @@
 // Los nombres de estados y reglas siguen el SRS v3.5 y el modelo de datos de la fase de diseño.
 
 export type Rol = "HUESPED" | "ANFITRION" | "ADMINISTRADOR";
+/** Estado de la cuenta solo para mostrar: no es una columna, se deriva de `activa` y de una restricción vigente. */
 export type EstadoCuenta = "ACTIVA" | "DESACTIVADA" | "RESTRINGIDA";
 export type EstadoPub = "BORRADOR" | "PENDIENTE_REVISION" | "ACTIVA" | "PAUSADA" | "BLOQUEADA";
 export type TipoAlojamiento = "Apartamento" | "Casa" | "Habitación" | "Cabaña";
@@ -11,12 +12,17 @@ export interface Usuario {
   nombre: string;
   correo: string;
   telefono: string;
+  ciudad: string | null; // texto opcional (usuario.ciudad VARCHAR(80))
   rol: Rol;
-  estado: EstadoCuenta; // RESTRINGIDA se deriva de una RestriccionUsuario vigente (DA-04)
+  activa: boolean; // false solo si el usuario desactivó su cuenta
+  restringida: boolean; // derivado de una RestriccionUsuario vigente
   clave: string;
-  aceptaDatosEn: string; // fecha y hora en que autorizó el tratamiento de datos (Ley 1581)
+  autorizacionDatos: string; // fecha y hora en que autorizó el tratamiento de datos (Ley 1581)
   fechaRegistro: string; // AAAA-MM-DD
 }
+
+export const estadoCuenta = (u: Pick<Usuario, "activa" | "restringida">): EstadoCuenta =>
+  u.restringida ? "RESTRINGIDA" : u.activa ? "ACTIVA" : "DESACTIVADA";
 
 /** RestriccionUsuario del diagrama de clases: la impone el Administrador. */
 export interface RestriccionUsuario { id: number; usuarioId: number; motivo: string; fechaInicio: string; fechaFin?: string }
@@ -104,12 +110,12 @@ const img = (n: number, nombres: string[]): Imagen[] =>
   nombres.map((nombre, i) => ({ id: `i${n}-${i}`, nombre, color: PALETA[(n + i) % PALETA.length] }));
 
 export const SEED_USUARIOS: Usuario[] = [
-  { id: 1, nombre: "Laura Gómez", correo: "anfitrion@correo.com", telefono: "310 555 0182", rol: "ANFITRION", estado: "ACTIVA", clave: "Clave1234", fechaRegistro: "2026-03-14", aceptaDatosEn: "2026-03-14T10:00:00" },
-  { id: 2, nombre: "Carlos Ruiz", correo: "huesped@correo.com", telefono: "315 222 4410", rol: "HUESPED", estado: "ACTIVA", clave: "Clave1234", fechaRegistro: "2026-05-02", aceptaDatosEn: "2026-05-02T10:00:00" },
-  { id: 3, nombre: "Admin LR", correo: "admin@inversioneslr.com", telefono: "601 555 0100", rol: "ADMINISTRADOR", estado: "ACTIVA", clave: "Clave1234", fechaRegistro: "2026-01-10", aceptaDatosEn: "2026-01-10T10:00:00" },
-  { id: 4, nombre: "Pedro Lara", correo: "pedro@correo.com", telefono: "300 410 7788", rol: "ANFITRION", estado: "ACTIVA", clave: "Clave1234", fechaRegistro: "2026-07-21", aceptaDatosEn: "2026-07-21T10:00:00" },
-  { id: 5, nombre: "Sofía Mejía", correo: "sofia@correo.com", telefono: "320 118 9034", rol: "ANFITRION", estado: "ACTIVA", clave: "Clave1234", fechaRegistro: "2026-09-08", aceptaDatosEn: "2026-09-08T10:00:00" },
-  { id: 6, nombre: "Andrés Silva", correo: "restringido@correo.com", telefono: "311 902 3321", rol: "ANFITRION", estado: "RESTRINGIDA", clave: "Clave1234", fechaRegistro: "2026-10-27", aceptaDatosEn: "2026-10-27T10:00:00" },
+  { id: 1, nombre: "Laura Gómez", correo: "anfitrion@correo.com", telefono: "310 555 0182", ciudad: "Bogotá", rol: "ANFITRION", activa: true, restringida: false, clave: "Clave1234", fechaRegistro: "2026-03-14", autorizacionDatos: "2026-03-14T10:00:00" },
+  { id: 2, nombre: "Carlos Ruiz", correo: "huesped@correo.com", telefono: "315 222 4410", ciudad: "Medellín", rol: "HUESPED", activa: true, restringida: false, clave: "Clave1234", fechaRegistro: "2026-05-02", autorizacionDatos: "2026-05-02T10:00:00" },
+  { id: 3, nombre: "Admin LR", correo: "admin@inversioneslr.com", telefono: "601 555 0100", ciudad: "Bogotá", rol: "ADMINISTRADOR", activa: true, restringida: false, clave: "Clave1234", fechaRegistro: "2026-01-10", autorizacionDatos: "2026-01-10T10:00:00" },
+  { id: 4, nombre: "Pedro Lara", correo: "pedro@correo.com", telefono: "300 410 7788", ciudad: "Bogotá", rol: "ANFITRION", activa: true, restringida: false, clave: "Clave1234", fechaRegistro: "2026-07-21", autorizacionDatos: "2026-07-21T10:00:00" },
+  { id: 5, nombre: "Sofía Mejía", correo: "sofia@correo.com", telefono: "320 118 9034", ciudad: "Medellín", rol: "ANFITRION", activa: true, restringida: false, clave: "Clave1234", fechaRegistro: "2026-09-08", autorizacionDatos: "2026-09-08T10:00:00" },
+  { id: 6, nombre: "Andrés Silva", correo: "restringido@correo.com", telefono: "311 902 3321", ciudad: "Bogotá", rol: "ANFITRION", activa: true, restringida: true, clave: "Clave1234", fechaRegistro: "2026-10-27", autorizacionDatos: "2026-10-27T10:00:00" },
 ];
 
 const reglas = (...r: string[]): ReglaAlojamiento[] => r.map((descripcion, i) => ({ descripcion, orden: i + 1 }));

@@ -13,8 +13,9 @@ from decimal import Decimal
 from django.db import transaction
 from django.db.models import Count
 
+from apps.auditoria import services as auditoria
 from apps.comun.errores import Conflicto, ErrorNegocio, NoEncontrado, SinPermiso
-from apps.comun.eventos import publicar
+from apps.comun.eventos import EVENTOS_DE_DOMINIO, publicar
 
 from .models import (
     AccionModeracion,
@@ -172,7 +173,8 @@ def obtener(usuario, publicacion_id: int) -> Publicacion:
 
 
 def _negar(usuario, p: Publicacion, motivo: str) -> None:
-    publicar("AccesoDenegado", usuario_id=usuario.id, entidad="Publicacion", entidad_id=p.id, resultado="FALLO", detalle={"motivo": motivo})
+    """Acceso negado (CA-05.2): se registra fuera de transaction.atomic para que quede aunque la petición falle."""
+    auditoria.registrar(usuario.id, "AccesoDenegado", entidad="Publicacion", entidad_id=p.id, exitoso=False, detalle={"motivo": motivo})
 
 
 def _validar_datos(d: dict) -> None:
@@ -239,7 +241,7 @@ def crear(anfitrion, d: dict) -> Publicacion:
     with transaction.atomic():
         p = Publicacion(anfitrion=anfitrion, estado=E.BORRADOR)
         _aplicar(p, d)
-        publicar("PublicacionCreada", usuario_id=anfitrion.id, entidad="Publicacion", entidad_id=p.id)
+        auditoria.registrar(anfitrion.id, "PublicacionCreada", entidad="Publicacion", entidad_id=p.id)
     return p
 
 
@@ -255,7 +257,7 @@ def actualizar(usuario, publicacion_id: int, d: dict) -> Publicacion:
         # La publicación conserva su estado (sigue ACTIVA sin volver a revisión). Fuera de BORRADOR debe seguir completa.
         if p.estado != E.BORRADOR and (f := faltantes(p)):
             raise ErrorNegocio("Falta: " + ", ".join(f) + ".", extra={"faltantes": f})
-        publicar("PublicacionEditada", usuario_id=usuario.id, entidad="Publicacion", entidad_id=p.id)
+        auditoria.registrar(usuario.id, "PublicacionEditada", entidad="Publicacion", entidad_id=p.id)
     return p
 
 
@@ -284,8 +286,10 @@ def cambiar_estado(usuario, publicacion_id: int, nuevo: str, observacion: str | 
         nombre = EVENTO[accion] if accion else {
             E.PENDIENTE_REVISION: "PublicacionEnviadaARevision", E.PAUSADA: "PublicacionPausada", E.ACTIVA: "PublicacionReactivada",
         }[nuevo]
-        publicar(nombre, usuario_id=usuario.id, entidad="Publicacion", entidad_id=p.id,
-                 detalle={"de": anterior, "a": nuevo, **({"observacion": observacion} if observacion else {})})
+        detalle = {"de": anterior, "a": nuevo, **({"observacion": observacion} if observacion else {})}
+        auditoria.registrar(usuario.id, nombre, entidad="Publicacion", entidad_id=p.id, detalle=detalle)
+        if nombre in EVENTOS_DE_DOMINIO:  # los reciben Reservas y Notificaciones
+            publicar(nombre, usuario_id=usuario.id, entidad="Publicacion", entidad_id=p.id, detalle=detalle)
     return p
 
 
@@ -365,8 +369,8 @@ def modificar_calendario(usuario, publicacion_id: int, inicio: date, fin: date, 
         PeriodoCalendario.objects.bulk_create(
             [PeriodoCalendario(publicacion=p, fecha_inicio=a, fecha_fin=b, tipo=TipoPeriodo.NO_DISPONIBLE) for a, b in _rangos(resultado)]
         )
-        publicar("CalendarioActualizado", usuario_id=usuario.id, entidad="Publicacion", entidad_id=p.id,
-                 detalle={"tipo": tipo, "desde": inicio.isoformat(), "hasta": fin.isoformat()})
+        auditoria.registrar(usuario.id, "CalendarioActualizado", entidad="Publicacion", entidad_id=p.id,
+                            detalle={"tipo": tipo, "desde": inicio.isoformat(), "hasta": fin.isoformat()})
     return calendario(usuario, publicacion_id, inicio, fin)
 
 

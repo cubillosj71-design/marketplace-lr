@@ -63,9 +63,11 @@ export interface UsuarioApi {
   correo: string;
   nombre_completo: string;
   telefono: string;
+  ciudad: string | null; // texto opcional
   rol: "HUESPED" | "ANFITRION" | "ADMINISTRADOR";
-  estado: "ACTIVA" | "DESACTIVADA" | "RESTRINGIDA";
-  acepta_datos_en: string | null;
+  activa: boolean; // false solo si el usuario desactivó su cuenta
+  restringida: boolean; // derivado: hay una RestriccionUsuario vigente (no es columna)
+  autorizacion_datos: string | null; // fecha y hora de la autorización de datos (Ley 1581)
   fecha_registro: string | null;
 }
 
@@ -103,7 +105,7 @@ export const identidadApi = {
     api.get<{ estado: "valido" | "vencido" | "usado" | "inexistente" }>(`/identidad/recuperacion/${encodeURIComponent(token)}`),
   restablecer: (token: string, password: string) =>
     api.post(`/identidad/recuperacion/${encodeURIComponent(token)}`, { password }),
-  actualizarPerfil: (cambios: Record<string, string>) => api.patch<UsuarioApi>("/identidad/perfil", cambios),
+  actualizarPerfil: (cambios: Record<string, string | null>) => api.patch<UsuarioApi>("/identidad/perfil", cambios),
   desactivar: () => api.post("/identidad/perfil/desactivar"),
 };
 

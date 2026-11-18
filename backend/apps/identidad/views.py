@@ -27,7 +27,7 @@ class RegistroSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True)
     rol = serializers.ChoiceField(choices=["HUESPED", "ANFITRION"])
     acepta_datos = serializers.BooleanField()
-    ciudad = serializers.IntegerField(required=False, allow_null=True)
+    ciudad = serializers.CharField(max_length=80, required=False, allow_null=True, allow_blank=True)  # texto opcional
 
 
 class Registro(APIView):
@@ -43,7 +43,7 @@ class Registro(APIView):
         d = s.validated_data
         u = services.registrar(
             nombre_completo=d["nombre_completo"], correo=d["correo"], telefono=d["telefono"], password=d["password"],
-            rol=d["rol"], acepta_datos=d["acepta_datos"], ciudad_id=d.get("ciudad"), ip=ip_de(request),
+            rol=d["rol"], acepta_datos=d["acepta_datos"], ciudad=d.get("ciudad"), ip=ip_de(request),
         )
         return Response(services.a_dict(u), status=status.HTTP_201_CREATED)
 
@@ -155,7 +155,7 @@ class RecuperacionToken(APIView):
 class PerfilSerializer(serializers.Serializer):
     nombre_completo = serializers.CharField(max_length=120, required=False)
     telefono = serializers.CharField(max_length=20, required=False)
-    ciudad = serializers.IntegerField(required=False, allow_null=True)
+    ciudad = serializers.CharField(max_length=80, required=False, allow_null=True, allow_blank=True)  # texto opcional
     password_actual = serializers.CharField(required=False, write_only=True)
     password_nueva = serializers.CharField(required=False, write_only=True)
 
