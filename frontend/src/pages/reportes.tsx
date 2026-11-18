@@ -1,325 +1,116 @@
-import { Ban, CheckCircle2, ClipboardList, FileSpreadsheet, FileText, PauseCircle, PowerOff, ShieldAlert, UserRound, Users, Wallet, type LucideIcon } from "lucide-react";
-import { useState, type ReactNode } from "react";
-import { CIUDADES, ESTADO_TXT, ROL_TXT, TIPOS, cop, estadoCuenta, type EstadoPub, type Rol, type Usuario } from "../data";
+import { Download, FileSpreadsheet, FileText, ShieldCheck } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { adminApi, catalogoApi, leerError, type ItemCatalogo } from "../api";
+import { ROL_TXT, type Rol } from "../data";
 import { Page } from "../layout";
-import { useStore, useToast } from "../store";
-import { descargarExcel, descargarPDF, type Reporte } from "../exportar";
-import { Alert, Badge, Field } from "../ui";
+import { useToast } from "../store";
+import { Alert, Field } from "../ui";
+import { SelectorPeriodo, periodosRapidos } from "./admin";
 
-/* Reportes del Administrador (RF-D-ADM-05.2 · HU-25 · BPMN-07).
-   Cada descarga queda en el registro de acciones con nombre, fecha y hora (CA-25.2). */
+/* HU-25 · RF-D-ADM-05.2: los archivos los genera el servidor con ReportLab y openpyxl (ADR-009), con las mismas
+   consultas del tablero. Cada descarga queda en el registro de acciones antes de entregarse (CA-25.2). */
 
-const ESTADO_CUENTA_TXT = { ACTIVA: "Activa", DESACTIVADA: "Desactivada", RESTRINGIDA: "Restringida" } as const;
-const VISTA_PUBLICADA = import.meta.env.VITE_ROUTER === "memory";
-const fechaCorta = (iso?: string) =>
-  iso ? new Date(iso + "T12:00:00").toLocaleDateString("es-CO", { day: "2-digit", month: "short", year: "numeric" }).replace(".", "") : "Sin fecha";
-const cant = (n: number, uno: string, varios = uno + "s") => `${n} ${n === 1 ? uno : varios}`;
-const enPeriodo = (iso: string | undefined, desde: string, hasta: string) => !!iso && iso >= desde && iso <= hasta;
+const REPORTES = [
+  { tipo: "usuarios", nombre: "Usuarios", descripcion: "Registrados en el periodo, por rol y estado de la cuenta." },
+  { tipo: "publicaciones", nombre: "Publicaciones", descripcion: "Creadas en el periodo, con sus reservas e ingresos." },
+  { tipo: "reservas", nombre: "Reservas", descripcion: "Creadas en el periodo, con su estado, devolución, monto bruto e ingreso." },
+  { tipo: "ingresos", nombre: "Ingresos estimados", descripcion: "Monto bruto e ingreso de la plataforma por mes." },
+  { tipo: "demanda", nombre: "Demanda", descripcion: "Reservas y monto bruto por ciudad y por tipo de alojamiento." },
+] as const;
+type TipoReporte = (typeof REPORTES)[number]["tipo"];
 
-function Stat({ icon: Icon, v, label, bg, fg }: { icon: LucideIcon; v: ReactNode; label: string; bg: string; fg: string }) {
-  return (
-    <div className="card card-tight stat">
-      <span className="ico" style={{ background: bg, color: fg }}><Icon /></span>
-      <div><b>{v}</b><span>{label}</span></div>
-    </div>
-  );
-}
-
-/* Periodo + botones de descarga, comunes a los dos reportes */
-function useDescarga(nombre: string) {
-  const { usuario, hoy, registrarEvento } = useStore();
+export function Reportes() {
   const toast = useToast();
-  const [desde, setDesde] = useState(`${hoy.slice(0, 4)}-01-01`);
-  const [hasta, setHasta] = useState(`${hoy.slice(0, 4)}-12-31`);
-  const [ocupado, setOcupado] = useState(false);
-  const errorPeriodo = !desde || !hasta ? "Elige la fecha inicial y la final." : desde > hasta ? "La fecha inicial no puede ser posterior a la final." : "";
-  const periodo = `${fechaCorta(desde)} al ${fechaCorta(hasta)}`;
+  const [busqueda] = useSearchParams();
+  const inicial = periodosRapidos()[0]!;
+  const [tipo, setTipo] = useState<TipoReporte>((REPORTES.find((r) => r.tipo === busqueda.get("tipo"))?.tipo) ?? "reservas");
+  const [p, setP] = useState({ desde: inicial.desde, hasta: inicial.hasta });
+  const [formato, setFormato] = useState<"pdf" | "xlsx">("pdf");
+  const [filtros, setFiltros] = useState({ rol: "", estado_cuenta: "", estado: "", ciudad: "", tipo_alojamiento: "" });
+  const [cat, setCat] = useState<{ ciudades: ItemCatalogo[]; tipos: ItemCatalogo[] }>({ ciudades: [], tipos: [] });
+  const [error, setError] = useState("");
+  const [descargando, setDescargando] = useState(false);
 
-  const descargar = async (formato: "PDF" | "Excel", armar: () => Reporte) => {
-    if (errorPeriodo) return;
-    setOcupado(true);
+  useEffect(() => {
+    Promise.all([catalogoApi.ciudades(), catalogoApi.tipos()]).then(([c, t]) => setCat({ ciudades: c.data, tipos: t.data })).catch(() => {});
+  }, []);
+
+  const descargar = async () => {
+    setError("");
+    setDescargando(true);
+    const extra = tipo === "usuarios" ? { rol: filtros.rol || undefined, estado: filtros.estado_cuenta || undefined }
+      : tipo === "publicaciones" ? { estado: filtros.estado || undefined, ciudad: filtros.ciudad || undefined, tipo: filtros.tipo_alojamiento || undefined }
+        : {};
     try {
-      const r = armar();
-      if (formato === "PDF") descargarPDF(r); else await descargarExcel(r);
-      registrarEvento("Reporte descargado", `${nombre} · ${formato} · ${periodo} · ${r.filas.length} registros`, "EXITO", { entidad: "Reporte" });
-      toast(`${nombre} descargado en ${formato}`);
-    } catch {
-      registrarEvento("Reporte descargado", `${nombre} · ${formato} · no se pudo generar`, "FALLO", { entidad: "Reporte" });
-      toast("No se pudo generar el reporte. Intenta de nuevo.", "err");
+      const { blob, nombre } = await adminApi.reporte(tipo, { formato, desde: p.desde, hasta: p.hasta, ...extra });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = nombre;
+      document.body.appendChild(a); a.click(); a.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      toast(`Descargado: ${nombre}`);
+    } catch (e) {
+      setError(leerError(e).error);  // p. ej. "El periodo máximo es de 12 meses."
     } finally {
-      setOcupado(false);
+      setDescargando(false);
     }
   };
-
-  const filtrosPeriodo = (
-    <>
-      <Field label="Desde"><input className="input" type="date" value={desde} max={hasta || undefined} onChange={(e) => setDesde(e.target.value)} /></Field>
-      <Field label="Hasta"><input className="input" type="date" value={hasta} min={desde || undefined} onChange={(e) => setHasta(e.target.value)} /></Field>
-    </>
-  );
-
-  const botones = (armar: () => Reporte) => (
-    <div className="row" style={{ gap: 10 }}>
-      <button className="btn btn-secondary" disabled={!!errorPeriodo || ocupado} onClick={() => descargar("PDF", armar)}>
-        <FileText size={18} /> Descargar PDF
-      </button>
-      <button className="btn btn-primary" disabled={!!errorPeriodo || ocupado} onClick={() => descargar("Excel", armar)}>
-        <FileSpreadsheet size={18} /> Descargar Excel
-      </button>
-    </div>
-  );
-
-  return { desde, hasta, periodo, errorPeriodo, filtrosPeriodo, botones, generadoPor: usuario!.nombre };
-}
-
-function AvisoDescarga() {
-  return (
-    <>
-      {VISTA_PUBLICADA && (
-        <Alert tipo="info">En esta vista publicada el navegador bloquea las descargas. Para obtener el archivo, usa la versión del repositorio o el HTML independiente.</Alert>
-      )}
-    </>
-  );
-}
-
-/* ---------------- Módulo Usuarios: Reporte de usuarios ---------------- */
-export function ReporteUsuarios() {
-  const { usuarios, restriccionVigente } = useStore();
-  const d = useDescarga("Reporte de usuarios");
-  const fechaHora = (iso: string) => new Date(iso).toLocaleString("es-CO", { dateStyle: "medium", timeStyle: "short" });
-  const [rol, setRol] = useState<"" | Rol>("");
-  const [estado, setEstado] = useState<"" | keyof typeof ESTADO_CUENTA_TXT>("");
-
-  // El estado de la cuenta no es un dato guardado: se deriva de activa y de una restricción vigente.
-  const estadoDe = (u: Usuario) => estadoCuenta({ activa: u.activa, restringida: !!restriccionVigente(u.id) });
-  const lista = usuarios
-    .filter((u) => enPeriodo(u.fechaRegistro, d.desde, d.hasta) && (!rol || u.rol === rol) && (!estado || estadoDe(u) === estado))
-    .sort((a, b) => b.fechaRegistro.localeCompare(a.fechaRegistro));
-  const porRol = (r: Rol) => lista.filter((u) => u.rol === r).length;
-  const porEstado = (e: keyof typeof ESTADO_CUENTA_TXT) => lista.filter((u) => estadoDe(u) === e).length;
-
-  const armar = (): Reporte => ({
-    titulo: "Reporte de usuarios",
-    periodo: d.periodo + (rol ? ` · Rol: ${ROL_TXT[rol]}` : "") + (estado ? ` · Estado: ${ESTADO_CUENTA_TXT[estado]}` : ""),
-    generadoPor: d.generadoPor,
-    resumen: [
-      ["Usuarios registrados en el periodo", lista.length],
-      ["Huéspedes", porRol("HUESPED")],
-      ["Anfitriones", porRol("ANFITRION")],
-      ["Administradores", porRol("ADMINISTRADOR")],
-      ["Cuentas activas", porEstado("ACTIVA")],
-      ["Cuentas desactivadas", porEstado("DESACTIVADA")],
-      ["Cuentas restringidas", porEstado("RESTRINGIDA")],
-    ],
-    columnas: ["Nombre", "Correo", "Rol", "Teléfono", "Estado de la cuenta", "Motivo de restricción", "Fecha de registro", "Autorizó datos (Ley 1581)"],
-    filas: lista.map((u) => [u.nombre, u.correo, ROL_TXT[u.rol], u.telefono, ESTADO_CUENTA_TXT[estadoDe(u)],
-      restriccionVigente(u.id)?.motivo ?? "", fechaCorta(u.fechaRegistro), fechaHora(u.autorizacionDatos)]),
-    archivo: `reporte-usuarios_${d.desde}_${d.hasta}`,
-  });
+  const set = (k: keyof typeof filtros, v: string) => setFiltros({ ...filtros, [k]: v });
 
   return (
-    <Page req="RF-D-ADM-05.2 · HU-25 · CA-25.2 · CA-25.3">
-      <div className="page-head">
-        <div><h1>Reporte de usuarios</h1><p>Usuarios registrados en el periodo que elijas, por rol y estado de la cuenta.</p></div>
-        {d.botones(armar)}
-      </div>
-      <AvisoDescarga />
-      <section className="card">
-        <div className="grid-4 report-filtros">
-          {d.filtrosPeriodo}
-          <Field label="Rol">
-            <select className="select" value={rol} onChange={(e) => setRol(e.target.value as "" | Rol)}>
-              <option value="">Todos</option>
-              {(Object.keys(ROL_TXT) as Rol[]).map((r) => <option key={r} value={r}>{ROL_TXT[r]}</option>)}
-            </select>
-          </Field>
-          <Field label="Estado de la cuenta">
-            <select className="select" value={estado} onChange={(e) => setEstado(e.target.value as typeof estado)}>
-              <option value="">Todos</option>
-              {(Object.keys(ESTADO_CUENTA_TXT) as (keyof typeof ESTADO_CUENTA_TXT)[]).map((k) => <option key={k} value={k}>{ESTADO_CUENTA_TXT[k]}</option>)}
-            </select>
-          </Field>
-        </div>
-        {d.errorPeriodo && <p className="error-text" role="alert" style={{ marginTop: 10 }}>{d.errorPeriodo}</p>}
-      </section>
-
-      <div className="grid-4">
-        <Stat icon={Users} v={lista.length} label="Usuarios en el periodo" bg="#dff3ef" fg="#0f766e" />
-        <Stat icon={UserRound} v={`${porRol("HUESPED")} / ${porRol("ANFITRION")} / ${porRol("ADMINISTRADOR")}`} label="Huésped / Anfitrión / Admin" bg="#e3ecfa" fg="#1e4a8a" />
-        <Stat icon={PowerOff} v={porEstado("DESACTIVADA")} label="Cuentas desactivadas" bg="#f1f1ef" fg="#57534e" />
-        <Stat icon={ShieldAlert} v={porEstado("RESTRINGIDA")} label="Cuentas restringidas" bg="#fbe1de" fg="#9b1c12" />
-      </div>
-
-      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-        {lista.length === 0 ? <div className="empty-state"><Users /><b>No hay usuarios registrados en ese periodo</b></div> : (
-          <div className="table-wrap">
-            <table className="table">
-              <thead><tr><th>Usuario</th><th>Rol</th><th>Teléfono</th><th>Estado</th><th>Registro</th><th>Autorizó datos</th></tr></thead>
-              <tbody>
-                {lista.map((u) => (
-                  <tr key={u.id}>
-                    <td className="cell-2"><b>{u.nombre}</b><span className="subtle">{u.correo}</span></td>
-                    <td>{ROL_TXT[u.rol]}</td>
-                    <td>{u.telefono}</td>
-                    <td>
-                      <span className={`badge ${estadoDe(u) === "ACTIVA" ? "badge-ACTIVA" : estadoDe(u) === "RESTRINGIDA" ? "badge-BLOQUEADA" : "badge-PAUSADA"}`}>{ESTADO_CUENTA_TXT[estadoDe(u)].toUpperCase()}</span>
-                      {restriccionVigente(u.id) && <span className="subtle" style={{ display: "block", marginTop: 4, maxWidth: 220 }}>{restriccionVigente(u.id)!.motivo}</span>}
-                    </td>
-                    <td>{fechaCorta(u.fechaRegistro)}</td>
-                    <td className="subtle">{fechaHora(u.autorizacionDatos)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+    <Page req="RF-D-ADM-05.2 · HU-25 · ADR-009 · periodo máximo de 12 meses">
+      <div className="page-head"><div><h1>Reportes</h1><p>Elige el reporte, el periodo y el formato. El archivo lo genera el servidor con las mismas cifras del tablero.</p></div></div>
+      <div className="detail-grid" style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1.3fr)", gap: 20, alignItems: "start" }}>
+        <section className="card stack">
+          <h3>Reporte</h3>
+          <div className="stack" style={{ gap: 8 }}>
+            {REPORTES.map((r) => (
+              <label key={r.tipo} className="card card-tight row" style={{ gap: 10, cursor: "pointer", borderColor: tipo === r.tipo ? "var(--accent)" : undefined }}>
+                <input type="radio" name="reporte" checked={tipo === r.tipo} onChange={() => setTipo(r.tipo)} />
+                <span className="stack" style={{ gap: 2 }}><b>{r.nombre}</b><span className="subtle">{r.descripcion}</span></span>
+              </label>
+            ))}
           </div>
-        )}
-      </div>
-      <p className="subtle">La descarga queda en el registro de acciones con tu nombre, la fecha y la hora.</p>
-    </Page>
-  );
-}
-
-/* ---------------- Módulo Alojamientos: Reporte de publicaciones ---------------- */
-export function ReportePublicaciones() {
-  const { publicaciones, usuarios, reservas } = useStore();
-  const d = useDescarga("Reporte de publicaciones");
-  const [estado, setEstado] = useState<"" | EstadoPub>("");
-  const [ciudad, setCiudad] = useState("");
-  const [tipo, setTipo] = useState("");
-
-  const nombre = (id: number) => usuarios.find((u) => u.id === id)?.nombre ?? "";
-  // Los borradores solo los ve su dueño, igual que en "Todas las publicaciones"
-  const lista = publicaciones
-    .filter((p) => p.estado !== "BORRADOR" && enPeriodo(p.creada ?? p.actualizada, d.desde, d.hasta)
-      && (!estado || p.estado === estado) && (!ciudad || p.ciudad === ciudad) && (!tipo || p.tipo === tipo))
-    .sort((a, b) => a.id - b.id);
-
-  // Reservas confirmadas o completadas con llegada en el periodo, sobre las publicaciones del reporte
-  const reservasDe = (pubId: number) => reservas.filter((r) => r.publicacionId === pubId
-    && (r.estado === "CONFIRMADA" || r.estado === "COMPLETADA") && enPeriodo(r.llegada, d.desde, d.hasta));
-  // Se usan los valores fijados en cada reserva (total y tarifa de servicio), así un cambio de tarifa no los altera (CA-22.1)
-  const filas = lista.map((p) => {
-    const rs = reservasDe(p.id);
-    return { p, reservas: rs.length, ingreso: rs.reduce((s, r) => s + r.total, 0), plataforma: rs.reduce((s, r) => s + r.tarifaServicio, 0) };
-  });
-  const n = (e: EstadoPub) => lista.filter((p) => p.estado === e).length;
-  const totalReservas = filas.reduce((s, f) => s + f.reservas, 0);
-  const totalIngreso = filas.reduce((s, f) => s + f.ingreso, 0);
-  const totalPlataforma = filas.reduce((s, f) => s + f.plataforma, 0);
-
-  const demanda = (clave: "ciudad" | "tipo") => {
-    const m = new Map<string, { pubs: number; reservas: number }>();
-    filas.forEach(({ p, reservas: r }) => {
-      const k = (p[clave] as string) || "Sin dato";
-      const v = m.get(k) ?? { pubs: 0, reservas: 0 };
-      m.set(k, { pubs: v.pubs + 1, reservas: v.reservas + r });
-    });
-    return [...m.entries()].sort((a, b) => b[1].reservas - a[1].reservas || b[1].pubs - a[1].pubs);
-  };
-  const porCiudad = demanda("ciudad");
-  const porTipo = demanda("tipo");
-
-  const armar = (): Reporte => ({
-    titulo: "Reporte de publicaciones",
-    periodo: d.periodo + (estado ? ` · Estado: ${ESTADO_TXT[estado]}` : "") + (ciudad ? ` · Ciudad: ${ciudad}` : "") + (tipo ? ` · Tipo: ${tipo}` : ""),
-    generadoPor: d.generadoPor,
-    resumen: [
-      ["Publicaciones en el periodo", lista.length],
-      ["En revisión", n("PENDIENTE_REVISION")],
-      ["Activas", n("ACTIVA")],
-      ["Pausadas", n("PAUSADA")],
-      ["Bloqueadas", n("BLOQUEADA")],
-      ["Reservas confirmadas o completadas", totalReservas],
-      ["Ingresos estimados brutos (COP)", cop(totalIngreso)],
-      ["Ingresos de la plataforma, tarifa de servicio (COP)", cop(totalPlataforma)],
-      ...porCiudad.map(([k, v]): [string, string] => [`Demanda en ${k}`, `${cant(v.reservas, "reserva")} · ${cant(v.pubs, "publicación", "publicaciones")}`]),
-      ...porTipo.map(([k, v]): [string, string] => [`Demanda por tipo: ${k}`, `${cant(v.reservas, "reserva")} · ${cant(v.pubs, "publicación", "publicaciones")}`]),
-    ],
-    columnas: ["Código", "Título", "Anfitrión", "Ciudad", "Tipo", "Precio por noche", "Estado", "Reservas", "Ingreso bruto", "Ingreso plataforma", "Creada"],
-    filas: filas.map(({ p, reservas: r, ingreso, plataforma }) => [p.id, p.titulo, nombre(p.anfitrionId), p.ciudad, p.tipo || "Sin tipo",
-      p.precioNoche ?? "Sin precio", ESTADO_TXT[p.estado], r, ingreso, plataforma, fechaCorta(p.creada ?? p.actualizada)]),
-    moneda: [5, 8, 9],
-    archivo: `reporte-publicaciones_${d.desde}_${d.hasta}`,
-  });
-
-  return (
-    <Page req="RF-D-ADM-05.2 · RF-D-ADM-05.1 · HU-25 · CA-25.1 · CA-25.2">
-      <div className="page-head">
-        <div><h1>Reporte de publicaciones</h1><p>Publicaciones creadas en el periodo, sus reservas, ingresos estimados y demanda por ciudad y tipo.</p></div>
-        {d.botones(armar)}
-      </div>
-      <AvisoDescarga />
-      <section className="card">
-        <div className="report-filtros report-filtros-5">
-          {d.filtrosPeriodo}
-          <Field label="Estado">
-            <select className="select" value={estado} onChange={(e) => setEstado(e.target.value as "" | EstadoPub)}>
-              <option value="">Todos</option>
-              {(["PENDIENTE_REVISION", "ACTIVA", "PAUSADA", "BLOQUEADA"] as EstadoPub[]).map((e) => <option key={e} value={e}>{ESTADO_TXT[e]}</option>)}
-            </select>
-          </Field>
-          <Field label="Ciudad">
-            <select className="select" value={ciudad} onChange={(e) => setCiudad(e.target.value)}>
-              <option value="">Todas</option>
-              {CIUDADES.map((c) => <option key={c}>{c}</option>)}
-            </select>
-          </Field>
-          <Field label="Tipo">
-            <select className="select" value={tipo} onChange={(e) => setTipo(e.target.value)}>
-              <option value="">Todos</option>
-              {TIPOS.map((t) => <option key={t}>{t}</option>)}
-            </select>
-          </Field>
-        </div>
-        {d.errorPeriodo && <p className="error-text" role="alert" style={{ marginTop: 10 }}>{d.errorPeriodo}</p>}
-      </section>
-
-      <div className="grid-4">
-        <Stat icon={ClipboardList} v={lista.length} label="Publicaciones en el periodo" bg="#dff3ef" fg="#0f766e" />
-        <Stat icon={CheckCircle2} v={n("ACTIVA")} label="Activas" bg="#dcf3e4" fg="#166534" />
-        <Stat icon={PauseCircle} v={`${n("PAUSADA")} / ${n("BLOQUEADA")}`} label="Pausadas / Bloqueadas" bg="#e3ecfa" fg="#1e4a8a" />
-        <Stat icon={Wallet} v={cop(totalIngreso)} label={`Ingreso bruto · plataforma ${cop(totalPlataforma)}`} bg="#fdf0c8" fg="#8a4b05" />
-      </div>
-
-      <div className="grid-2">
-        {([["Demanda por ciudad", porCiudad], ["Demanda por tipo de alojamiento", porTipo]] as const).map(([t, filasD]) => (
-          <section key={t} className="card" style={{ padding: 0, overflow: "hidden" }}>
-            <h3 style={{ padding: "16px 18px 6px" }}>{t}</h3>
-            <table className="table">
-              <thead><tr><th>{t.endsWith("ciudad") ? "Ciudad" : "Tipo"}</th><th style={{ textAlign: "right" }}>Publicaciones</th><th style={{ textAlign: "right" }}>Reservas</th></tr></thead>
-              <tbody>
-                {filasD.length === 0 ? <tr><td colSpan={3} className="subtle">Sin datos en el periodo</td></tr> :
-                  filasD.map(([k, v]) => <tr key={k}><td>{k}</td><td style={{ textAlign: "right" }}>{v.pubs}</td><td style={{ textAlign: "right" }}>{v.reservas}</td></tr>)}
-              </tbody>
-            </table>
-          </section>
-        ))}
-      </div>
-
-      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-        {lista.length === 0 ? <div className="empty-state"><Ban /><b>No hay publicaciones creadas en ese periodo</b></div> : (
-          <div className="table-wrap">
-            <table className="table">
-              <thead><tr><th>Publicación</th><th>Anfitrión</th><th>Tipo</th><th>Precio/noche</th><th>Estado</th><th style={{ textAlign: "right" }}>Reservas</th><th style={{ textAlign: "right" }}>Ingreso bruto</th><th style={{ textAlign: "right" }}>Plataforma</th></tr></thead>
-              <tbody>
-                {filas.map(({ p, reservas: r, ingreso, plataforma }) => (
-                  <tr key={p.id}>
-                    <td className="cell-2"><b>{p.titulo}</b><span className="subtle">{p.ciudad} · #{p.id} · creada {fechaCorta(p.creada ?? p.actualizada)}</span></td>
-                    <td>{nombre(p.anfitrionId)}</td>
-                    <td>{p.tipo || "Sin tipo"}</td>
-                    <td>{p.precioNoche ? cop(p.precioNoche) : "Sin precio"}</td>
-                    <td><Badge estado={p.estado} /></td>
-                    <td style={{ textAlign: "right" }}>{r}</td>
-                    <td style={{ textAlign: "right" }}>{cop(ingreso)}</td>
-                    <td style={{ textAlign: "right" }}>{cop(plataforma)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        </section>
+        <section className="card stack">
+          <h3>Periodo</h3>
+          <SelectorPeriodo desde={p.desde} hasta={p.hasta} onCambio={(desde, hasta) => setP({ desde, hasta })} />
+          {tipo === "usuarios" && (
+            <div className="grid-2">
+              <Field label="Rol"><select className="select" value={filtros.rol} onChange={(e) => set("rol", e.target.value)}>
+                <option value="">Todos</option>{(Object.keys(ROL_TXT) as Rol[]).map((r) => <option key={r} value={r}>{ROL_TXT[r]}</option>)}
+              </select></Field>
+              <Field label="Estado de la cuenta"><select className="select" value={filtros.estado_cuenta} onChange={(e) => set("estado_cuenta", e.target.value)}>
+                <option value="">Todos</option>{["ACTIVA", "DESACTIVADA", "RESTRINGIDA"].map((e) => <option key={e} value={e}>{e}</option>)}
+              </select></Field>
+            </div>
+          )}
+          {tipo === "publicaciones" && (
+            <div className="grid-2">
+              <Field label="Estado"><select className="select" value={filtros.estado} onChange={(e) => set("estado", e.target.value)}>
+                <option value="">Todos</option>{["PENDIENTE_REVISION", "ACTIVA", "PAUSADA", "BLOQUEADA"].map((e) => <option key={e} value={e}>{e.replace("_", " ")}</option>)}
+              </select></Field>
+              <Field label="Ciudad"><select className="select" value={filtros.ciudad} onChange={(e) => set("ciudad", e.target.value)}>
+                <option value="">Todas</option>{cat.ciudades.map((c) => <option key={c.id} value={c.nombre}>{c.nombre}</option>)}
+              </select></Field>
+              <Field label="Tipo"><select className="select" value={filtros.tipo_alojamiento} onChange={(e) => set("tipo_alojamiento", e.target.value)}>
+                <option value="">Todos</option>{cat.tipos.map((t) => <option key={t.id} value={t.nombre}>{t.nombre}</option>)}
+              </select></Field>
+            </div>
+          )}
+          <h3>Formato</h3>
+          <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+            <button className={`btn ${formato === "pdf" ? "btn-primary" : "btn-secondary"}`} onClick={() => setFormato("pdf")}><FileText /> PDF</button>
+            <button className={`btn ${formato === "xlsx" ? "btn-primary" : "btn-secondary"}`} onClick={() => setFormato("xlsx")}><FileSpreadsheet /> Excel</button>
           </div>
-        )}
+          {error && <Alert tipo="error">{error}</Alert>}
+          <button className="btn btn-primary btn-block" disabled={descargando} onClick={descargar}>
+            <Download /> {descargando ? "Generando…" : "Descargar"}
+          </button>
+          <p className="subtle row" style={{ gap: 6 }}><ShieldCheck size={15} /> La descarga queda en el registro de acciones con tu nombre, el reporte, el formato y el periodo.</p>
+        </section>
       </div>
-      <p className="subtle">Ingreso bruto = total de cada reserva (precio base − descuento + limpieza + tarifa de servicio). Ingreso de la plataforma = tarifa de servicio fijada al confirmar la reserva. Cuenta las reservas confirmadas o completadas con llegada en el periodo. La descarga queda en el registro de acciones.</p>
     </Page>
   );
 }

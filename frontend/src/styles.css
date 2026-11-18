@@ -373,7 +373,7 @@ table.table { width: 100%; border-collapse: collapse; font-size: 14px; }
 
 /* ---------- responsivo ---------- */
 @media (max-width: 1000px) {
-  .perfil-grid, .detail-grid, .form-grid { grid-template-columns: 1fr !important; }
+  .perfil-grid, .detail-grid, .form-grid { grid-template-columns: minmax(0, 1fr) !important; }
   .auth { grid-template-columns: 1fr; }
   .auth-hero { padding: 28px 24px; min-height: auto; gap: 22px; }
   .topbar-logo { display: inline-flex; }

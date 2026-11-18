@@ -128,13 +128,13 @@ def test_cambiar_clave_exige_la_actual(demo, entrar):
 def test_ca_04_2_no_desactiva_con_reservas_confirmadas(demo, entrar):
     for correo in ("huesped@correo.com", "anfitrion@correo.com"):  # como huésped y en sus alojamientos
         r = entrar(correo).post("/api/v1/identidad/perfil/desactivar")
-        assert r.status_code == 409 and {x["estado"] for x in r.json()["reservas"]} == {"CONFIRMADA"}
+        assert r.status_code == 409 and "CONFIRMADA" in {x["estado"] for x in r.json()["reservas"]}
 
 
 def test_ca_04_5_tampoco_desactiva_con_reservas_en_revision(demo, entrar):
     from django.apps import apps
 
-    apps.get_model("reservas", "Reserva").objects.update(estado="EN_REVISION")
+    apps.get_model("reservas", "Reserva").objects.filter(estado="CONFIRMADA").update(estado="EN_REVISION")
     for correo in ("huesped@correo.com", "anfitrion@correo.com"):
         r = entrar(correo).post("/api/v1/identidad/perfil/desactivar")
         assert r.status_code == 409 and {x["estado"] for x in r.json()["reservas"]} == {"EN_REVISION"}

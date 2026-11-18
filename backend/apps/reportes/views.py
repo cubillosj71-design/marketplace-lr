@@ -18,8 +18,8 @@ class Periodo(serializers.Serializer):
     formato = serializers.ChoiceField(choices=services.FORMATOS, required=False)
     rol = serializers.ChoiceField(choices=["HUESPED", "ANFITRION", "ADMINISTRADOR"], required=False)
     estado = serializers.CharField(required=False)
-    ciudad = serializers.IntegerField(required=False)
-    tipo = serializers.IntegerField(required=False)
+    ciudad = serializers.CharField(required=False)  # nombre, como lo expone v_publicacion_reporte
+    tipo = serializers.CharField(required=False)
 
     def validate(self, d):
         hoy = timezone.localdate()

@@ -205,3 +205,15 @@ class RestriccionAdmin(APIView):
     def delete(self, request, usuario_id):
         services.levantar_restriccion(request.user, usuario_id, ip=ip_de(request))
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class UsuariosAdmin(APIView):
+    """GET /admin/usuarios?rol&q (HU-21): buscar por nombre o correo, con activa, restringida y motivo."""
+
+    permission_classes = [EsAdministrador]
+
+    def get(self, request):
+        rol = request.query_params.get("rol") or None
+        if rol and rol not in ("HUESPED", "ANFITRION", "ADMINISTRADOR"):
+            raise ErrorNegocio("El rol debe ser HUESPED, ANFITRION o ADMINISTRADOR.", campo="rol")
+        return Response(services.usuarios_para_admin(rol, request.query_params.get("q")))

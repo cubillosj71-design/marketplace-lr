@@ -1,10 +1,10 @@
 import {
-  Bell, CalendarCheck, CalendarDays, CheckCircle2, ClipboardList, FileBarChart2, Percent, FileSpreadsheet, ChevronRight, ClipboardCheck, Compass, History, Home, KeyRound, LayoutList, LogOut,
+  BarChart3, Bell, CalendarCheck, CalendarDays, CheckCircle2, ClipboardList, FileBarChart2, Percent, FileSpreadsheet, ChevronRight, ClipboardCheck, Compass, History, Home, KeyRound, LayoutList, LogOut,
   PlusCircle, RotateCcw, ShieldCheck, Star, UserRound,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { notificacionesApi } from "./api";
+import { adminApi, notificacionesApi } from "./api";
 import { ROL_TXT, iniciales, type Rol } from "./data";
 import { useStore, useToast } from "./store";
 import { ImageTile, Logo } from "./ui";
@@ -43,8 +43,22 @@ export function AuthLayout({ children }: { children: ReactNode }) {
 /* ---------- navegación por rol ---------- */
 type Item = { to: string; label: string; icon: typeof Home; count?: number; end?: boolean };
 
+/** Número de publicaciones pendientes de revisión, desde la API (solo para el Administrador). */
+function usePendientes(activo: boolean) {
+  const loc = useLocation();
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    if (!activo) return;
+    let vivo = true;
+    adminApi.publicaciones("PENDIENTE_REVISION").then((l) => { if (vivo) setN(l.length); }).catch(() => {});
+    return () => { vivo = false; };
+  }, [activo, loc.pathname]);
+  return n;
+}
+
 function useNav(): { titulo: string; items: Item[] }[] {
-  const { usuario, publicaciones } = useStore();
+  const { usuario } = useStore();
+  const pendientes = usePendientes(usuario?.rol === "ADMINISTRADOR");
   if (!usuario) return [];
   const cuenta: Item[] = [
     { to: "/perfil", label: "Mi perfil", icon: UserRound },
@@ -63,20 +77,18 @@ function useNav(): { titulo: string; items: Item[] }[] {
       { to: "/reservas-alojamientos", label: "Reservas de mis alojamientos", icon: CalendarCheck },
     ],
     ADMINISTRADOR: [
+      { to: "/admin/tablero", label: "Tablero", icon: BarChart3 },
       { to: "/admin/publicaciones", label: "Todas las publicaciones", icon: LayoutList },
-      {
-        to: "/admin/revision", label: "Pendientes de revisión", icon: ClipboardCheck,
-        count: publicaciones.filter((p) => p.estado === "PENDIENTE_REVISION").length,
-      },
+      { to: "/admin/revision", label: "Pendientes de revisión", icon: ClipboardCheck, count: pendientes },
       { to: "/admin/reservas", label: "Reservas en revisión", icon: ClipboardList },
-      { to: "/admin/reportes/publicaciones", label: "Reporte de publicaciones", icon: FileSpreadsheet },
       { to: "/admin/tarifa", label: "Tarifa de servicio", icon: Percent },
       { to: "/admin/registro", label: "Registro de acciones", icon: History },
+      { to: "/admin/reportes", label: "Reportes", icon: FileSpreadsheet },
     ],
   };
-  // El reporte de usuarios pertenece al módulo Usuarios y solo lo ve el Administrador
+  // La administración de cuentas (HU-21) pertenece al módulo Usuarios y solo la ve el Administrador
   const usuariosItems = usuario.rol === "ADMINISTRADOR"
-    ? [...cuenta, { to: "/admin/reportes/usuarios", label: "Reporte de usuarios", icon: FileBarChart2 }]
+    ? [...cuenta, { to: "/admin/usuarios", label: "Usuarios", icon: FileBarChart2 }]
     : cuenta;
   return [
     { titulo: "Alojamientos", items: porRol[usuario.rol] },
@@ -96,6 +108,10 @@ const MIGAS: [RegExp, string][] = [
   [/^\/publicaciones/, "Mis publicaciones"],
   [/^\/calendario/, "Calendario de disponibilidad"],
   [/^\/admin\/revision\/\d+/, "Revisar publicación"],
+  [/^\/admin\/publicaciones\/\d+/, "Detalle de publicación"],
+  [/^\/admin\/tablero/, "Tablero"],
+  [/^\/admin\/usuarios/, "Usuarios"],
+  [/^\/admin\/reportes/, "Reportes"],
   [/^\/admin\/revision/, "Pendientes de revisión"],
   [/^\/admin\/publicaciones/, "Todas las publicaciones"],
   [/^\/admin\/registro/, "Registro de acciones"],
@@ -140,7 +156,8 @@ export function AppLayout() {
   const go = useNavigate();
   if (!usuario) return <Navigate to="/ingresar" replace />;
   const miga = MIGAS.find(([r]) => r.test(loc.pathname))?.[1] ?? "";
-  const seccion = loc.pathname.startsWith("/perfil") || loc.pathname.startsWith("/roles") || loc.pathname.startsWith("/admin/reportes/usuarios") ? "Usuarios" : "Alojamientos";
+  const seccion = loc.pathname.startsWith("/perfil") || loc.pathname.startsWith("/roles") || loc.pathname.startsWith("/admin/usuarios") ? "Usuarios"
+    : loc.pathname.startsWith("/admin") ? "Administración" : "Alojamientos";
 
   const links = nav.flatMap((g) => g.items);
   const renderLink = (it: Item) => (

@@ -43,12 +43,12 @@ Todas usan la contraseña `Clave1234`. En la pantalla de ingreso hay botones par
 | USU | Mi perfil y desactivar cuenta | `/perfil` | CU-USU-04, CU-USU-05, RF-D-USU-01.4 |
 | USU | Cambiar contraseña | `/perfil/contrasena` | RF-D-USU-01.4 |
 | USU | Roles y permisos | `/roles` | RF-D-USU-02.1 |
-| USU | Reporte de usuarios (solo Administrador): periodo, rol, estado, descarga PDF o Excel | `/admin/reportes/usuarios` | RF-D-ADM-05.2, HU-25, CA-25.2, CA-25.3 |
+| USU | Reporte de usuarios (solo Administrador): periodo, rol, estado, descarga PDF o Excel | `/admin/reportes?tipo=usuarios` | RF-D-ADM-05.2, HU-25, CA-25.2, CA-25.3 |
 | ALO | Mis publicaciones | `/publicaciones` | CU-ALO-03, RF-D-ALO-02.1 |
 | ALO | Detalle, pausar, reactivar, enviar a revisión | `/publicaciones/:id` | CU-ALO-02, CU-ALO-05 |
 | ALO | Nueva y editar publicación (2 pasos) | `/publicaciones/nueva`, `/publicaciones/:id/editar` | CU-ALO-01, CU-ALO-04, RF-D-ALO-01.1 |
 | ALO | Calendario de disponibilidad | `/calendario` | CU-ALO-06, RF-D-ALO-02.2 |
-| ALO | Reporte de publicaciones (solo Administrador): periodo, estado, ciudad, tipo, reservas, ingresos estimados, demanda por ciudad y tipo, descarga PDF o Excel | `/admin/reportes/publicaciones` | RF-D-ADM-05.2, RF-D-ADM-05.1, HU-25, CA-25.1, CA-25.2 |
+| ALO | Reporte de publicaciones (solo Administrador): periodo, estado, ciudad, tipo, reservas, ingresos estimados, demanda por ciudad y tipo, descarga PDF o Excel | `/admin/reportes?tipo=publicaciones` | RF-D-ADM-05.2, RF-D-ADM-05.1, HU-25, CA-25.1, CA-25.2 |
 | (RES) | Explorar alojamientos, huésped y visitante | `/explorar`, `/explorar-publico` | Búsqueda básica; la completa es del módulo RES |
 | (ADM) | Todas las publicaciones, revisar, bloquear | `/admin/...` | RF-D-ADM-01.1, para cerrar el ciclo de estados |
 | (ADM) | Tarifa de servicio: porcentaje vigente (0 % a 30 %) e historial | `/admin/tarifa` | RF-D-ADM-03.1, HU-22, CA-22.1 |
@@ -67,7 +67,7 @@ Si alguien entra a una ruta que no le corresponde, ve "No tienes permiso" y el i
 
 ## Reportes
 
-- Formatos: PDF (jsPDF) y Excel .xlsx (ExcelJS). En Excel los valores en pesos van como número para poder sumarlos.
+- Formatos: PDF y Excel .xlsx. Los genera el servidor (ReportLab y openpyxl, ADR-009); el frontend solo descarga el archivo. En Excel los valores en pesos van como número para poder sumarlos.
 - El periodo por defecto es el año en curso. Si la fecha inicial es posterior a la final, la descarga se bloquea.
 - Cada descarga queda en el registro de acciones con quién, fecha, hora, formato, periodo y número de registros.
 - Las activas del reporte de publicaciones coinciden con el tablero de "Todas las publicaciones" (CA-25.1).
@@ -93,8 +93,7 @@ Si alguien entra a una ruta que no le corresponde, ve "No tienes permiso" y el i
 - `src/data.ts`: tipos, datos de ejemplo y reglas (datos obligatorios para revisión, noches ocupadas).
 - `src/store.tsx`: estado global y acciones (sesión, validaciones, cambios de estado).
 - `src/layout.tsx`: diseño de acceso, barra lateral por rol y protección por rol.
-- `src/pages/`: una carpeta de pantallas por módulo (`reportes.tsx` tiene los dos reportes).
-- `src/exportar.ts`: generación de PDF y Excel.
+- `src/pages/`: una carpeta de pantallas por módulo (`reportes.tsx` descarga los cinco reportes del servidor).
 - `src/styles.css`: sistema visual (colores, tipografía, componentes).
 
 Cuando exista la API, las acciones de `store.tsx` se reemplazan por llamadas con `src/api.ts`.

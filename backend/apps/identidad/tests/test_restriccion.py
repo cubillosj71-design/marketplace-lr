@@ -30,7 +30,7 @@ def test_restringir_no_cambia_la_cuenta_ni_el_estado_de_sus_reservas(demo, entra
     huesped = entrar("huesped@correo.com")
     uid = huesped.usuario["id"]
     antes = {r["id"]: r["estado"] for r in reservas.reservas_para_reporte() if r["huesped"] == uid}
-    assert antes and set(antes.values()) == {"CONFIRMADA"}
+    assert antes and "CONFIRMADA" in set(antes.values())
     entrar("admin@inversioneslr.com").post(_url(uid), {"motivo": "Prueba"}, format="json")
     despues = {r["id"]: r["estado"] for r in reservas.reservas_para_reporte() if r["huesped"] == uid}
     assert despues == antes

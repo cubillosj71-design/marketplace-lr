@@ -7,6 +7,7 @@ Usa las interfaces públicas de cada servicio. Solo para ajustar las fechas de c
 (para que los reportes tengan datos repartidos en el año) toca las tablas con apps.get_model.
 """
 
+import uuid
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from importlib import import_module
@@ -16,9 +17,11 @@ from django.conf import settings
 from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
+from django.test import override_settings
 from django.utils import timezone
 
 from apps.catalogo import services as catalogo
+from apps.comun import reloj
 from apps.comun.bd import vaciado_permitido
 from apps.identidad import services as identidad
 from apps.reservas import services as reservas
@@ -81,8 +84,17 @@ PUBLICACIONES = [
         "Apartamento El Poblado", "Apartamento", "Medellín", "El Poblado",
         "No aparece en búsquedas porque la cuenta del anfitrión está restringida.", 3, 240000, 40000, ["Wi-Fi"], ["No fumar"], ["Sala"]), None),
 ]
-RESERVAS = [  # índice de la publicación, llegada, salida, huéspedes
-    (0, "2026-11-20", "2026-11-23", 2), (0, "2026-12-05", "2026-12-09", 3), (6, "2026-12-20", "2026-12-22", 2),
+# Reservas por el flujo real (cotizar y reservar con el pago simulado). El reloj de la aplicación fija la fecha de
+# creación, que es la que usan el tablero y los reportes (RF-D-ADM-05). Octubre y noviembre de 2026 muestran todos
+# los estados: COMPLETADA, CONFIRMADA, EN_REVISION y una CANCELADA con devolución parcial.
+RESERVAS = [  # índice de la publicación, llegada, salida, huéspedes, creada, (cancelada el, motivo) o None
+    (6, "2026-10-10", "2026-10-12", 2, "2026-10-01", None),   # Cabaña del Lago: COMPLETADA
+    (7, "2026-10-24", "2026-10-26", 4, "2026-10-05", None),   # Casa campestre La Ceja: COMPLETADA
+    (4, "2026-12-10", "2026-12-12", 2, "2026-10-20", None),   # Loft Chapinero: EN_REVISION al bloquearlo
+    (6, "2026-12-20", "2026-12-22", 2, "2026-10-25", None),   # Cabaña del Lago: CONFIRMADA
+    (0, "2026-11-20", "2026-11-23", 2, "2026-11-02", None),   # Monserrate: CONFIRMADA
+    (0, "2026-12-05", "2026-12-09", 3, "2026-11-05", None),   # Monserrate: CONFIRMADA
+    (8, "2026-11-15", "2026-11-17", 2, "2026-11-04", ("2026-11-10", "Cambio de planes")),  # Laureles: CANCELADA, 5 días: 50 %
 ]
 
 
@@ -137,7 +149,7 @@ class Command(BaseCommand):
             momento = timezone.make_aware(datetime.fromisoformat(f + "T10:00:00"))
             Usuario.objects.filter(correo=correo).update(fecha_registro=momento, autorizacion_datos=momento)
 
-        creadas = []
+        creadas, por_bloquear = [], []
         for dueno, creada, estado, d, moderacion in PUBLICACIONES:
             entrada = {**{k: v for k, v in d.items() if k not in ("tipo", "ciudad", "servicios")},
                        "ciudad": ciudad[d["ciudad"]], "tipo_alojamiento": tipo[d["tipo"]], "politica": politica,
@@ -153,19 +165,34 @@ class Command(BaseCommand):
                 catalogo.cambiar_estado(cuentas[dueno], p.id, "PAUSADA")
             if moderacion and moderacion[0] == "DEVOLVER":
                 catalogo.revisar(admin, p.id, "DEVOLVER", moderacion[1])
-            if moderacion and moderacion[0] == "BLOQUEAR":
-                catalogo.bloquear(admin, p.id, moderacion[1])
+            if moderacion and moderacion[0] == "BLOQUEAR":  # se bloquea después de reservar (queda EN_REVISION)
+                por_bloquear.append((p.id, moderacion[1]))
             Publicacion.objects.filter(pk=p.id).update(creada=momento)
             Revision.objects.filter(publicacion_id=p.id).update(fecha=momento + timedelta(days=1))
 
         # Fechas no disponibles de ejemplo en el primer alojamiento
         reservas.modificar_calendario(cuentas["anfitrion@correo.com"], creadas[0], date(2026, 12, 12), date(2026, 12, 15), "NO_DISPONIBLE")
 
-        for i, llegada, salida, huespedes in RESERVAS:
-            reservas.crear_reserva_confirmada(
-                cuentas["huesped@correo.com"].id, catalogo.resumen_publicacion(creadas[i]),
-                date.fromisoformat(llegada), date.fromisoformat(salida), huespedes,
-            )
+        huesped = cuentas["huesped@correo.com"]
+        reloj_anterior = reloj._fijo  # se restaura al final (las pruebas pueden fijar "hoy" antes de cargar)
+        try:
+            # La demostración siempre paga con el adaptador simulado, aunque haya STRIPE_SECRET_KEY en el entorno
+            simulado = override_settings(STRIPE_SECRET_KEY="")
+            simulado.enable()
+            for i, llegada, salida, huespedes, creada, cancelacion in RESERVAS:
+                reloj.fijar(timezone.make_aware(datetime.fromisoformat(creada + "T10:00:00")))
+                cot = reservas.cotizar(huesped, creadas[i], date.fromisoformat(llegada), date.fromisoformat(salida), huespedes)
+                r, _ = reservas.reservar(huesped, cot.id, uuid.uuid4(), "simulado")
+                if cancelacion:
+                    reloj.fijar(timezone.make_aware(datetime.fromisoformat(cancelacion[0] + "T10:00:00")))
+                    reservas.cancelar(huesped, r["id"], cancelacion[1])
+        finally:
+            simulado.disable()
+            reloj.fijar(reloj_anterior)
+        # Con la fecha real: bloquear (sus reservas futuras pasan a EN_REVISION) y completar las que ya terminaron
+        for pid, motivo in por_bloquear:
+            catalogo.bloquear(admin, pid, motivo)
+        reservas.completar_vencidas()
 
         identidad.restringir(admin, cuentas["restringido@correo.com"].id,
                              "Reportes de huéspedes por cobros por fuera de la plataforma.",

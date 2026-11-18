@@ -34,7 +34,8 @@ def test_ca_20_1_bloquear_pasa_la_reserva_a_en_revision_en_la_misma_transaccion(
     assert Reserva().objects.get(pk=reserva_740["id"]).estado == "EN_REVISION"
     assert reserva_740["publicacion"] not in [p["id"] for p in cliente.get("/api/v1/busqueda/publicaciones").json()]
     en_revision = entrar("admin@inversioneslr.com").get("/api/v1/admin/reservas", {"estado": "EN_REVISION"}).json()
-    assert [r["id"] for r in en_revision] == [reserva_740["id"]]
+    assert reserva_740["id"] in [r["id"] for r in en_revision]
+    assert {r["estado"] for r in en_revision} == {"EN_REVISION"}
 
 
 def test_si_falla_pasar_a_revision_el_bloqueo_tambien_se_revierte(reserva_740, entrar, monkeypatch):
@@ -51,7 +52,7 @@ def test_ca_20_2_mantener_vuelve_a_confirmada(reserva_740, entrar):
     _bloquear(entrar, reserva_740["publicacion"])
     r = _resolver(entrar, reserva_740["id"], mantener=True)
     assert r.status_code == 200 and r.json()["estado"] == "CONFIRMADA"
-    assert not Cancelacion().objects.exists()
+    assert not Cancelacion().objects.filter(reserva_id=reserva_740["id"]).exists()
 
 
 def test_ca_20_3_cancelar_devuelve_el_100_y_libera_las_noches(reserva_740, entrar, reloj):

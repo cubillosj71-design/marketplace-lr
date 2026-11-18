@@ -437,24 +437,6 @@ def reservar(huesped, cotizacion_id: int, clave: uuid.UUID, medio: str, ip=None)
     return reserva_dict(r), True
 
 
-def crear_reserva_confirmada(huesped_id: int, publicacion: dict, llegada: date, salida: date, num_huespedes: int) -> int:
-    """Crea cotización y reserva CONFIRMADA sin pasar por el pago. Solo para la carga de datos de demostración
-    (cargar_demo), que usa fechas fijas; el flujo real es reservar()."""
-    tarifa = _tarifa_o_error()
-    c = calcular(publicacion, (salida - llegada).days, porcentaje=tarifa.porcentaje)
-    with transaction.atomic():
-        cot = Cotizacion.objects.create(
-            huesped_id=huesped_id, publicacion_id=publicacion["id"], tarifa_servicio_ref=tarifa, fecha_llegada=llegada,
-            fecha_salida=salida, num_huespedes=num_huespedes, vence=reloj.ahora() + timedelta(minutes=MINUTOS_COTIZACION), **c,
-        )
-        r = Reserva.objects.create(
-            cotizacion=cot, huesped_id=huesped_id, publicacion_id=publicacion["id"], politica_id=publicacion["politica"],
-            fecha_llegada=llegada, fecha_salida=salida, num_huespedes=num_huespedes, total=c["total"],
-            clave_idempotencia=uuid.uuid4(),
-        )
-    return r.id
-
-
 # ---------------------------------------------------------------- suscriptor de eventos
 
 def al_bloquear_publicacion(sender, nombre, entidad_id=None, usuario_id=None, **_):

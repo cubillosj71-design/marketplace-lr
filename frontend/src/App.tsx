@@ -1,11 +1,11 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AppLayout, SoloRol } from "./layout";
-import { AdminPublicaciones, RegistroAcciones, RevisarPublicacion, TarifaServicioPage } from "./pages/admin";
+import { AdminPublicaciones, RegistroAcciones, RevisarPublicacion, Tablero, TarifaServicioPage, UsuariosAdmin } from "./pages/admin";
 import { Inicio, Login, Recuperar, Registro, Restablecer } from "./pages/auth";
 import { Calendario } from "./pages/calendario";
 import { Explorar, ExplorarDetalle, ExplorarPublico, ExplorarPublicoDetalle } from "./pages/explorar";
 import { DetallePublicacion, FormPublicacionRuta, MisPublicaciones } from "./pages/publicaciones";
-import { ReportePublicaciones, ReporteUsuarios } from "./pages/reportes";
+import { Reportes } from "./pages/reportes";
 import { CotizacionPage } from "./pages/reservar";
 import { Avisos, MisReservas, ReservasDeMisAlojamientos, ReservasEnRevision } from "./pages/reservas";
 import { CambiarContrasena, Perfil, Roles } from "./pages/usuarios";
@@ -49,8 +49,12 @@ export default function App() {
         <Route path="/admin/publicaciones" element={<SoloRol roles={["ADMINISTRADOR"]}><AdminPublicaciones /></SoloRol>} />
         <Route path="/admin/revision" element={<SoloRol roles={["ADMINISTRADOR"]}><AdminPublicaciones soloPendientes key="pend" /></SoloRol>} />
         <Route path="/admin/revision/:id" element={<SoloRol roles={["ADMINISTRADOR"]}><RevisarPublicacion /></SoloRol>} />
-        <Route path="/admin/reportes/usuarios" element={<SoloRol roles={["ADMINISTRADOR"]}><ReporteUsuarios /></SoloRol>} />
-        <Route path="/admin/reportes/publicaciones" element={<SoloRol roles={["ADMINISTRADOR"]}><ReportePublicaciones /></SoloRol>} />
+        <Route path="/admin/publicaciones/:id" element={<SoloRol roles={["ADMINISTRADOR"]}><RevisarPublicacion /></SoloRol>} />
+        <Route path="/admin/tablero" element={<SoloRol roles={["ADMINISTRADOR"]}><Tablero /></SoloRol>} />
+        <Route path="/admin/usuarios" element={<SoloRol roles={["ADMINISTRADOR"]}><UsuariosAdmin /></SoloRol>} />
+        <Route path="/admin/reportes" element={<SoloRol roles={["ADMINISTRADOR"]}><Reportes /></SoloRol>} />
+        <Route path="/admin/reportes/usuarios" element={<Navigate to="/admin/reportes?tipo=usuarios" replace />} />
+        <Route path="/admin/reportes/publicaciones" element={<Navigate to="/admin/reportes?tipo=publicaciones" replace />} />
         <Route path="/admin/tarifa" element={<SoloRol roles={["ADMINISTRADOR"]}><TarifaServicioPage /></SoloRol>} />
         <Route path="/admin/registro" element={<SoloRol roles={["ADMINISTRADOR"]}><RegistroAcciones /></SoloRol>} />
       </Route>

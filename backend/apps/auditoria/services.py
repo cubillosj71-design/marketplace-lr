@@ -36,11 +36,44 @@ def registrar(
     )
 
 
-def consultar(*, actor_id=None, accion=None, desde=None, hasta=None, exitoso=None):
-    """Consulta para el administrador (RF-D-ADM-04.1, CA-23.1): filtra por usuario (actor), acción y periodo."""
-    qs = EventoAuditoria.objects.all()
+# Tipos de acción del filtro del registro (CA-23.1, CA-23.3). Cada tipo agrupa las acciones que registran los
+# módulos. "Acción del administrador" se define por el rol de quien la hizo (actor), no por el nombre de la acción.
+# Las de reseñas (publicada u ocultada) llegan con su módulo.
+TIPOS_ACCION: dict[str, dict] = {
+    "inicio_sesion": {"nombre": "Inicio de sesión", "acciones": ["InicioSesion", "CierreSesion"]},
+    "acceso_no_permitido": {"nombre": "Intento de usar una función no permitida", "acciones": ["AccesoDenegado"]},
+    "estado_publicacion": {"nombre": "Cambio de estado de una publicación", "acciones": [
+        "PublicacionEnviadaARevision", "PublicacionAprobada", "PublicacionDevuelta", "PublicacionBloqueada",
+        "PublicacionDesbloqueada", "PublicacionPausada", "PublicacionReactivada"]},
+    "estado_reserva": {"nombre": "Cambio de estado de una reserva", "acciones": [
+        "ReservaConfirmada", "ReservaEnRevision", "ReservaResuelta", "ReservaCompletada"]},
+    "reserva_rechazada": {"nombre": "Intento de reserva rechazado", "acciones": ["ReservaRechazada"]},
+    "cancelacion": {"nombre": "Cancelación de una reserva", "acciones": ["ReservaCancelada"]},
+    "descarga_reporte": {"nombre": "Descarga de reporte", "acciones": ["ReporteDescargado"]},
+    "accion_administrador": {"nombre": "Acción del administrador", "rol_actor": "ADMINISTRADOR"},
+    "cuenta": {"nombre": "Cuenta de usuario", "acciones": [
+        "UsuarioRegistrado", "PerfilActualizado", "CuentaDesactivada", "RecuperacionSolicitada", "ContrasenaRestablecida",
+        "CuentaRestringida", "RestriccionLevantada"]},
+    "pago": {"nombre": "Pagos y devoluciones", "acciones": ["PagoAprobado", "PagoNoAprobado", "DevolucionRegistrada", "PagoConciliado"]},
+    "operacion": {"nombre": "Operación y fallas", "acciones": ["ErrorOperacion", "NotificacionFallida", "TareasDiarias"]},
+}
+
+
+def tipos_accion() -> list[dict]:
+    return [{"clave": k, "nombre": v["nombre"]} for k, v in TIPOS_ACCION.items()]
+
+
+def consultar(*, actor_id=None, accion=None, tipo=None, desde=None, hasta=None, exitoso=None):
+    """Consulta para el administrador (RF-D-ADM-04.1, CA-23.1): filtra por usuario (actor), tipo de acción, acción
+    y periodo. Trae el nombre del actor por la llave foránea de la propia tabla (sin importar Identidad)."""
+    qs = EventoAuditoria.objects.select_related("actor")
     if actor_id:
         qs = qs.filter(actor_id=actor_id)
+    if tipo:
+        if tipo not in TIPOS_ACCION:
+            raise ValueError(tipo)
+        t = TIPOS_ACCION[tipo]
+        qs = qs.filter(actor__rol=t["rol_actor"]) if "rol_actor" in t else qs.filter(accion__in=t["acciones"])
     if accion:
         qs = qs.filter(accion=accion)
     if exitoso is not None:

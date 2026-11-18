@@ -273,3 +273,22 @@ forbidden_modules =
     apps.pagos
     apps.resenas
     apps.reportes
+
+# MOD-09 Reportes solo lee las vistas v_usuario_reporte, v_publicacion_reporte, v_reserva_reporte y v_demanda con
+# modelos managed = False. No importa ninguna otra app de negocio; solo Auditoría (registra cada descarga) y apps.comun.
+[importlinter:contract:reportes-solo-vistas]
+name = Reportes solo lee vistas (MOD-09)
+type = forbidden
+source_modules =
+    apps.reportes
+forbidden_modules =
+    apps.identidad
+    apps.catalogo
+    apps.busqueda
+    apps.reservas
+    apps.pagos
+    apps.resenas
+    apps.notificaciones
+# Las pruebas sí crean datos con los services de los demás módulos
+ignore_imports =
+    apps.reportes.tests.** -> apps.**
