@@ -197,3 +197,44 @@ export const reservasApi = {
   cotizacion: (id: number) => api.get<CotizacionApi>(`/reservas/cotizaciones/${id}`),
   reservar: (d: { cotizacion: number; clave_idempotencia: string; medio_pago: string }) => api.post<ReservaApi>("/reservas", d),
 };
+
+/* ---------------- SRV-04 Reservas: consultar, cancelar y revisar (HU-14, HU-15, HU-20, HU-26) ---------------- */
+
+export interface CancelacionApi {
+  fecha: string; motivo: string; cancelada_por: number | null; automatica: boolean;
+  dias_anticipacion: number; porcentaje_devolucion: string; valor_devolucion: string;
+}
+
+export interface ReservaResumen {
+  id: number; estado: "CONFIRMADA" | "CANCELADA" | "COMPLETADA" | "EN_REVISION"; publicacion: number;
+  alojamiento: string | null; anfitrion: number | null; huesped: number; huesped_nombre: string | null;
+  fecha_llegada: string; fecha_salida: string; noches: number; num_huespedes: number; total: string;
+  cancelable: boolean; cancelacion: CancelacionApi | null;
+}
+
+export interface SimulacionCancelacion {
+  reserva: number; cancelable: boolean; dias_anticipacion: number; porcentaje_devolucion: string; valor_devolucion: string;
+}
+
+export const misReservasApi = {
+  mias: () => api.get<ReservaResumen[]>("/reservas/mias"),
+  deMisAlojamientos: () => api.get<ReservaResumen[]>("/reservas/de-mis-alojamientos"),
+  detalle: (id: number) => api.get<ReservaResumen>(`/reservas/${id}`),
+  simularCancelacion: (id: number) => api.get<SimulacionCancelacion>(`/reservas/${id}/cancelar`),
+  cancelar: (id: number, motivo: string) => api.post<ReservaResumen>(`/reservas/${id}/cancelar`, { motivo }),
+  enRevision: () => api.get<ReservaResumen[]>("/admin/reservas", { params: { estado: "EN_REVISION" } }),
+  resolver: (id: number, mantener: boolean, motivo?: string) =>
+    api.post<ReservaResumen>(`/admin/reservas/${id}/resolver`, { mantener, ...(motivo ? { motivo } : {}) }),
+};
+
+/* ---------------- SRV-07 Notificaciones (HU-16) ---------------- */
+
+export interface NotificacionApi {
+  id: number; tipo: string; mensaje: string; entidad: string | null; entidad_id: number | null; leida: boolean; fecha: string;
+}
+
+export const notificacionesApi = {
+  bandeja: () => api.get<{ no_leidas: number; notificaciones: NotificacionApi[] }>("/notificaciones"),
+  marcarLeida: (id: number) => api.post<NotificacionApi>(`/notificaciones/${id}/leida`),
+  marcarTodas: () => api.post<{ marcadas: number }>("/notificaciones/leidas"),
+};

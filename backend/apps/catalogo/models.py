@@ -11,6 +11,8 @@ quedar vacíos solo mientras la publicación es BORRADOR. Una restricción CHECK
 completos en cualquier otro estado, así la regla de RF-D-ALO-01.2 también se cumple en la base.
 """
 
+from decimal import Decimal
+
 from django.conf import settings
 from django.contrib.postgres.fields import ArrayField
 from django.db import models
@@ -68,6 +70,14 @@ class PoliticaCancelacion(models.Model):
 
     def __str__(self) -> str:
         return self.nombre
+
+    def porcentaje_devolucion(self, dias: int) -> Decimal:
+        """porcentajeDevolucion(dias) del diagrama: el porcentaje del tramo que contiene los días de
+        anticipación (Moderada: 7 o más 100 %, de 2 a 6 50 %, menos de 2 0 %). Sin tramo, 0 %."""
+        for t in self.tramos.order_by("-dias_minimos"):
+            if dias >= t.dias_minimos and (t.dias_maximos is None or dias <= t.dias_maximos):
+                return t.porcentaje_devolucion
+        return Decimal("0")
 
 
 class TramoPolitica(models.Model):

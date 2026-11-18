@@ -7,6 +7,7 @@ import { Explorar, ExplorarDetalle, ExplorarPublico, ExplorarPublicoDetalle } fr
 import { DetallePublicacion, FormPublicacionRuta, MisPublicaciones } from "./pages/publicaciones";
 import { ReportePublicaciones, ReporteUsuarios } from "./pages/reportes";
 import { CotizacionPage } from "./pages/reservar";
+import { Avisos, MisReservas, ReservasDeMisAlojamientos, ReservasEnRevision } from "./pages/reservas";
 import { CambiarContrasena, Perfil, Roles } from "./pages/usuarios";
 import { useStore } from "./store";
 
@@ -34,6 +35,10 @@ export default function App() {
         <Route path="/explorar" element={<SoloRol roles={["HUESPED"]}><Explorar /></SoloRol>} />
         <Route path="/explorar/:id" element={<SoloRol roles={["HUESPED"]}><ExplorarDetalle /></SoloRol>} />
         <Route path="/cotizacion/:id" element={<SoloRol roles={["HUESPED"]}><CotizacionPage /></SoloRol>} />
+        <Route path="/reservas" element={<SoloRol roles={["HUESPED"]}><MisReservas /></SoloRol>} />
+        <Route path="/reservas-alojamientos" element={<SoloRol roles={["ANFITRION"]}><ReservasDeMisAlojamientos /></SoloRol>} />
+        <Route path="/admin/reservas" element={<SoloRol roles={["ADMINISTRADOR"]}><ReservasEnRevision /></SoloRol>} />
+        <Route path="/avisos" element={<Avisos />} />
 
         <Route path="/publicaciones" element={<SoloRol roles={["ANFITRION"]}><MisPublicaciones /></SoloRol>} />
         <Route path="/publicaciones/nueva" element={<SoloRol roles={["ANFITRION"]}><FormPublicacionRuta /></SoloRol>} />

@@ -1,25 +1,32 @@
-"""Eventos de dominio (ADR-007).
+"""Eventos de dominio (ADR-007, C4 nivel 3).
 
 Solo para los eventos de dominio del diagrama: PublicacionAprobada, PublicacionDevuelta,
-PublicacionBloqueada, PublicacionDesbloqueada, PublicacionPausada y PublicacionReactivada (más
-adelante ReservaConfirmada, ReservaCancelada, ReservaEnRevision y ReservaResuelta). Los reciben
-Reservas y Notificaciones conectándose a la señal `evento_dominio`, sin que quien publica los conozca.
+PublicacionBloqueada, PublicacionDesbloqueada, PublicacionPausada, PublicacionReactivada, ReservaConfirmada,
+ReservaCancelada, ReservaEnRevision y ReservaResuelta.
 
-La auditoría NO usa estos eventos: cada módulo llama a auditoria.services.registrar() en la misma
-transacción del cambio (C4 nivel 3, vista b).
+Cada evento se entrega por dos señales, como en el diagrama C4 nivel 3:
+- `evento_dominio_en_transaccion`: síncrona, dentro de la MISMA transacción de quien publica. La usa Reservas
+  para pasar a EN_REVISION las reservas de una publicación bloqueada (CA-20.1): si algo falla, se revierte todo.
+- `evento_dominio`: DESPUÉS de confirmar la transacción (transaction.on_commit). La usa Notificaciones para crear
+  los avisos. Se envía con send_robust: si un receptor falla, la operación ya confirmada no se rompe.
 
-El envío se hace con transaction.on_commit, así un evento solo sale si la transacción se guardó.
+La auditoría NO usa estos eventos: cada módulo llama a auditoria.services.registrar() en la misma transacción
+del cambio (C4 nivel 3, vista b).
 """
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from django.db import transaction
 from django.dispatch import Signal
 
-# Argumentos: nombre (str), usuario_id (int | None, quien lo provocó), entidad (str | None),
+log = logging.getLogger("marketplace")
+
+# Argumentos de ambas señales: nombre (str), usuario_id (int | None, quien lo provocó), entidad (str | None),
 # entidad_id (int | None), detalle (dict)
+evento_dominio_en_transaccion = Signal()
 evento_dominio = Signal()
 
 EVENTOS_DE_DOMINIO = frozenset({
@@ -27,6 +34,12 @@ EVENTOS_DE_DOMINIO = frozenset({
     "PublicacionPausada", "PublicacionReactivada",
     "ReservaConfirmada", "ReservaCancelada", "ReservaEnRevision", "ReservaResuelta",
 })
+
+
+def _despues_de_confirmar(nombre: str, datos: dict) -> None:
+    for receptor, resultado in evento_dominio.send_robust(sender=nombre, **datos):
+        if isinstance(resultado, Exception):
+            log.error("Falló un receptor de %s: %r", nombre, resultado, extra={"evento": nombre})
 
 
 def publicar(
@@ -40,7 +53,8 @@ def publicar(
     if nombre not in EVENTOS_DE_DOMINIO:
         raise ValueError(f"{nombre} no es un evento de dominio del diagrama; para auditar usa auditoria.services.registrar().")
     datos = dict(nombre=nombre, usuario_id=usuario_id, entidad=entidad, entidad_id=entidad_id, detalle=detalle or {})
-    transaction.on_commit(lambda: evento_dominio.send(sender=nombre, **datos))
+    evento_dominio_en_transaccion.send(sender=nombre, **datos)  # misma transacción: si falla, se revierte
+    transaction.on_commit(lambda: _despues_de_confirmar(nombre, datos))
 
 
 def ip_de(request) -> str | None:

@@ -10,4 +10,8 @@ app_name = "reservas"
 urlpatterns = [
     path("cotizaciones", views.Cotizaciones.as_view(), name="cotizaciones"),
     path("cotizaciones/<int:pk>", views.CotizacionDetalle.as_view(), name="cotizacion"),
+    path("mias", views.MisReservas.as_view(), name="mias"),
+    path("de-mis-alojamientos", views.DeMisAlojamientos.as_view(), name="de-mis-alojamientos"),
+    path("<int:pk>", views.ReservaDetalle.as_view(), name="reserva"),
+    path("<int:pk>/cancelar", views.Cancelar.as_view(), name="cancelar"),
 ]

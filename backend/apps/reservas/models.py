@@ -1,7 +1,7 @@
 """Modelos de SRV-04 Reservas.
 
 Tablas de este servicio (MOD-04): periodo_calendario, tarifa_servicio, cotizacion,
-cotizacion_servicio_adicional y reserva (la tabla cancelacion llega con la cancelación).
+cotizacion_servicio_adicional, reserva y cancelacion.
 Vista de solo lectura que publica: v_noche_no_disponible.
 Ver las secciones 9 y 10 del documento de diseño y el diagrama de clases.
 """
@@ -129,6 +129,54 @@ class Reserva(models.Model):
                 ],
                 condition=Q(estado__in=[EstadoReserva.CONFIRMADA, EstadoReserva.EN_REVISION]),
             ),
+        ]
+
+    # ---- métodos del diagrama de clases. Solo cambian el estado; el trigger de reserva acepta únicamente las
+    # transiciones de la sección 3.6 del SRS. Lo demás (cancelación, devolución, auditoría, eventos) lo
+    # orquesta reservas.services en la misma transacción.
+    def _pasar_a(self, estado: str) -> None:
+        self.estado = estado
+        self.save(update_fields=["estado", "actualizada"])
+
+    def confirmar(self) -> None:
+        self._pasar_a(EstadoReserva.CONFIRMADA)
+
+    def cancelar(self) -> None:
+        self._pasar_a(EstadoReserva.CANCELADA)
+
+    def completar(self) -> None:
+        """RF-D-RES-02.3: CONFIRMADA cuya fecha de salida ya pasó."""
+        self._pasar_a(EstadoReserva.COMPLETADA)
+
+    def pasar_a_revision(self) -> None:
+        self._pasar_a(EstadoReserva.EN_REVISION)
+
+    def resolver(self, mantener: bool) -> None:
+        """EN_REVISION -> CONFIRMADA si se mantiene, CANCELADA si no (CA-20.2, CA-20.3)."""
+        self.confirmar() if mantener else self.cancelar()
+
+    def cancelar_sin_resolucion(self) -> None:
+        """EN_REVISION que llegó a su fecha de llegada sin resolverse (CA-20.5)."""
+        self.cancelar()
+
+
+class Cancelacion(models.Model):
+    """Cancelación de una reserva (RF-D-RES-03.1). Registro de solo inserción: la migración 0006 crea los
+    triggers que rechazan UPDATE, DELETE y TRUNCATE (RNF-E-CON-01). cancelada_por NULL = automática."""
+
+    reserva = models.OneToOneField(Reserva, on_delete=models.PROTECT, related_name="cancelacion")
+    cancelada_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    fecha = models.DateTimeField()
+    motivo = models.TextField()
+    dias_anticipacion = models.IntegerField()
+    porcentaje_devolucion = models.DecimalField(max_digits=5, decimal_places=2)
+    valor_devolucion = models.DecimalField(max_digits=12, decimal_places=2)
+
+    class Meta:
+        db_table = "cancelacion"
+        constraints = [
+            models.CheckConstraint(condition=Q(porcentaje_devolucion__gte=0, porcentaje_devolucion__lte=100), name="cancelacion_porcentaje_0_100"),
+            models.CheckConstraint(condition=Q(valor_devolucion__gte=0), name="cancelacion_valor_no_negativo"),
         ]
 
 
