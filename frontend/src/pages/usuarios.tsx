@@ -1,7 +1,7 @@
 import { Check, KeyRound, Minus, PowerOff, ShieldCheck, UserRound } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ROL_TXT, fechaLarga, iniciales } from "../data";
+import { CIUDADES, ROL_TXT, fechaLarga, iniciales } from "../data";
 import { Page } from "../layout";
 import { useStore, useToast } from "../store";
 import { Alert, Field, Modal } from "../ui";
@@ -12,13 +12,14 @@ export function Perfil() {
   const toast = useToast();
   const go = useNavigate();
   const u = usuario!;
-  const [f, setF] = useState({ nombre: u.nombre, telefono: u.telefono });
+  // Ciudad opcional: "" en el formulario equivale a "Sin ciudad" (null en la API)
+  const [f, setF] = useState({ nombre: u.nombre, telefono: u.telefono, ciudad: u.ciudad ?? "" });
   const [err, setErr] = useState<Record<string, string>>({});
   const [guardado, setGuardado] = useState(false);
   const [confirmar, setConfirmar] = useState(false);
   const pendientes = reservasPendientesDe(u);
   const esAdmin = u.rol === "ADMINISTRADOR";
-  const cambiado = f.nombre !== u.nombre || f.telefono !== u.telefono;
+  const cambiado = f.nombre !== u.nombre || f.telefono !== u.telefono || f.ciudad !== (u.ciudad ?? "");
 
   const guardar = async () => {
     const er: Record<string, string> = {};
@@ -26,7 +27,7 @@ export function Perfil() {
     if (!f.telefono.trim()) er.telefono = "El teléfono no puede quedar vacío.";
     setErr(er);
     if (Object.keys(er).length) return;
-    const r = await actualizarPerfil(f);
+    const r = await actualizarPerfil({ nombre: f.nombre, telefono: f.telefono, ciudad: f.ciudad || null });
     if (!r.ok) return setErr({ [r.campo === "nombre_completo" ? "nombre" : r.campo ?? "telefono"]: r.error });
     setGuardado(true);
     toast("Cambios guardados");
@@ -45,7 +46,7 @@ export function Perfil() {
               <h2>{u.nombre}</h2>
               <div className="row" style={{ gap: 8, marginTop: 4 }}>
                 <span className="role-pill">{ROL_TXT[u.rol]}</span>
-                <span className="badge badge-ACTIVA">CUENTA ACTIVA</span>
+                {u.activa && !u.restringida && <span className="badge badge-ACTIVA">CUENTA ACTIVA</span>}
               </div>
             </div>
           </div>
@@ -57,6 +58,13 @@ export function Perfil() {
             <Field label="Teléfono" error={err.telefono}>
               <input className="input" value={f.telefono} onChange={(e) => setF({ ...f, telefono: e.target.value })} />
             </Field>
+            <Field label="Ciudad (opcional)" error={err.ciudad}>
+              <select className="select" value={f.ciudad} onChange={(e) => setF({ ...f, ciudad: e.target.value })}>
+                <option value="">Sin ciudad</option>
+                {/* Si la cuenta trae una ciudad que no está en la lista, se conserva como opción */}
+                {[...CIUDADES, ...(u.ciudad && !CIUDADES.includes(u.ciudad) ? [u.ciudad] : [])].map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </Field>
             <Field label="Correo electrónico" hint="El correo identifica tu cuenta y no se puede cambiar.">
               <input className="input" value={u.correo} readOnly />
             </Field>
@@ -66,7 +74,7 @@ export function Perfil() {
           </div>
           <p className="subtle" style={{ display: "flex", gap: 6, alignItems: "center" }}>
             <ShieldCheck size={15} /> Autorizaste el tratamiento de tus datos personales (Ley 1581 de 2012) el{" "}
-            {new Date(u.aceptaDatosEn).toLocaleString("es-CO", { dateStyle: "long", timeStyle: "short" })}.
+            {new Date(u.autorizacionDatos).toLocaleString("es-CO", { dateStyle: "long", timeStyle: "short" })}.
           </p>
           <div className="row-between">
             <span className="subtle">El rol tampoco se cambia: cada cuenta tiene un único rol.</span>

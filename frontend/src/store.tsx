@@ -44,7 +44,8 @@ const TRANSICIONES: Record<"ANFITRION" | "ADMINISTRADOR", [EstadoPub, EstadoPub]
   ],
 };
 
-const LLAVE = "alojamientos-lr-prototipo-v3";
+// v4: el usuario ya no tiene "estado" sino activa/restringida (modelo relacional). Las copias v3 se descartan.
+const LLAVE = "alojamientos-lr-prototipo-v4";
 
 const semilla = (): DB => ({
   usuarios: SEED_USUARIOS.map((u) => ({ ...u })),
@@ -80,7 +81,7 @@ interface Store extends DB {
   solicitarEnlace: (correo: string) => Promise<{ ok: true; token: string } | { ok: false; error: string }>;
   estadoEnlace: (token: string) => Promise<"valido" | "vencido" | "usado" | "inexistente">;
   restablecer: (token: string, clave: string) => Promise<Resultado>;
-  actualizarPerfil: (d: { nombre: string; telefono: string }) => Promise<Resultado>;
+  actualizarPerfil: (d: { nombre: string; telefono: string; ciudad: string | null }) => Promise<Resultado>;
   restriccionVigente: (usuarioId: number) => RestriccionUsuario | undefined;
   cambiarClave: (actual: string, nueva: string) => Promise<Resultado>;
   reservasPendientesDe: (u: Usuario) => Reserva[];
@@ -123,12 +124,15 @@ function sincronizarCuenta(d: DB, a: UsuarioApi, hoy: string): Usuario {
   if (!u) {
     u = {
       id: Math.max(0, ...d.usuarios.map((x) => x.id)) + 1, nombre: a.nombre_completo, correo: a.correo,
-      telefono: a.telefono, rol: a.rol, estado: a.estado, clave: "",
-      fechaRegistro: isoLocal(a.fecha_registro).slice(0, 10) || hoy, aceptaDatosEn: isoLocal(a.acepta_datos_en),
+      telefono: a.telefono, ciudad: a.ciudad, rol: a.rol, activa: a.activa, restringida: a.restringida, clave: "",
+      fechaRegistro: isoLocal(a.fecha_registro).slice(0, 10) || hoy, autorizacionDatos: isoLocal(a.autorizacion_datos),
     };
     d.usuarios.push(u);
   }
-  Object.assign(u, { nombre: a.nombre_completo, telefono: a.telefono, rol: a.rol, estado: a.estado, clave: "" });
+  Object.assign(u, {
+    nombre: a.nombre_completo, telefono: a.telefono, ciudad: a.ciudad, rol: a.rol, activa: a.activa,
+    restringida: a.restringida, autorizacionDatos: isoLocal(a.autorizacion_datos), clave: "",
+  });
   return u;
 }
 
@@ -269,9 +273,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
     },
 
-    async actualizarPerfil({ nombre, telefono }) {
+    async actualizarPerfil({ nombre, telefono, ciudad }) {
       try {
-        const { data } = await identidadApi.actualizarPerfil({ nombre_completo: nombre.trim(), telefono: telefono.trim() });
+        const { data } = await identidadApi.actualizarPerfil({ nombre_completo: nombre.trim(), telefono: telefono.trim(), ciudad });
         abrirSesion(data);
         return { ok: true };
       } catch (e) {
@@ -391,7 +395,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     visibleEnBusquedas(p) {
       const a = db.usuarios.find((u) => u.id === p.anfitrionId);
-      return p.estado === "ACTIVA" && a?.estado === "ACTIVA";
+      // Visible si la cuenta del anfitrión está activa y sin restricción vigente (CA-04.3)
+      return p.estado === "ACTIVA" && !!a?.activa && !restriccionVigente(a.id);
     },
 
     restablecerDatos() { const s = semilla(); s.sesionId = db.sesionId; setDb(s); },

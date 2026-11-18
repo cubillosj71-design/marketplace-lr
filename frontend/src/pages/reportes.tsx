@@ -1,6 +1,6 @@
 import { Ban, CheckCircle2, ClipboardList, FileSpreadsheet, FileText, PauseCircle, PowerOff, ShieldAlert, UserRound, Users, Wallet, type LucideIcon } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import { CIUDADES, ESTADO_TXT, ROL_TXT, TIPOS, cop, type EstadoPub, type Rol } from "../data";
+import { CIUDADES, ESTADO_TXT, ROL_TXT, TIPOS, cop, estadoCuenta, type EstadoPub, type Rol, type Usuario } from "../data";
 import { Page } from "../layout";
 import { useStore, useToast } from "../store";
 import { descargarExcel, descargarPDF, type Reporte } from "../exportar";
@@ -90,11 +90,13 @@ export function ReporteUsuarios() {
   const [rol, setRol] = useState<"" | Rol>("");
   const [estado, setEstado] = useState<"" | keyof typeof ESTADO_CUENTA_TXT>("");
 
+  // El estado de la cuenta no es un dato guardado: se deriva de activa y de una restricción vigente.
+  const estadoDe = (u: Usuario) => estadoCuenta({ activa: u.activa, restringida: !!restriccionVigente(u.id) });
   const lista = usuarios
-    .filter((u) => enPeriodo(u.fechaRegistro, d.desde, d.hasta) && (!rol || u.rol === rol) && (!estado || u.estado === estado))
+    .filter((u) => enPeriodo(u.fechaRegistro, d.desde, d.hasta) && (!rol || u.rol === rol) && (!estado || estadoDe(u) === estado))
     .sort((a, b) => b.fechaRegistro.localeCompare(a.fechaRegistro));
   const porRol = (r: Rol) => lista.filter((u) => u.rol === r).length;
-  const porEstado = (e: keyof typeof ESTADO_CUENTA_TXT) => lista.filter((u) => u.estado === e).length;
+  const porEstado = (e: keyof typeof ESTADO_CUENTA_TXT) => lista.filter((u) => estadoDe(u) === e).length;
 
   const armar = (): Reporte => ({
     titulo: "Reporte de usuarios",
@@ -110,8 +112,8 @@ export function ReporteUsuarios() {
       ["Cuentas restringidas", porEstado("RESTRINGIDA")],
     ],
     columnas: ["Nombre", "Correo", "Rol", "Teléfono", "Estado de la cuenta", "Motivo de restricción", "Fecha de registro", "Autorizó datos (Ley 1581)"],
-    filas: lista.map((u) => [u.nombre, u.correo, ROL_TXT[u.rol], u.telefono, ESTADO_CUENTA_TXT[u.estado],
-      restriccionVigente(u.id)?.motivo ?? "", fechaCorta(u.fechaRegistro), fechaHora(u.aceptaDatosEn)]),
+    filas: lista.map((u) => [u.nombre, u.correo, ROL_TXT[u.rol], u.telefono, ESTADO_CUENTA_TXT[estadoDe(u)],
+      restriccionVigente(u.id)?.motivo ?? "", fechaCorta(u.fechaRegistro), fechaHora(u.autorizacionDatos)]),
     archivo: `reporte-usuarios_${d.desde}_${d.hasta}`,
   });
 
@@ -160,11 +162,11 @@ export function ReporteUsuarios() {
                     <td>{ROL_TXT[u.rol]}</td>
                     <td>{u.telefono}</td>
                     <td>
-                      <span className={`badge ${u.estado === "ACTIVA" ? "badge-ACTIVA" : u.estado === "RESTRINGIDA" ? "badge-BLOQUEADA" : "badge-PAUSADA"}`}>{ESTADO_CUENTA_TXT[u.estado].toUpperCase()}</span>
+                      <span className={`badge ${estadoDe(u) === "ACTIVA" ? "badge-ACTIVA" : estadoDe(u) === "RESTRINGIDA" ? "badge-BLOQUEADA" : "badge-PAUSADA"}`}>{ESTADO_CUENTA_TXT[estadoDe(u)].toUpperCase()}</span>
                       {restriccionVigente(u.id) && <span className="subtle" style={{ display: "block", marginTop: 4, maxWidth: 220 }}>{restriccionVigente(u.id)!.motivo}</span>}
                     </td>
                     <td>{fechaCorta(u.fechaRegistro)}</td>
-                    <td className="subtle">{fechaHora(u.aceptaDatosEn)}</td>
+                    <td className="subtle">{fechaHora(u.autorizacionDatos)}</td>
                   </tr>
                 ))}
               </tbody>

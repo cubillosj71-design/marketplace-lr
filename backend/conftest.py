@@ -46,7 +46,8 @@ def entrar():
 
 @pytest.fixture
 def eventos():
-    """Acciones registradas en la auditoría (requiere pruebas con transaction=True)."""
+    """Acciones registradas en la auditoría. registrar() escribe en la misma transacción, así que no
+    hace falta transaction=True (que además no sirve: flush usa TRUNCATE y el trigger lo rechaza)."""
     from apps.auditoria import services
 
     return lambda **f: list(services.consultar(**f).values_list("accion", flat=True))

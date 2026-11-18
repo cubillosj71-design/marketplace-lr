@@ -171,3 +171,20 @@ forbidden_modules =
     apps.catalogo
     apps.busqueda
     apps.reportes
+
+# MOD-08 Auditoría no depende de ningún otro componente (C4 nivel 3, vista b): los demás la llaman a
+# ella con auditoria.services.registrar(). Solo puede usar las piezas transversales de apps.comun.
+[importlinter:contract:auditoria-independiente]
+name = Auditoría no importa ninguna otra app (C4 nivel 3, vista b)
+type = forbidden
+source_modules =
+    apps.auditoria
+forbidden_modules =
+    apps.identidad
+    apps.catalogo
+    apps.busqueda
+    apps.reservas
+    apps.pagos
+    apps.resenas
+    apps.notificaciones
+    apps.reportes

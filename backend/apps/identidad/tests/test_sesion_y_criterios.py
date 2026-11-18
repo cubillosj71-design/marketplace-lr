@@ -20,7 +20,8 @@ NUEVO = {"nombre_completo": "Marta Ríos", "correo": "marta@correo.com", "telefo
 # ---------------- HU-01
 def test_ca_01_1_registro_valido_deja_la_cuenta_activa_y_lista_para_entrar(cliente, entrar):
     r = cliente.post("/api/v1/identidad/registro", NUEVO, format="json")
-    assert r.status_code == 201 and r.json()["estado"] == "ACTIVA" and r.json()["rol"] == "HUESPED"
+    assert r.status_code == 201 and r.json()["rol"] == "HUESPED"
+    assert r.json()["activa"] is True and r.json()["restringida"] is False
     assert entrar("marta@correo.com", "Segura2026").usuario["correo"] == "marta@correo.com"
 
 
@@ -95,11 +96,20 @@ def test_abrir_y_usar_el_enlace_no_choca_con_el_limite_de_solicitudes(demo, clie
 
 
 # ---------------- HU-04
-def test_ca_04_1_cambiar_nombre_y_telefono_muestra_los_datos_nuevos(demo, entrar):
+def test_ca_04_1_cambiar_telefono_y_ciudad_muestra_los_datos_nuevos(demo, entrar):
     c = entrar("huesped@correo.com")
-    c.patch(PERFIL, {"nombre_completo": "Carlos Andrés Ruiz", "telefono": "301 999 8877"}, format="json")
+    assert c.patch(PERFIL, {"telefono": "301 999 8877", "ciudad": "Cartagena"}, format="json").status_code == 200
     perfil = c.get(PERFIL).json()
-    assert perfil["nombre_completo"] == "Carlos Andrés Ruiz" and perfil["telefono"] == "301 999 8877"
+    assert perfil["telefono"] == "301 999 8877" and perfil["ciudad"] == "Cartagena"
+    # "Sin ciudad": la ciudad es opcional
+    c.patch(PERFIL, {"ciudad": None}, format="json")
+    assert c.get(PERFIL).json()["ciudad"] is None
+
+
+def test_el_perfil_devuelve_los_campos_del_modelo_relacional(demo, entrar):
+    perfil = entrar("huesped@correo.com").get(PERFIL).json()
+    assert set(perfil) == {"id", "correo", "nombre_completo", "telefono", "ciudad", "rol", "activa", "restringida",
+                           "autorizacion_datos", "fecha_registro"}
 
 
 def test_ca_04_3_un_anfitrion_desactivado_sale_de_las_cuentas_visibles(demo, entrar):

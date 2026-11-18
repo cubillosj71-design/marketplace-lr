@@ -3,7 +3,6 @@
 import io
 
 import pytest
-from django.db import connection
 from openpyxl import load_workbook
 
 pytestmark = pytest.mark.django_db
@@ -65,12 +64,19 @@ def test_tipo_invalido(demo, entrar):
     assert entrar("admin@inversioneslr.com").get("/api/v1/admin/reportes/otro").status_code == 404
 
 
-@pytest.mark.django_db(transaction=True)
 def test_ca_25_2_cada_descarga_queda_en_la_auditoria(demo, entrar):
     admin = entrar("admin@inversioneslr.com")
     admin.get("/api/v1/admin/reportes/usuarios", {**PERIODO, "formato": "pdf"})
     r = admin.get("/api/v1/admin/auditoria", {"accion": "ReporteDescargado"}).json()["results"]
-    assert r[0]["usuario_id"] == admin.usuario["id"] and r[0]["detalle"]["tipo"] == "usuarios" and r[0]["fecha"]
+    assert r[0]["actor_id"] == admin.usuario["id"] and r[0]["detalle"]["tipo"] == "usuarios" and r[0]["fecha"]
+    assert r[0]["exitoso"] is True
+
+
+def test_reporte_de_usuarios_filtra_por_estado_derivado_de_la_cuenta(demo, entrar):
+    admin = entrar("admin@inversioneslr.com")
+    r = admin.get("/api/v1/admin/reportes/usuarios", {**PERIODO, "formato": "xlsx", "estado": "RESTRINGIDA"})
+    filas = list(load_workbook(io.BytesIO(r.content))["Detalle"].iter_rows(min_row=2, values_only=True))
+    assert [(f[1], f[3], f[5]) for f in filas] == [("restringido@correo.com", "Bogotá", "Restringida")]
 
 
 # ---------------- HU-22 Tarifa de servicio
@@ -82,13 +88,4 @@ def test_ca_22_1_tarifa_nueva_no_cambia_reservas_confirmadas(demo, entrar):
     assert t["porcentaje"] == "12.00" and len(t["historial"]) == 2
     assert admin.get("/api/v1/admin/tablero", PERIODO).json()["ingresos"]["plataforma"] == "210000.00"
 
-
-# ---------------- HU-23 Auditoría de solo inserción
-@pytest.mark.django_db(transaction=True)
-def test_la_auditoria_no_se_modifica_ni_se_borra(demo, entrar):
-    from django.db import DatabaseError
-
-    entrar("admin@inversioneslr.com")
-    for sql in ("UPDATE evento_auditoria SET accion = 'x'", "DELETE FROM evento_auditoria"):
-        with pytest.raises(DatabaseError, match="solo inserción"), connection.cursor() as c:
-            c.execute(sql)
+# HU-23: la auditoría de solo inserción (CA-23.1, CA-23.2) se prueba en apps/auditoria/tests.

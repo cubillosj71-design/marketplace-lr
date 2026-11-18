@@ -92,7 +92,7 @@ def test_ca_08_pausar_y_reactivar_sin_tocar_reservas(demo, entrar):
     pid = _id("Apartamento con vista a Monserrate")
     c = entrar("anfitrion@correo.com")
     assert c.post(f"{BASE}/publicaciones/{pid}/pausar").json()["estado"] == "PAUSADA"
-    assert len(reservas.confirmadas_pendientes(c.usuario["id"], True)) == 2  # CA-08.4
+    assert len(reservas.reservas_pendientes(c.usuario["id"], True)) == 2  # CA-08.4
     assert c.post(f"{BASE}/publicaciones/{pid}/reactivar").json()["estado"] == "ACTIVA"
     assert c.post(f"{BASE}/publicaciones/{_id('Habitación cerca al centro')}/pausar").status_code == 409
 
@@ -138,22 +138,22 @@ def test_admin_lista_sin_borradores(demo, entrar):
     assert "BORRADOR" not in estados
 
 
-@pytest.mark.django_db(transaction=True)
-def test_bloquear_pasa_reservas_futuras_a_en_revision(demo, entrar, eventos):
+def test_bloquear_pasa_reservas_futuras_a_en_revision(demo, entrar, eventos, django_capture_on_commit_callbacks):
     from apps.reservas import services as reservas
 
     admin = entrar("admin@inversioneslr.com")
     pid = _id("Apartamento con vista a Monserrate")
     assert admin.post(f"/api/v1/admin/publicaciones/{pid}/bloqueo", {"motivo": ""}, format="json").status_code == 400
-    assert admin.post(f"/api/v1/admin/publicaciones/{pid}/bloqueo", {"motivo": "Fraude"}, format="json").json()["estado"] == "BLOQUEADA"
+    # PublicacionBloqueada es un evento de dominio: sale con on_commit y lo recibe Reservas
+    with django_capture_on_commit_callbacks(execute=True):
+        assert admin.post(f"/api/v1/admin/publicaciones/{pid}/bloqueo", {"motivo": "Fraude"}, format="json").json()["estado"] == "BLOQUEADA"
     estados = {r["estado"] for r in reservas.reservas_para_reporte(publicaciones_ids=[pid]) if r["fecha_llegada"] >= date.today()}
     assert estados == {"EN_REVISION"}
     assert "ReservaEnRevision" in eventos()
     assert admin.delete(f"/api/v1/admin/publicaciones/{pid}/bloqueo").json()["estado"] == "PAUSADA"
 
 
-@pytest.mark.django_db(transaction=True)
 def test_ca_05_2_intento_ajeno_queda_registrado(demo, entrar, eventos):
     entrar("pedro@correo.com").patch(f"{BASE}/publicaciones/{_id('Cabaña del Lago')}", {"titulo": "x"}, format="json")
     entrar("huesped@correo.com").get("/api/v1/admin/tablero")
-    assert eventos(accion="AccesoDenegado", resultado="FALLO").count("AccesoDenegado") >= 2
+    assert eventos(accion="AccesoDenegado", exitoso=False).count("AccesoDenegado") >= 2
