@@ -2,11 +2,10 @@
 
 from rest_framework import serializers, status
 from rest_framework.generics import ListAPIView
-from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.comun.permisos import EsAdministrador, EsAnfitrion, EsAnfitrionOAdministrador
+from apps.comun.permisos import RequierePermiso
 
 from . import services
 from .models import EstadoPublicacion, Publicacion
@@ -93,7 +92,7 @@ def _salida(p):
 class Publicaciones(APIView):
     """POST /catalogo/publicaciones (RF-D-ALO-01.1). Se crea como BORRADOR."""
 
-    permission_classes = [EsAnfitrion]
+    permission_classes = [RequierePermiso("publicaciones.gestionar_propias")]
 
     def post(self, request):
         s = PublicacionEntrada(data=request.data)
@@ -104,7 +103,7 @@ class Publicaciones(APIView):
 class MisPublicaciones(ListAPIView):
     """GET /catalogo/mis-publicaciones?estado= (RF-D-ALO-02.1)."""
 
-    permission_classes = [EsAnfitrion]
+    permission_classes = [RequierePermiso("publicaciones.gestionar_propias")]
     serializer_class = PublicacionLista
 
     def get_queryset(self):
@@ -114,7 +113,7 @@ class MisPublicaciones(ListAPIView):
 class PublicacionDetalle(APIView):
     """GET y PATCH /catalogo/publicaciones/{id}: anfitrión dueño o administrador (RF-D-ALO-02.1, ADM-01.1)."""
 
-    permission_classes = [EsAnfitrionOAdministrador]
+    permission_classes = [RequierePermiso("publicaciones.gestionar_propias", "publicaciones.moderar")]
 
     def get(self, request, pk):
         return Response(_salida(services.obtener(request.user, pk)))
@@ -126,7 +125,7 @@ class PublicacionDetalle(APIView):
 
 
 class _CambioEstado(APIView):
-    permission_classes = [EsAnfitrionOAdministrador]
+    permission_classes = [RequierePermiso("publicaciones.gestionar_propias", "publicaciones.moderar")]
     destino: str = ""
 
     def post(self, request, pk):
@@ -144,7 +143,7 @@ class Reactivar(_CambioEstado):
 class EnviarRevision(_CambioEstado):
     """POST /catalogo/publicaciones/{id}/enviar-revision (RF-D-ALO-01.2)."""
 
-    permission_classes = [EsAnfitrion]
+    permission_classes = [RequierePermiso("publicaciones.gestionar_propias")]
     destino = EstadoPublicacion.PENDIENTE_REVISION
 
 
@@ -155,8 +154,7 @@ class EnviarRevision(_CambioEstado):
 class Catalogos(APIView):
     """GET /catalogo/ciudades · /tipos-alojamiento · /servicios (todos)."""
 
-    permission_classes = [AllowAny]
-    authentication_classes: list = []
+    permission_classes = [RequierePermiso("catalogo.ver")]
     clave = ""
 
     def get(self, request):
@@ -168,7 +166,7 @@ class Catalogos(APIView):
 class PublicacionesAdmin(ListAPIView):
     """GET /admin/publicaciones?estado= : todas menos borradores (apoya RF-D-ADM-01.1)."""
 
-    permission_classes = [EsAdministrador]
+    permission_classes = [RequierePermiso("publicaciones.moderar")]
     serializer_class = PublicacionLista
 
     def get_queryset(self):
@@ -183,7 +181,7 @@ class RevisionEntrada(serializers.Serializer):
 class RevisionAdmin(APIView):
     """POST /admin/publicaciones/{id}/revision (RF-D-ADM-01.1)."""
 
-    permission_classes = [EsAdministrador]
+    permission_classes = [RequierePermiso("publicaciones.moderar")]
 
     def post(self, request, pk):
         s = RevisionEntrada(data=request.data)
@@ -195,7 +193,7 @@ class RevisionAdmin(APIView):
 class BloqueoAdmin(APIView):
     """POST y DELETE /admin/publicaciones/{id}/bloqueo (RF-D-ADM-01.2)."""
 
-    permission_classes = [EsAdministrador]
+    permission_classes = [RequierePermiso("publicaciones.moderar")]
 
     def post(self, request, pk):
         return Response(_salida(services.bloquear(request.user, pk, request.data.get("motivo", ""))))

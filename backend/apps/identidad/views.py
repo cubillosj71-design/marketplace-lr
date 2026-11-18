@@ -9,13 +9,14 @@ y solo desde el mismo sitio (SameSite=Strict), lo que también bloquea el CSRF.
 
 from django.conf import settings
 from rest_framework import serializers, status
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.comun import rbac
 from apps.comun.errores import ErrorNegocio
 from apps.comun.eventos import ip_de
-from apps.comun.permisos import EsAdministrador
+from apps.comun.permisos import RequierePermiso
 
 from . import services
 
@@ -33,8 +34,7 @@ class RegistroSerializer(serializers.Serializer):
 class Registro(APIView):
     """POST /identidad/registro (RF-D-USU-01.1)."""
 
-    permission_classes = [AllowAny]
-    authentication_classes: list = []
+    permission_classes = [RequierePermiso("cuenta.registrar")]
     throttle_scope = "registro"
 
     def post(self, request):
@@ -152,6 +152,16 @@ class RecuperacionToken(APIView):
         return Response({"detalle": "Tu contraseña se actualizó. Ya puedes iniciar sesión."})
 
 
+class Permisos(APIView):
+    """GET /identidad/permisos (RF-D-USU-02.1): el rol y los permisos de quien llama, según apps.comun.rbac.
+    Sin sesión responde los del VISITANTE. Es pública porque describe la propia matriz."""
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        return Response({"rol": rbac.rol_de(request.user), "permisos": sorted(rbac.permisos_de(request.user))})
+
+
 class PerfilSerializer(serializers.Serializer):
     nombre_completo = serializers.CharField(max_length=120, required=False)
     telefono = serializers.CharField(max_length=20, required=False)
@@ -163,7 +173,7 @@ class PerfilSerializer(serializers.Serializer):
 class Perfil(APIView):
     """GET y PATCH /identidad/perfil (RF-D-USU-01.4). El correo y el rol no se cambian."""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [RequierePermiso("perfil.gestionar")]
 
     def get(self, request):
         return Response(services.a_dict(request.user))
@@ -178,6 +188,8 @@ class Perfil(APIView):
 class Desactivar(APIView):
     """POST /identidad/perfil/desactivar (CU-USU-05)."""
 
+    permission_classes = [RequierePermiso("cuenta.desactivar")]
+
     def post(self, request):
         services.desactivar_cuenta(request.user, ip=ip_de(request))
         return Response({"detalle": "Tu cuenta quedó desactivada. Se reactiva cuando vuelvas a iniciar sesión."})
@@ -191,7 +203,7 @@ class RestriccionSerializer(serializers.Serializer):
 class RestriccionAdmin(APIView):
     """POST y DELETE /admin/usuarios/{id}/restriccion (RF-D-ADM-02.1)."""
 
-    permission_classes = [EsAdministrador]
+    permission_classes = [RequierePermiso("usuarios.restringir")]
 
     def post(self, request, usuario_id):
         s = RestriccionSerializer(data=request.data)
@@ -210,7 +222,7 @@ class RestriccionAdmin(APIView):
 class UsuariosAdmin(APIView):
     """GET /admin/usuarios?rol&q (HU-21): buscar por nombre o correo, con activa, restringida y motivo."""
 
-    permission_classes = [EsAdministrador]
+    permission_classes = [RequierePermiso("usuarios.ver")]
 
     def get(self, request):
         rol = request.query_params.get("rol") or None

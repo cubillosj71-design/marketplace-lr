@@ -7,7 +7,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.comun.eventos import ip_de
-from apps.comun.permisos import EsAdministrador
+from apps.comun.permisos import RequierePermiso
 
 from . import services
 
@@ -31,7 +31,7 @@ class Periodo(serializers.Serializer):
 class Tablero(APIView):
     """GET /admin/tablero?desde&hasta."""
 
-    permission_classes = [EsAdministrador]
+    permission_classes = [RequierePermiso("tablero.ver")]
 
     def get(self, request):
         p = Periodo(data=request.query_params)
@@ -42,7 +42,7 @@ class Tablero(APIView):
 class ReporteArchivo(APIView):
     """GET /admin/reportes/{tipo}?formato=pdf|xlsx&desde&hasta (tipos: usuarios, publicaciones, reservas, ingresos, demanda)."""
 
-    permission_classes = [EsAdministrador]
+    permission_classes = [RequierePermiso("reportes.descargar")]
 
     def get(self, request, tipo):
         p = Periodo(data=request.query_params)
