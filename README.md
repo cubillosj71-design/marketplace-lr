@@ -108,7 +108,38 @@ npm install
 npm run dev
 ```
 
-La aplicación queda en http://localhost:5173 y muestra si la API responde.
+La aplicación queda en http://localhost:5173. Necesita la API corriendo en http://localhost:8000: Vite reenvía las rutas `/api/*` a Django (ver `vite.config.ts`), así el navegador ve un solo origen, igual que en Render.
+
+### Primer Administrador
+
+El Administrador no se registra desde la aplicación (nota de RF-AN-USU-01). Se crea una vez, al poner en marcha la plataforma:
+
+```
+cd backend
+python manage.py createsuperuser
+```
+
+Pide correo, nombre completo, teléfono y contraseña. En Render se ejecuta desde la consola del servicio web.
+
+## Módulo de usuarios (SRV-01 Identidad)
+
+| Historia | Qué hace | Ruta de la API | Pantalla |
+|---|---|---|---|
+| MAL-1 · HU-01 | Registro como Huésped o Anfitrión, con autorización de datos | `POST /identidad/registro` | `/registro` |
+| MAL-2 · HU-02 | Inicio de sesión, renovación y cierre | `POST /identidad/token`, `/token/renovar`, `/salir` | `/iniciar-sesion` |
+| MAL-3 · HU-03 | Recuperación simulada de la contraseña | `POST /identidad/recuperacion`, `GET/POST /recuperacion/{token}` | `/recuperar`, `/recuperar/:token` |
+| MAL-4 · HU-04 | Perfil y desactivación de la cuenta | `GET/PATCH /identidad/perfil`, `POST /perfil/desactivar` | `/perfil` |
+| MAL-5 · HU-05 | Permisos por rol para todos los servicios | `apps/identidad/permisos.py` | `RutaProtegida` |
+| MAL-21 · HU-21 | Restricción de cuentas por el Administrador | `POST/DELETE /admin/usuarios/{id}/restriccion` | (pendiente, módulo ADM) |
+
+El contrato completo está en [docs/api/identidad.openapi.yaml](docs/api/identidad.openapi.yaml).
+
+**Cómo usan los demás servicios este módulo**
+
+- Permisos en sus vistas: `from apps.identidad.permisos import EsAnfitrion, EsDuenoOAdministrador, solo_roles, Rol`.
+- Consultas: `from apps.identidad import services` y luego `services.anfitriones_ocultos_ids()` (Búsqueda), `services.resumen_usuario(id)`, `services.contar_por_rol()` (Reportes).
+- Auditoría: `from apps.auditoria import services as auditoria` y `auditoria.registrar(...)`.
+- En el front, cada módulo agrega sus rutas dentro de `<RutaProtegida roles={[...]} />` en `App.tsx` y llama a la API con el cliente `api` de `src/api.ts`, que ya pone el token y lo renueva.
 
 ## Forma de trabajo
 

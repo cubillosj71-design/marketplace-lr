@@ -1,0 +1,288 @@
+openapi: 3.0.3
+info:
+  title: Marketplace de Alojamientos LR - SRV-01 Identidad
+  version: 1.0.0
+  description: |
+    Rutas del módulo USU (RF-D-USU-01.1 a RF-D-USU-02.1) y de restricción de
+    cuentas (RF-D-ADM-02.1). Todas van bajo /api/v1 y responden JSON.
+
+    Sesión (ADR-005):
+    - El token de acceso (30 min) llega en el cuerpo y se envía en el encabezado
+      `Authorization: Bearer <token>`.
+    - El token de renovación (24 h) llega en la cookie httpOnly `renovacion`,
+      con Path=/api/v1/identidad/ y SameSite=Strict. Cada renovación la rota.
+    - En cada petición autenticada se revisa el estado de la cuenta: una cuenta
+      restringida o desactivada recibe 401 aunque su token no haya vencido.
+
+    Errores de negocio: `{ "codigo": "...", "mensaje": "...", "campo": "..." }`.
+    Errores de formato (DRF): `{ "<campo>": ["mensaje"] }`.
+    Límite de intentos por IP: 429 al superarlo.
+servers:
+  - url: /api/v1
+tags:
+  - name: Registro y sesión
+  - name: Recuperación de contraseña
+  - name: Perfil
+  - name: Administración
+paths:
+  /identidad/registro:
+    post:
+      tags: [Registro y sesión]
+      summary: Registrarse como Huésped o Anfitrión (HU-01, CU-USU-01)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Registro" }
+      responses:
+        "201":
+          description: Cuenta creada y activa.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje: { type: string }
+                  usuario: { $ref: "#/components/schemas/Usuario" }
+        "400":
+          description: "Datos inválidos, contraseña de menos de 8 caracteres (contrasena_invalida), sin autorización de datos (autorizacion_datos_requerida) o rol no permitido."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "409":
+          description: El correo ya está registrado (correo_registrado).
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "429": { $ref: "#/components/responses/DemasiadosIntentos" }
+
+  /identidad/token:
+    post:
+      tags: [Registro y sesión]
+      summary: Iniciar sesión (HU-02, CU-USU-02)
+      description: Si la cuenta estaba desactivada por su titular, se reactiva (flujo 4c).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [correo, password]
+              properties:
+                correo: { type: string, format: email }
+                password: { type: string, format: password }
+      responses:
+        "200":
+          description: Sesión iniciada. Pone la cookie `renovacion`.
+          headers:
+            Set-Cookie: { schema: { type: string }, description: "renovacion=<token>; HttpOnly; SameSite=Strict; Path=/api/v1/identidad/" }
+          content: { application/json: { schema: { $ref: "#/components/schemas/Sesion" } } }
+        "401":
+          description: Correo o contraseña incorrectos (credenciales_invalidas). El intento queda registrado.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "403":
+          description: Cuenta restringida (cuenta_restringida).
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "429": { $ref: "#/components/responses/DemasiadosIntentos" }
+
+  /identidad/token/renovar:
+    post:
+      tags: [Registro y sesión]
+      summary: Obtener un token de acceso nuevo con la cookie de renovación
+      security: [{ cookieRenovacion: [] }]
+      responses:
+        "200":
+          description: Token nuevo. La cookie se rota.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Sesion" } } }
+        "401":
+          description: Sin cookie, cookie vencida o ya usada, o cuenta no activa (sin_sesion).
+
+  /identidad/salir:
+    post:
+      tags: [Registro y sesión]
+      summary: Cerrar sesión
+      description: El token de renovación pasa a la lista negra y se borra la cookie.
+      security: [{ cookieRenovacion: [] }]
+      responses:
+        "204": { description: Sesión cerrada. }
+
+  /identidad/recuperacion:
+    post:
+      tags: [Recuperación de contraseña]
+      summary: Pedir un enlace de recuperación (HU-03, CU-USU-03)
+      description: |
+        Recuperación simulada (AMB-08): el enlace se devuelve para mostrarlo en
+        pantalla. Sirve una sola vez durante 20 minutos (RNF-P-SEG-03) y anula
+        los enlaces anteriores sin usar.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [correo]
+              properties:
+                correo: { type: string, format: email }
+      responses:
+        "200":
+          description: Enlace generado.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje: { type: string }
+                  enlace: { type: string, example: "/recuperar/Xk9..." }
+        "404": { description: No hay una cuenta con ese correo. }
+        "429": { $ref: "#/components/responses/DemasiadosIntentos" }
+
+  /identidad/recuperacion/{token}:
+    parameters:
+      - { name: token, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [Recuperación de contraseña]
+      summary: Verificar si el enlace todavía sirve (CA-03.2, CA-03.3)
+      security: []
+      responses:
+        "200":
+          description: El enlace sirve.
+          content: { application/json: { schema: { type: object, properties: { valido: { type: boolean } } } } }
+        "400":
+          description: enlace_invalido, enlace_usado o enlace_vencido.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    post:
+      tags: [Recuperación de contraseña]
+      summary: Definir la nueva contraseña
+      description: Cierra todas las sesiones abiertas de la cuenta.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password: { type: string, format: password, minLength: 8 }
+      responses:
+        "200": { description: Contraseña actualizada. }
+        "400":
+          description: enlace_invalido, enlace_usado, enlace_vencido o contrasena_invalida.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+
+  /identidad/perfil:
+    get:
+      tags: [Perfil]
+      summary: Consultar el perfil (HU-04, CU-USU-04)
+      description: Solo Huésped y Anfitrión.
+      responses:
+        "200": { description: "Perfil.", content: { application/json: { schema: { $ref: "#/components/schemas/Usuario" } } } }
+        "401": { $ref: "#/components/responses/SinSesion" }
+        "403": { $ref: "#/components/responses/RolSinPermiso" }
+    patch:
+      tags: [Perfil]
+      summary: Actualizar nombre y teléfono (CA-04.1)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nombre_completo: { type: string, minLength: 3, maxLength: 120 }
+                telefono: { type: string, maxLength: 20, example: "3001234567" }
+      responses:
+        "200": { description: "Perfil actualizado.", content: { application/json: { schema: { $ref: "#/components/schemas/Usuario" } } } }
+        "400": { description: Datos inválidos. }
+        "401": { $ref: "#/components/responses/SinSesion" }
+        "403": { $ref: "#/components/responses/RolSinPermiso" }
+
+  /identidad/perfil/desactivar:
+    post:
+      tags: [Perfil]
+      summary: Desactivar la cuenta (CU-USU-05, CA-04.2, CA-04.3)
+      description: Cierra la sesión. La cuenta se reactiva al volver a iniciar sesión.
+      responses:
+        "200": { description: Cuenta desactivada. }
+        "401": { $ref: "#/components/responses/SinSesion" }
+        "403": { $ref: "#/components/responses/RolSinPermiso" }
+        "409":
+          description: Tiene reservas CONFIRMADAS pendientes (reservas_pendientes).
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+
+  /admin/usuarios/{usuario_id}/restriccion:
+    parameters:
+      - { name: usuario_id, in: path, required: true, schema: { type: integer } }
+    post:
+      tags: [Administración]
+      summary: Restringir una cuenta (HU-21, RF-D-ADM-02.1)
+      description: Solo Administrador. No aplica a cuentas de Administrador. Cierra las sesiones de la cuenta.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [motivo]
+              properties:
+                motivo: { type: string, maxLength: 1000 }
+      responses:
+        "201": { description: Cuenta restringida. }
+        "400": { description: "Sin motivo, usuario inexistente, cuenta de Administrador o ya restringida." }
+        "401": { $ref: "#/components/responses/SinSesion" }
+        "403": { $ref: "#/components/responses/RolSinPermiso" }
+    delete:
+      tags: [Administración]
+      summary: Quitar la restricción
+      responses:
+        "204": { description: Restricción levantada. }
+        "400": { description: La cuenta no tiene una restricción vigente. }
+        "401": { $ref: "#/components/responses/SinSesion" }
+        "403": { $ref: "#/components/responses/RolSinPermiso" }
+
+security:
+  - bearerJWT: []
+
+components:
+  securitySchemes:
+    bearerJWT: { type: http, scheme: bearer, bearerFormat: JWT }
+    cookieRenovacion: { type: apiKey, in: cookie, name: renovacion }
+  responses:
+    SinSesion:
+      description: Sin token, token vencido o cuenta no activa. El front-end pide iniciar sesión (CA-05.1).
+    RolSinPermiso:
+      description: El rol no tiene permiso. El intento queda registrado como ACCESO_DENEGADO (CA-05.2).
+    DemasiadosIntentos:
+      description: Se superó el límite de intentos por minuto desde la misma IP.
+  schemas:
+    Rol: { type: string, enum: [HUESPED, ANFITRION, ADMINISTRADOR] }
+    Usuario:
+      type: object
+      properties:
+        id: { type: integer }
+        nombre_completo: { type: string }
+        correo: { type: string, format: email }
+        telefono: { type: string }
+        rol: { $ref: "#/components/schemas/Rol" }
+        estado: { type: string, enum: [ACTIVA, DESACTIVADA, RESTRINGIDA] }
+        fecha_registro: { type: string, format: date-time }
+    Registro:
+      type: object
+      required: [nombre_completo, correo, telefono, password, rol, acepta_datos]
+      properties:
+        nombre_completo: { type: string, minLength: 3, maxLength: 120 }
+        correo: { type: string, format: email, maxLength: 254 }
+        telefono: { type: string, maxLength: 20, example: "3001234567" }
+        password: { type: string, format: password, minLength: 8 }
+        rol: { type: string, enum: [HUESPED, ANFITRION] }
+        acepta_datos: { type: boolean, description: "Autorización de tratamiento de datos (Ley 1581). Debe ser true." }
+    Sesion:
+      type: object
+      properties:
+        access: { type: string, description: Token de acceso JWT (30 minutos). }
+        usuario: { $ref: "#/components/schemas/Usuario" }
+    Error:
+      type: object
+      properties:
+        codigo: { type: string }
+        mensaje: { type: string }
+        campo: { type: string }
