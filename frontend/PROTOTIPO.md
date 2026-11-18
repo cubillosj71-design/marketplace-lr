@@ -1,13 +1,23 @@
 # Prototipo funcional: Usuarios y Alojamientos
 
-Frontend en React 18 + TypeScript + Vite, con datos de ejemplo en memoria (sin backend). Los cambios se guardan en el `localStorage` del navegador.
+Frontend en React 18 + TypeScript + Vite.
+
+- **Módulo Usuarios: conectado a la API real** (SRV-01 Identidad, `backend/API.md`). Registro, inicio de sesión,
+  cierre de sesión, recuperación de contraseña, perfil, cambio de contraseña y desactivación van contra el backend.
+  El token de acceso vive en memoria y el de renovación en una cookie httpOnly (ADR-005, C4 nivel 2): al recargar la
+  página la sesión se recupera sin pedir la contraseña.
+- **Módulo Alojamientos y administración: siguen con datos de ejemplo** guardados en el `localStorage` del navegador,
+  hasta que se conecten a sus servicios. La cuenta de la API se relaciona con estos datos por el correo.
 
 ## Cómo correrlo
 
+Necesita el backend corriendo con los datos de ejemplo (ver `backend/API.md`):
+
 ```bash
+cd backend && python manage.py migrate && python manage.py cargar_demo && python manage.py runserver
 cd frontend
 npm install
-npm run dev        # http://localhost:5173
+npm run dev        # http://localhost:5173 ; Vite reenvía /api/* a http://localhost:8000
 ```
 
 Para generar la versión estática: `npm run build` (queda en `dist/`).

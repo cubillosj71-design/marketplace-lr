@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { cuandoSePierdaLaSesion, identidadApi, leerError, renovarSesion, type UsuarioApi } from "./api";
 import {
   SEED_PUBLICACIONES, SEED_RESERVAS, SEED_RESTRICCIONES, SEED_REVISIONES, SEED_TARIFAS, SEED_USUARIOS,
   faltantesRevision, isoDia, nochesReserva, tarifaVigente,
@@ -44,7 +45,6 @@ const TRANSICIONES: Record<"ANFITRION" | "ADMINISTRADOR", [EstadoPub, EstadoPub]
 };
 
 const LLAVE = "alojamientos-lr-prototipo-v3";
-const VIGENCIA_ENLACE_MS = 20 * 60 * 1000; // el enlace sirve una vez y por máximo 20 minutos
 
 const semilla = (): DB => ({
   usuarios: SEED_USUARIOS.map((u) => ({ ...u })),
@@ -71,19 +71,20 @@ export type Resultado = { ok: true; msg?: string } | { ok: false; error: string;
 interface Store extends DB {
   usuario: Usuario | null;
   hoy: string;
-  // Usuarios
-  iniciarSesion: (correo: string, clave: string) => Resultado;
-  cerrarSesion: () => void;
-  registrar: (d: { nombre: string; correo: string; telefono: string; clave: string; rol: Rol }) => Resultado;
-  solicitarEnlace: (correo: string) => { ok: true; token: string } | { ok: false; error: string };
-  estadoEnlace: (token: string) => "valido" | "vencido" | "usado" | "inexistente";
-  vencerEnlace: (token: string) => void;
-  restablecer: (token: string, clave: string) => Resultado;
-  actualizarPerfil: (d: { nombre: string; telefono: string }) => Resultado;
+  // Usuarios: van contra la API real (SRV-01 Identidad). El resto del prototipo sigue local.
+  /** true mientras se recupera la sesión al cargar la página (cookie de renovación). */
+  cargandoSesion: boolean;
+  iniciarSesion: (correo: string, clave: string) => Promise<Resultado>;
+  cerrarSesion: () => Promise<void>;
+  registrar: (d: { nombre: string; correo: string; telefono: string; clave: string; rol: Rol; acepta: boolean }) => Promise<Resultado>;
+  solicitarEnlace: (correo: string) => Promise<{ ok: true; token: string } | { ok: false; error: string }>;
+  estadoEnlace: (token: string) => Promise<"valido" | "vencido" | "usado" | "inexistente">;
+  restablecer: (token: string, clave: string) => Promise<Resultado>;
+  actualizarPerfil: (d: { nombre: string; telefono: string }) => Promise<Resultado>;
   restriccionVigente: (usuarioId: number) => RestriccionUsuario | undefined;
-  cambiarClave: (actual: string, nueva: string) => Resultado;
+  cambiarClave: (actual: string, nueva: string) => Promise<Resultado>;
   reservasPendientesDe: (u: Usuario) => Reserva[];
-  desactivarCuenta: () => Resultado;
+  desactivarCuenta: () => Promise<Resultado>;
   // Alojamientos
   guardarPublicacion: (p: Publicacion) => Publicacion;
   enviarARevision: (id: number, recienGuardada?: Publicacion) => Resultado;
@@ -104,8 +105,37 @@ interface Store extends DB {
 
 const Ctx = createContext<Store | null>(null);
 
+/**
+ * Copia local de la cuenta que entregó la API. El prototipo guarda publicaciones y
+ * reservas en el navegador y las relaciona por el id local del usuario, así que la
+ * cuenta de la API se busca por correo (o se agrega) y se marca como la sesión.
+ * La contraseña ya no se guarda en el navegador: la verifica el servidor.
+ */
+/** "2026-11-18T05:41:00Z" (UTC, como lo manda la API) -> "2026-11-18T00:41:00" en hora local. */
+const isoLocal = (fecha: string | null) => {
+  if (!fecha) return "";
+  const d = new Date(fecha);
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 19);
+};
+
+function sincronizarCuenta(d: DB, a: UsuarioApi, hoy: string): Usuario {
+  let u = d.usuarios.find((x) => x.correo.toLowerCase() === a.correo.toLowerCase());
+  if (!u) {
+    u = {
+      id: Math.max(0, ...d.usuarios.map((x) => x.id)) + 1, nombre: a.nombre_completo, correo: a.correo,
+      telefono: a.telefono, rol: a.rol, estado: a.estado, clave: "",
+      fechaRegistro: isoLocal(a.fecha_registro).slice(0, 10) || hoy, aceptaDatosEn: isoLocal(a.acepta_datos_en),
+    };
+    d.usuarios.push(u);
+  }
+  Object.assign(u, { nombre: a.nombre_completo, telefono: a.telefono, rol: a.rol, estado: a.estado, clave: "" });
+  return u;
+}
+
 export function StoreProvider({ children }: { children: ReactNode }) {
-  const [db, setDb] = useState<DB>(cargar);
+  // La sesión no se toma del localStorage: se recupera con la cookie al cargar.
+  const [db, setDb] = useState<DB>(() => ({ ...cargar(), sesionId: null }));
+  const [cargandoSesion, setCargandoSesion] = useState(true);
 
   useEffect(() => {
     try { localStorage.setItem(LLAVE, JSON.stringify(db)); } catch { /* sin espacio o bloqueado */ }
@@ -115,6 +145,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const hoy = isoDia(new Date());
 
   const upd = useCallback((f: (d: DB) => DB) => setDb((d) => f(structuredClone(d))), []);
+
+  /** Marca como sesión la cuenta que devolvió la API (login, renovación o perfil). */
+  const abrirSesion = useCallback(
+    (a: UsuarioApi) => upd((d) => { d.sesionId = sincronizarCuenta(d, a, isoDia(new Date())).id; return d; }),
+    [upd],
+  );
+  const olvidarSesion = useCallback(() => upd((d) => ({ ...d, sesionId: null })), [upd]);
+
+  // Al cargar la página: si la cookie de renovación sigue vigente, se recupera la sesión.
+  useEffect(() => {
+    let activo = true;
+    cuandoSePierdaLaSesion(olvidarSesion);
+    renovarSesion()
+      .then((s) => { if (activo && s) abrirSesion(s.usuario); })
+      .finally(() => { if (activo) setCargandoSesion(false); });
+    return () => { activo = false; };
+  }, [abrirSesion, olvidarSesion]);
 
   const reservasConfirmadas = useCallback(
     (pubId: number) => db.reservas.filter((r) => r.publicacionId === pubId && r.estado === "CONFIRMADA"),
@@ -136,13 +183,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [db.publicaciones, db.reservas, hoy],
   );
 
-  const estadoEnlace = useCallback((token: string): "valido" | "vencido" | "usado" | "inexistente" => {
-    const t = db.tokens.find((x) => x.token === token);
-    if (!t) return "inexistente";
-    if (t.usado) return "usado";
-    if (Date.now() - t.creado > VIGENCIA_ENLACE_MS) return "vencido";
-    return "valido";
-  }, [db.tokens]);
+  const estadoEnlace = useCallback(async (token: string) => {
+    try { return (await identidadApi.estadoEnlace(token)).data.estado; } catch { return "inexistente" as const; }
+  }, []);
 
   /** Agrega un evento al registro dentro de una actualización. */
   const anotar = (d: DB, quien: string, accion: string, detalle: string, resultado: Evento["resultado"], ent?: Entidad) => {
@@ -174,96 +217,90 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     usuario,
     hoy,
 
-    iniciarSesion(correo, clave) {
-      const u = db.usuarios.find((x) => x.correo.toLowerCase() === correo.trim().toLowerCase());
-      if (!u || u.clave !== clave) {
-        upd((d) => { anotar(d, correo.trim() || "(sin correo)", "Inicio de sesión", "Correo o contraseña incorrectos", "FALLO", u ? USU(u.id) : { entidad: "Usuario" }); return d; });
-        return { ok: false, error: "Correo o contraseña incorrectos. Revisa los datos e inténtalo de nuevo." };
+    cargandoSesion,
+
+    async iniciarSesion(correo, clave) {
+      try {
+        const sesion = await identidadApi.iniciarSesion(correo.trim(), clave);
+        abrirSesion(sesion.usuario);
+        return { ok: true, msg: sesion.aviso };
+      } catch (e) {
+        return { ok: false, ...leerError(e) };
       }
-      const r = restriccionVigente(u.id);
-      if (u.estado === "RESTRINGIDA" || r) {
-        upd((d) => { anotar(d, u.correo, "Inicio de sesión", "Cuenta restringida", "FALLO", USU(u.id)); return d; });
-        const hasta = r?.fechaFin ? ` hasta el ${new Date(r.fechaFin).toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric" })}` : "";
-        return { ok: false, error: `Tu cuenta está restringida por el administrador${hasta}.${r ? ` Motivo: ${r.motivo}` : ""} No puedes iniciar sesión mientras la restricción esté vigente.` };
-      }
-      const reactivada = u.estado === "DESACTIVADA";
-      upd((d) => {
-        const x = d.usuarios.find((y) => y.id === u.id)!;
-        x.estado = "ACTIVA";
-        d.sesionId = u.id;
-        anotar(d, `${u.correo} (${u.rol})`, "Inicio de sesión", reactivada ? "Cuenta reactivada al ingresar" : "Ingreso correcto", "EXITO", USU(u.id));
-        return d;
-      });
-      return { ok: true, msg: reactivada ? "Tu cuenta se reactivó. ¡Bienvenido de nuevo!" : undefined };
     },
 
-    cerrarSesion() { upd((d) => ({ ...d, sesionId: null })); },
-
-    registrar({ nombre, correo, telefono, clave, rol }) {
-      if (db.usuarios.some((u) => u.correo.toLowerCase() === correo.trim().toLowerCase()))
-        return { ok: false, error: "Este correo ya está registrado.", campo: "correo" };
-      upd((d) => {
-        d.usuarios.push({
-          id: Math.max(...d.usuarios.map((u) => u.id)) + 1,
-          nombre: nombre.trim(), correo: correo.trim(), telefono: telefono.trim(),
-          rol, estado: "ACTIVA", clave, fechaRegistro: hoy, aceptaDatosEn: ahoraIso(),
-        });
-        const nuevo = d.usuarios[d.usuarios.length - 1];
-        anotar(d, `${nuevo.correo} (${rol})`, "Registro de cuenta", "Autorizó el tratamiento de datos (Ley 1581)", "EXITO", USU(nuevo.id));
-        return d;
-      });
-      return { ok: true };
+    async cerrarSesion() {
+      await identidadApi.salir().catch(() => {});
+      olvidarSesion();
     },
 
-    solicitarEnlace(correo) {
-      const u = db.usuarios.find((x) => x.correo.toLowerCase() === correo.trim().toLowerCase());
-      if (!u) return { ok: false, error: "No encontramos una cuenta con ese correo." };
-      const token = Math.random().toString(36).slice(2, 10);
-      upd((d) => { d.tokens.push({ token, correo: u.correo, creado: Date.now(), usado: false }); return d; });
-      return { ok: true, token };
+    async registrar({ nombre, correo, telefono, clave, rol, acepta }) {
+      try {
+        await identidadApi.registrar({ nombre_completo: nombre.trim(), correo: correo.trim(), telefono: telefono.trim(), password: clave, rol, acepta_datos: acepta });
+        return { ok: true };
+      } catch (e) {
+        const r = leerError(e);
+        // Nombres de campo de la API -> nombres del formulario
+        const campos: Record<string, string> = { nombre_completo: "nombre", password: "clave", acepta_datos: "acepta" };
+        return { ok: false, error: r.error, campo: r.campo ? campos[r.campo] ?? r.campo : undefined };
+      }
+    },
+
+    async solicitarEnlace(correo) {
+      try {
+        const { data } = await identidadApi.solicitarRecuperacion(correo.trim());
+        const token = data.enlace?.split("/restablecer/")[1];
+        // Si el correo no existe, la API no lo revela: responde igual, solo que sin enlace.
+        if (!token) return { ok: false, error: "No apareció un enlace para ese correo. Revisa que esté bien escrito." };
+        return { ok: true, token };
+      } catch (e) {
+        return { ok: false, error: leerError(e).error };
+      }
     },
 
     estadoEnlace,
 
-    vencerEnlace(token) {
-      upd((d) => { const t = d.tokens.find((x) => x.token === token); if (t) t.creado -= 21 * 60 * 1000; return d; });
+    async restablecer(token, clave) {
+      try {
+        await identidadApi.restablecer(token, clave);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, ...leerError(e) };
+      }
     },
 
-    restablecer(token, clave) {
-      const est = estadoEnlace(token);
-      if (est !== "valido") return { ok: false, error: est === "usado" ? "Este enlace ya se usó." : "Este enlace venció. Solicita uno nuevo." };
-      upd((d) => {
-        const t = d.tokens.find((x) => x.token === token)!;
-        t.usado = true;
-        d.usuarios.find((u) => u.correo === t.correo)!.clave = clave;
-        return d;
-      });
-      return { ok: true };
+    async actualizarPerfil({ nombre, telefono }) {
+      try {
+        const { data } = await identidadApi.actualizarPerfil({ nombre_completo: nombre.trim(), telefono: telefono.trim() });
+        abrirSesion(data);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, ...leerError(e) };
+      }
     },
 
-    actualizarPerfil({ nombre, telefono }) {
-      if (!usuario) return { ok: false, error: "Sin sesión" };
-      upd((d) => { Object.assign(d.usuarios.find((u) => u.id === usuario.id)!, { nombre, telefono }); return d; });
-      return { ok: true };
-    },
-
-    cambiarClave(actual, nueva) {
-      if (!usuario) return { ok: false, error: "Sin sesión" };
-      if (usuario.clave !== actual) return { ok: false, error: "La contraseña actual no es correcta.", campo: "actual" };
-      upd((d) => { d.usuarios.find((u) => u.id === usuario.id)!.clave = nueva; return d; });
-      return { ok: true };
+    async cambiarClave(actual, nueva) {
+      try {
+        await identidadApi.actualizarPerfil({ password_actual: actual, password_nueva: nueva });
+        return { ok: true };
+      } catch (e) {
+        const r = leerError(e);
+        return { ok: false, error: r.error, campo: r.campo === "password_nueva" ? "nueva" : "actual" };
+      }
     },
 
     reservasPendientesDe,
     restriccionVigente,
 
-    desactivarCuenta() {
-      if (!usuario) return { ok: false, error: "Sin sesión" };
-      if (usuario.rol === "ADMINISTRADOR") return negar("Desactivar una cuenta de administrador");
-      const pend = reservasPendientesDe(usuario);
-      if (pend.length) return { ok: false, error: "Tienes reservas confirmadas pendientes." };
-      upd((d) => { d.usuarios.find((u) => u.id === usuario.id)!.estado = "DESACTIVADA"; d.sesionId = null; anotar(d, quien, "Cuenta desactivada", "Por su titular", "EXITO", USU(usuario.id)); return d; });
-      return { ok: true };
+    async desactivarCuenta() {
+      try {
+        await identidadApi.desactivar();
+        olvidarSesion();
+        return { ok: true };
+      } catch (e) {
+        // CA-04.2: con reservas confirmadas pendientes la API responde 409 con el motivo.
+        return { ok: false, ...leerError(e) };
+      }
     },
 
     guardarPublicacion(p) {
@@ -363,9 +400,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     registrarEvento(accion, detalle, resultado = "FALLO", ent) {
       upd((d) => { anotar(d, quien, accion, detalle, resultado, ent); return d; });
     },
-  }), [db, usuario, hoy, upd, reservasConfirmadas, nochesOcupadas, reservasPendientesDe, estadoEnlace]);
+  }), [db, usuario, hoy, upd, reservasConfirmadas, nochesOcupadas, reservasPendientesDe, estadoEnlace, cargandoSesion, abrirSesion, olvidarSesion]);
 
-  return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
+  // Mientras se recupera la sesión no se pintan las rutas: si no, las protegidas
+  // mandarían a "Ingresar" antes de saber si había una sesión abierta.
+  return (
+    <Ctx.Provider value={store}>
+      {cargandoSesion ? <p className="muted" style={{ textAlign: "center", padding: 48 }}>Cargando…</p> : children}
+    </Ctx.Provider>
+  );
 }
 
 export const useStore = () => {

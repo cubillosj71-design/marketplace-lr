@@ -1,5 +1,5 @@
 import { ArrowLeft, Building2, Check, Circle, Clock, Compass, Copy, Eye, EyeOff, Luggage, ShieldCheck, UserRound } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link, Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import type { Rol } from "../data";
 import { AuthLayout, inicioPorRol } from "../layout";
@@ -34,10 +34,13 @@ export function Login() {
   const [correo, setCorreo] = useState(aviso.correo ?? "");
   const [clave, setClave] = useState("");
   const [error, setError] = useState("");
+  const [enviando, setEnviando] = useState(false);
 
-  const entrar = (c = correo, k = clave) => {
-    const r = iniciarSesion(c, k);
-    if (!r.ok) { setError(r.error); return; }
+  const entrar = async (c = correo, k = clave) => {
+    setEnviando(true);
+    const r = await iniciarSesion(c, k);
+    setEnviando(false);
+    if (!r.ok) { setError(r.error); setClave(""); return; }
     if (r.msg) toast(r.msg);
     // el rol se lee del usuario recién autenticado en el siguiente render
     go("/inicio");
@@ -66,7 +69,7 @@ export function Login() {
           </Link>
           <Link to="/recuperar">¿Olvidaste tu contraseña?</Link>
         </div>
-        <button className="btn btn-primary btn-block" type="submit">Ingresar</button>
+        <button className="btn btn-primary btn-block" type="submit" disabled={enviando}>{enviando ? "Ingresando…" : "Ingresar"}</button>
       </form>
       <p className="muted" style={{ textAlign: "center" }}>¿No tienes cuenta? <Link to="/registro">Regístrate</Link></p>
       <div className="demo-accounts">
@@ -96,7 +99,9 @@ export function Registro() {
   const [err, setErr] = useState<Record<string, string>>({});
   const set = (k: keyof typeof f, v: string | boolean) => setF((x) => ({ ...x, [k]: v }));
 
-  const enviar = (e: FormEvent) => {
+  const [enviando, setEnviando] = useState(false);
+
+  const enviar = async (e: FormEvent) => {
     e.preventDefault();
     const er: Record<string, string> = {};
     if (!f.nombre.trim()) er.nombre = "Escribe tu nombre completo.";
@@ -105,7 +110,9 @@ export function Registro() {
     if (f.clave.length < 8) er.clave = "La contraseña debe tener al menos 8 caracteres.";
     if (!f.acepta) er.acepta = "La autorización es obligatoria: sin ella no se crea la cuenta.";
     if (!Object.keys(er).length) {
-      const r = registrar(f);
+      setEnviando(true);
+      const r = await registrar(f);
+      setEnviando(false);
       if (!r.ok) er[r.campo ?? "general"] = r.error;
       else return go("/ingresar", { state: { aviso: "Tu cuenta quedó creada. Ya puedes iniciar sesión.", correo: f.correo } });
     }
@@ -123,6 +130,7 @@ export function Registro() {
         <h1>Crea tu cuenta</h1>
         <p>Elige cómo usarás la plataforma. Cada cuenta tiene un único rol.</p>
       </div>
+      {err.general && <Alert tipo="error">{err.general}</Alert>}
       <form className="stack" onSubmit={enviar} noValidate>
         <div className="choice-group" role="radiogroup" aria-label="Rol">
           {roles.map((r) => (
@@ -154,7 +162,7 @@ export function Registro() {
           </label>
           {err.acepta && <span className="error-text">{err.acepta}</span>}
         </div>
-        <button className="btn btn-primary btn-block" type="submit">Crear cuenta</button>
+        <button className="btn btn-primary btn-block" type="submit" disabled={enviando}>{enviando ? "Creando la cuenta…" : "Crear cuenta"}</button>
       </form>
       <p className="muted" style={{ textAlign: "center" }}>¿Ya tienes cuenta? <Link to="/ingresar">Inicia sesión</Link></p>
     </AuthLayout>
@@ -180,10 +188,10 @@ export function Recuperar() {
         <p>Escribe el correo de tu cuenta y te damos un enlace para definir una nueva.</p>
       </div>
       {!token ? (
-        <form className="stack" noValidate onSubmit={(e) => {
+        <form className="stack" noValidate onSubmit={async (e) => {
           e.preventDefault();
           if (!correoValido(correo)) return setError("Escribe un correo válido.");
-          const r = solicitarEnlace(correo);
+          const r = await solicitarEnlace(correo);
           if (!r.ok) return setError(r.error);
           setError(""); setToken(r.token);
         }}>
@@ -219,12 +227,19 @@ export function Recuperar() {
 /* ---------------- CU-USU-03 Definir nueva contraseña ---------------- */
 export function Restablecer() {
   const { token = "" } = useParams();
-  const { estadoEnlace, restablecer, vencerEnlace } = useStore();
+  const { estadoEnlace, restablecer } = useStore();
   const go = useNavigate();
   const [clave, setClave] = useState("");
   const [conf, setConf] = useState("");
   const [error, setError] = useState("");
-  const est = estadoEnlace(token);
+  const [est, setEst] = useState<"cargando" | "valido" | "vencido" | "usado" | "inexistente">("cargando");
+
+  // El servidor dice si el enlace sirve apenas se abre (CA-03.2, CA-03.3).
+  useEffect(() => {
+    let activo = true;
+    estadoEnlace(token).then((e) => { if (activo) setEst(e); });
+    return () => { activo = false; };
+  }, [token, estadoEnlace]);
   const largo = clave.length >= 8;
   const iguales = clave.length > 0 && clave === conf;
 
@@ -235,7 +250,9 @@ export function Restablecer() {
   return (
     <AuthLayout>
       <Link to="/ingresar" className="back"><ArrowLeft /> Volver a ingresar</Link>
-      {est !== "valido" ? (
+      {est === "cargando" ? (
+        <p className="muted" style={{ textAlign: "center" }}>Verificando el enlace…</p>
+      ) : est !== "valido" ? (
         <>
           <div className="head"><h1>Este enlace ya no sirve</h1></div>
           <Alert tipo="error">
@@ -251,10 +268,10 @@ export function Restablecer() {
             <p>Úsala la próxima vez que ingreses.</p>
           </div>
           {error && <Alert tipo="error">{error}</Alert>}
-          <form className="stack" noValidate onSubmit={(e) => {
+          <form className="stack" noValidate onSubmit={async (e) => {
             e.preventDefault();
             if (!largo || !iguales) return setError("Revisa los requisitos de la contraseña.");
-            const r = restablecer(token, clave);
+            const r = await restablecer(token, clave);
             if (!r.ok) return setError(r.error);
             go("/ingresar", { state: { aviso: "Contraseña actualizada. Ingresa con la nueva." } });
           }}>
@@ -266,9 +283,6 @@ export function Restablecer() {
             </div>
             <button className="btn btn-primary btn-block" type="submit">Guardar y continuar</button>
           </form>
-          <button className="link-btn subtle" style={{ alignSelf: "center", fontWeight: 500 }} onClick={() => vencerEnlace(token)}>
-            Simular que pasaron 21 minutos (CA-03.2)
-          </button>
         </>
       )}
     </AuthLayout>

@@ -143,7 +143,7 @@ export function AppLayout() {
           <div className="user-chip">
             <span className="avatar" aria-hidden>{iniciales(usuario.nombre)}</span>
             <div className="who"><b>{usuario.nombre}</b><span>{ROL_TXT[usuario.rol]}</span></div>
-            <button className="btn btn-ghost btn-sm" onClick={() => { cerrarSesion(); go("/ingresar"); }}>
+            <button className="btn btn-ghost btn-sm" onClick={async () => { await cerrarSesion(); go("/ingresar"); }}>
               <LogOut /> <span>Salir</span>
             </button>
           </div>

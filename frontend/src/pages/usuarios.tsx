@@ -20,13 +20,14 @@ export function Perfil() {
   const esAdmin = u.rol === "ADMINISTRADOR";
   const cambiado = f.nombre !== u.nombre || f.telefono !== u.telefono;
 
-  const guardar = () => {
+  const guardar = async () => {
     const er: Record<string, string> = {};
     if (!f.nombre.trim()) er.nombre = "El nombre no puede quedar vacío.";
     if (!f.telefono.trim()) er.telefono = "El teléfono no puede quedar vacío.";
     setErr(er);
     if (Object.keys(er).length) return;
-    actualizarPerfil(f);
+    const r = await actualizarPerfil(f);
+    if (!r.ok) return setErr({ [r.campo === "nombre_completo" ? "nombre" : r.campo ?? "telefono"]: r.error });
     setGuardado(true);
     toast("Cambios guardados");
   };
@@ -113,9 +114,11 @@ export function Perfil() {
           <p className="muted">Se cerrará tu sesión. Para reactivarla, solo vuelve a iniciar sesión con tu correo y contraseña.</p>
           <div className="modal-actions">
             <button className="btn btn-secondary" onClick={() => setConfirmar(false)}>Cancelar</button>
-            <button className="btn btn-primary" style={{ background: "var(--err)" }} onClick={() => {
-              const r = desactivarCuenta();
-              if (r.ok) go("/ingresar", { state: { aviso: "Tu cuenta quedó desactivada. Se reactiva cuando vuelvas a iniciar sesión.", correo: u.correo } });
+            <button className="btn btn-primary" style={{ background: "var(--err)" }} onClick={async () => {
+              const r = await desactivarCuenta();
+              if (r.ok) return go("/ingresar", { state: { aviso: "Tu cuenta quedó desactivada. Se reactiva cuando vuelvas a iniciar sesión.", correo: u.correo } });
+              setConfirmar(false);
+              toast(r.error, "err");
             }}>Sí, desactivar</button>
           </div>
         </Modal>
@@ -133,14 +136,14 @@ export function CambiarContrasena() {
   return (
     <Page req="RF-D-USU-01.3 · RF-D-USU-01.4">
       <div className="page-head"><div><h1>Cambiar contraseña</h1><p>Usa al menos 8 caracteres.</p></div></div>
-      <form className="card stack" style={{ maxWidth: 560 }} noValidate onSubmit={(e) => {
+      <form className="card stack" style={{ maxWidth: 560 }} noValidate onSubmit={async (e) => {
         e.preventDefault();
         const er: Record<string, string> = {};
         if (!f.actual) er.actual = "Escribe tu contraseña actual.";
         if (f.nueva.length < 8) er.nueva = "Debe tener al menos 8 caracteres.";
         if (f.nueva !== f.conf) er.conf = "Las contraseñas no coinciden.";
         if (!Object.keys(er).length) {
-          const r = cambiarClave(f.actual, f.nueva);
+          const r = await cambiarClave(f.actual, f.nueva);
           if (!r.ok) er[r.campo ?? "actual"] = r.error;
           else { toast("Contraseña actualizada"); setF({ actual: "", nueva: "", conf: "" }); }
         }
