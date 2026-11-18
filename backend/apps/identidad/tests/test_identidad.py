@@ -82,7 +82,7 @@ def test_salir_invalida_el_refresh(demo, entrar):
 # ---------------- HU-03 Recuperar contraseña
 def test_recuperacion_no_revela_si_el_correo_existe(cliente):
     r = cliente.post("/api/v1/identidad/recuperacion", {"correo": "nadie@correo.com"}, format="json")
-    assert r.status_code == 202 and "enlace_desarrollo" not in r.json()
+    assert r.status_code == 202 and "enlace" not in r.json()
 
 
 def test_restablecer_y_ca_03_3_enlace_usado(demo, cliente, entrar):

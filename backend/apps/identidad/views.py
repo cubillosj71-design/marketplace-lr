@@ -1,12 +1,19 @@
-"""Vistas REST de SRV-01 Identidad (sección 3.4: /api/v1/identidad/...)."""
+"""Vistas REST de SRV-01 Identidad (sección 3.4: /api/v1/identidad/...).
+
+Sesión (ADR-005 y C4 nivel 2): el token de ACCESO va en el cuerpo y la aplicación
+web lo guarda en memoria; el token de RENOVACIÓN va en una cookie httpOnly que
+JavaScript no puede leer. Así, si un script malicioso llega a correr en la página,
+no puede llevarse la sesión de 24 horas. La cookie solo viaja a /api/v1/identidad/
+y solo desde el mismo sitio (SameSite=Strict), lo que también bloquea el CSRF.
+"""
 
 from django.conf import settings
 from rest_framework import serializers, status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework_simplejwt.views import TokenRefreshView
 
+from apps.comun.errores import ErrorNegocio
 from apps.comun.eventos import ip_de
 from apps.comun.permisos import EsAdministrador
 
@@ -28,6 +35,7 @@ class Registro(APIView):
 
     permission_classes = [AllowAny]
     authentication_classes: list = []
+    throttle_scope = "registro"
 
     def post(self, request):
         s = RegistroSerializer(data=request.data)
@@ -40,39 +48,90 @@ class Registro(APIView):
         return Response(services.a_dict(u), status=status.HTTP_201_CREATED)
 
 
+COOKIE = settings.IDENTIDAD_COOKIE_RENOVACION
+
+
+def _responder_con_sesion(sesion: dict) -> Response:
+    """Saca el refresh del cuerpo y lo pone en la cookie httpOnly."""
+    refresh = sesion.pop("refresh")
+    respuesta = Response(sesion)
+    respuesta.set_cookie(
+        COOKIE["nombre"], refresh,
+        max_age=int(settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"].total_seconds()),
+        path=COOKIE["ruta"], secure=COOKIE["segura"], httponly=True, samesite="Strict",
+    )
+    return respuesta
+
+
+def _quitar_cookie(respuesta: Response) -> Response:
+    respuesta.delete_cookie(COOKIE["nombre"], path=COOKIE["ruta"], samesite="Strict")
+    return respuesta
+
+
+def _refresh_de(request) -> str:
+    # La cookie es la vía normal. El cuerpo se acepta para clientes sin navegador (pruebas, Postman).
+    return request.COOKIES.get(COOKIE["nombre"]) or request.data.get("refresh", "")
+
+
 class Token(APIView):
-    """POST /identidad/token (RF-D-USU-01.2): devuelve access, refresh y los datos del usuario."""
+    """POST /identidad/token (RF-D-USU-01.2): devuelve access y usuario; el refresh va en la cookie."""
+
+    permission_classes = [AllowAny]
+    authentication_classes: list = []
+    throttle_scope = "inicio_sesion"
+
+    def post(self, request):
+        return _responder_con_sesion(
+            services.iniciar_sesion(request.data.get("correo"), request.data.get("password"), ip=ip_de(request))
+        )
+
+
+class TokenRenovar(APIView):
+    """POST /identidad/token/renovar: rota el refresh (el anterior queda en la lista negra) y
+    devuelve un access nuevo y el usuario. La aplicación web la llama al cargar la página para
+    recuperar la sesión, porque el access en memoria se pierde al recargar."""
 
     permission_classes = [AllowAny]
     authentication_classes: list = []
 
     def post(self, request):
-        return Response(services.iniciar_sesion(request.data.get("correo"), request.data.get("password"), ip=ip_de(request)))
-
-
-class TokenRenovar(TokenRefreshView):
-    """POST /identidad/token/renovar: rota el refresh y pone el anterior en la lista negra (ADR-005)."""
+        try:
+            sesion = services.renovar_sesion(_refresh_de(request))
+        except ErrorNegocio as error:
+            respuesta = Response({"detalle": error.detalle}, status=error.codigo)
+            return _quitar_cookie(respuesta)
+        return _responder_con_sesion(sesion)
 
 
 class Salir(APIView):
-    """POST /identidad/salir: pone el refresh en la lista negra."""
-
-    def post(self, request):
-        services.cerrar_sesion(request.data.get("refresh", ""))
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
-
-class Recuperacion(APIView):
-    """POST /identidad/recuperacion (RF-D-USU-01.3). La respuesta es igual exista o no el correo."""
+    """POST /identidad/salir: pone el refresh en la lista negra y borra la cookie.
+    No exige un access vigente: cerrar sesión debe funcionar aunque ya haya vencido."""
 
     permission_classes = [AllowAny]
     authentication_classes: list = []
 
     def post(self, request):
+        services.cerrar_sesion(_refresh_de(request), ip=ip_de(request))
+        return _quitar_cookie(Response(status=status.HTTP_204_NO_CONTENT))
+
+
+class Recuperacion(APIView):
+    """POST /identidad/recuperacion (RF-D-USU-01.3, CA-03.1).
+
+    La recuperación es simulada y el MVP no envía correos (AMB-08, AMB-12): el enlace se
+    devuelve para mostrarlo en pantalla, también en producción. Con un correo que no
+    existe la respuesta tiene el mismo estado y el mismo mensaje, solo que sin enlace.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes: list = []
+    throttle_scope = "recuperacion"
+
+    def post(self, request):
         token = services.solicitar_recuperacion(request.data.get("correo", ""), ip=ip_de(request))
-        cuerpo = {"detalle": "Si el correo está registrado, te enviamos un enlace que vence en 20 minutos."}
-        if settings.DEBUG and token:  # solo en desarrollo, para probar sin servidor de correo
-            cuerpo["enlace_desarrollo"] = f"{settings.FRONTEND_URL}/#/restablecer/{token}"
+        cuerpo = {"detalle": "Si el correo está registrado, aquí aparece un enlace que sirve una vez y vence en 20 minutos."}
+        if token:
+            cuerpo["enlace"] = f"{settings.FRONTEND_URL}/#/restablecer/{token}"
         return Response(cuerpo, status=status.HTTP_202_ACCEPTED)
 
 
@@ -81,6 +140,9 @@ class RecuperacionToken(APIView):
 
     permission_classes = [AllowAny]
     authentication_classes: list = []
+    # Límite propio y más amplio: abrir y usar un enlace hace varias peticiones seguidas,
+    # y adivinar un token de 256 bits es imposible aunque no hubiera límite.
+    throttle_scope = "recuperacion_enlace"
 
     def get(self, request, token):
         return Response({"estado": services.estado_enlace(token)})

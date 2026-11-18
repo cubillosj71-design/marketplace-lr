@@ -165,6 +165,15 @@ REST_FRAMEWORK = {
     "EXCEPTION_HANDLER": "apps.comun.errores.manejar_excepcion",
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 50,
+    # Límite de intentos por IP en las rutas sensibles (frena la fuerza bruta de contraseñas).
+    # Solo aplica a las vistas que declaran throttle_scope.
+    "DEFAULT_THROTTLE_CLASSES": ["rest_framework.throttling.ScopedRateThrottle"],
+    "DEFAULT_THROTTLE_RATES": {
+        "inicio_sesion": os.environ.get("LIMITE_INICIO_SESION", "10/min"),
+        "registro": os.environ.get("LIMITE_REGISTRO", "10/min"),
+        "recuperacion": os.environ.get("LIMITE_RECUPERACION", "5/min"),
+        "recuperacion_enlace": os.environ.get("LIMITE_RECUPERACION_ENLACE", "30/min"),
+    },
 }
 
 # Recuperación de contraseña (RNF-P-SEG-03): el enlace apunta a la aplicación web y vence en 20 minutos
@@ -196,6 +205,10 @@ SIMPLE_JWT = {
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
 }
+
+# Cookie httpOnly con el token de renovación (C4 nivel 2). Solo viaja a las rutas de
+# identidad y, fuera de desarrollo, solo por HTTPS.
+IDENTIDAD_COOKIE_RENOVACION = {"nombre": "renovacion", "ruta": "/api/v1/identidad/", "segura": not DEBUG}
 
 # La aplicación web corre en otro dominio (ADR-003, ADR-005)
 CORS_ALLOWED_ORIGINS = os.environ.get("CORS_ALLOWED_ORIGINS", "http://localhost:5173").split(",")

@@ -25,10 +25,17 @@ Cuentas de ejemplo: `admin@inversioneslr.com`, `anfitrion@correo.com`, `huesped@
 
 ## Autenticación (ADR-005)
 
-1. `POST /identidad/token` con `{"correo", "password"}` devuelve `access` (30 min), `refresh` (24 h) y `usuario`.
+1. `POST /identidad/token` con `{"correo", "password"}` devuelve `access` (30 min) y `usuario` en el cuerpo.
+   El `refresh` (24 h) llega en la cookie httpOnly `renovacion` (Path `/api/v1/identidad/`, SameSite=Strict),
+   que JavaScript no puede leer (C4 nivel 2). La aplicación web guarda el `access` solo en memoria.
 2. Cada petición lleva `Authorization: Bearer <access>`.
-3. `POST /identidad/token/renovar` con `{"refresh"}` entrega tokens nuevos y anula el anterior.
-4. El estado de la cuenta se revisa en cada petición: una cuenta desactivada o restringida pierde el acceso de inmediato.
+3. `POST /identidad/token/renovar` lee la cookie, entrega un `access` nuevo y rota la cookie; la anterior queda en la
+   lista negra. Solo renueva si la cuenta sigue ACTIVA. Al cargar la página, el front la llama para recuperar la sesión.
+4. `POST /identidad/salir` pone la cookie en la lista negra y la borra. No exige un `access` vigente.
+5. El estado de la cuenta se revisa en cada petición: una cuenta desactivada o restringida pierde el acceso de inmediato.
+6. Clientes sin navegador (Postman, pruebas) pueden mandar `{"refresh"}` en el cuerpo de `renovar` y `salir`.
+7. Límite de intentos por IP: 10/min en inicio de sesión y registro, 5/min al pedir enlaces de recuperación y
+   30/min al abrirlos o usarlos. Al superarlo, la API responde 429.
 
 Errores de negocio: `{"detalle": "...", "campo": "..."}` con 400, 401, 403, 404, 409 o 410.
 
@@ -75,8 +82,10 @@ con sesión iniciada va en `PATCH /identidad/perfil` con `password_actual` y `pa
   BORRADOR pueden faltar; una restricción CHECK exige que estén completos en cualquier otro estado.
 - **Calendario.** `periodo_calendario` guarda rangos `[fecha_inicio, fecha_fin)` de noches NO_DISPONIBLE, unidos
   y sin traslapes. `POST` con `tipo: DISPONIBLE` vuelve a abrir un rango.
-- **Recuperación de contraseña.** Se guarda solo el hash SHA-256 del enlace. En desarrollo el correo sale por la
-  consola y la respuesta trae `enlace_desarrollo`; en producción se configura SMTP con variables de entorno.
+- **Recuperación de contraseña.** Se guarda solo el hash SHA-256 del enlace. Como la recuperación es simulada y el
+  MVP no envía correos (AMB-08, AMB-12), la respuesta trae `enlace` para mostrarlo en pantalla, también en producción
+  (CA-03.1). Con un correo no registrado la respuesta es igual, pero sin `enlace`. Pedir un enlace nuevo anula los
+  anteriores sin usar.
 - **Reportes (ADR-009).** ReportLab y openpyxl en el servidor, con las mismas funciones del tablero (CA-25.1).
   Cada descarga publica `ReporteDescargado` (CA-25.2).
 - **Alcance de Reservas.** En este incremento existen la tarifa de servicio, la cotización y la reserva (para el

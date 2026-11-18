@@ -1,10 +1,20 @@
 """Utilidades de prueba compartidas."""
 
 import pytest
+from django.core.cache import cache
 from django.core.management import call_command
 from rest_framework.test import APIClient
 
 CLAVE = "Clave1234"
+
+
+@pytest.fixture(autouse=True)
+def limpiar_limites_de_intentos():
+    """Los límites por IP (throttling) se cuentan en la caché: se limpian para que una
+    prueba no gaste los intentos de la siguiente."""
+    cache.clear()
+    yield
+    cache.clear()
 
 
 @pytest.fixture
@@ -27,7 +37,7 @@ def entrar():
         r = c.post("/api/v1/identidad/token", {"correo": correo, "password": clave}, format="json")
         assert r.status_code == 200, r.content
         c.credentials(HTTP_AUTHORIZATION=f"Bearer {r.json()['access']}")
-        c.refresh = r.json()["refresh"]
+        c.refresh = r.cookies["renovacion"].value  # el refresh llega en la cookie httpOnly
         c.usuario = r.json()["usuario"]
         return c
 
