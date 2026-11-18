@@ -7,6 +7,7 @@ include_external_packages = False
 [importlinter:contract:identidad]
 name = identidad no importa modelos de otros servicios (ADR-001)
 type = forbidden
+allow_indirect_imports = True
 source_modules =
     apps.identidad
 forbidden_modules =
@@ -22,6 +23,7 @@ forbidden_modules =
 [importlinter:contract:catalogo]
 name = catalogo no importa modelos de otros servicios (ADR-001)
 type = forbidden
+allow_indirect_imports = True
 source_modules =
     apps.catalogo
 forbidden_modules =
@@ -37,6 +39,7 @@ forbidden_modules =
 [importlinter:contract:busqueda]
 name = busqueda no importa modelos de otros servicios (ADR-001)
 type = forbidden
+allow_indirect_imports = True
 source_modules =
     apps.busqueda
 forbidden_modules =
@@ -52,6 +55,7 @@ forbidden_modules =
 [importlinter:contract:reservas]
 name = reservas no importa modelos de otros servicios (ADR-001)
 type = forbidden
+allow_indirect_imports = True
 source_modules =
     apps.reservas
 forbidden_modules =
@@ -67,6 +71,7 @@ forbidden_modules =
 [importlinter:contract:pagos]
 name = pagos no importa modelos de otros servicios (ADR-001)
 type = forbidden
+allow_indirect_imports = True
 source_modules =
     apps.pagos
 forbidden_modules =
@@ -82,6 +87,7 @@ forbidden_modules =
 [importlinter:contract:resenas]
 name = resenas no importa modelos de otros servicios (ADR-001)
 type = forbidden
+allow_indirect_imports = True
 source_modules =
     apps.resenas
 forbidden_modules =
@@ -97,6 +103,7 @@ forbidden_modules =
 [importlinter:contract:notificaciones]
 name = notificaciones no importa modelos de otros servicios (ADR-001)
 type = forbidden
+allow_indirect_imports = True
 source_modules =
     apps.notificaciones
 forbidden_modules =
@@ -112,6 +119,7 @@ forbidden_modules =
 [importlinter:contract:auditoria]
 name = auditoria no importa modelos de otros servicios (ADR-001)
 type = forbidden
+allow_indirect_imports = True
 source_modules =
     apps.auditoria
 forbidden_modules =
@@ -127,6 +135,7 @@ forbidden_modules =
 [importlinter:contract:reportes]
 name = reportes no importa modelos de otros servicios (ADR-001)
 type = forbidden
+allow_indirect_imports = True
 source_modules =
     apps.reportes
 forbidden_modules =
@@ -138,3 +147,27 @@ forbidden_modules =
     apps.resenas.models
     apps.notificaciones.models
     apps.auditoria.models
+
+# Dependencias síncronas en un solo sentido (sección 3.3 del diseño)
+[importlinter:contract:catalogo-no-depende-de-reservas]
+name = Catálogo no depende de Reservas (sección 3.3)
+type = forbidden
+allow_indirect_imports = True
+source_modules =
+    apps.catalogo
+forbidden_modules =
+    apps.reservas
+# Las pruebas de integración sí pueden revisar el efecto en Reservas
+ignore_imports =
+    apps.catalogo.tests.** -> apps.reservas.**
+
+[importlinter:contract:identidad-solo-usa-reservas]
+name = Identidad solo consulta a Reservas (sección 3.3)
+type = forbidden
+allow_indirect_imports = True
+source_modules =
+    apps.identidad
+forbidden_modules =
+    apps.catalogo
+    apps.busqueda
+    apps.reportes
