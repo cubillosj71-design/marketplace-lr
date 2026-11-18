@@ -12,6 +12,7 @@ urlpatterns = [
     path("salir", views.Salir.as_view(), name="salir"),
     path("recuperacion", views.Recuperacion.as_view(), name="recuperacion"),
     path("recuperacion/<str:token>", views.RecuperacionToken.as_view(), name="recuperacion-token"),
+    path("permisos", views.Permisos.as_view(), name="permisos"),
     path("perfil", views.Perfil.as_view(), name="perfil"),
     path("perfil/desactivar", views.Desactivar.as_view(), name="desactivar"),
 ]

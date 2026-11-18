@@ -3,7 +3,7 @@
 from rest_framework import serializers
 from rest_framework.generics import ListAPIView
 
-from apps.comun.permisos import EsAdministrador
+from apps.comun.permisos import RequierePermiso
 
 from . import services
 
@@ -37,7 +37,7 @@ class AuditoriaAdmin(ListAPIView):
 
     Devuelve la página de eventos y, en "tipos", los tipos de acción disponibles para el filtro."""
 
-    permission_classes = [EsAdministrador]
+    permission_classes = [RequierePermiso("auditoria.consultar")]
     serializer_class = EventoSerializer
 
     def get_queryset(self):

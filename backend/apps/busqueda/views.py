@@ -1,9 +1,10 @@
 """Vistas REST de SRV-03 Búsqueda. Públicas: las usan el Visitante y el Huésped (HU-10, HU-11)."""
 
 from rest_framework import serializers
-from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
+from apps.comun.permisos import RequierePermiso
 
 from . import services
 
@@ -33,8 +34,7 @@ class FiltrosBusqueda(serializers.Serializer):
 class Publicaciones(APIView):
     """GET /busqueda/publicaciones?ciudad&llegada&salida&huespedes&tipo&precio_min&precio_max&servicios."""
 
-    permission_classes = [AllowAny]
-    authentication_classes: list = []
+    permission_classes = [RequierePermiso("busqueda.ver")]
 
     def get(self, request):
         datos = {k: v for k, v in request.query_params.items() if v != ""}
@@ -53,8 +53,7 @@ class RangoDetalle(serializers.Serializer):
 class PublicacionDetalle(APIView):
     """GET /busqueda/publicaciones/{id}?desde&hasta."""
 
-    permission_classes = [AllowAny]
-    authentication_classes: list = []
+    permission_classes = [RequierePermiso("busqueda.ver")]
 
     def get(self, request, pk):
         f = RangoDetalle(data=request.query_params)

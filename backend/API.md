@@ -73,18 +73,20 @@ Registro, sesión (`usuario`) y perfil devuelven:
 | Identidad | `POST /identidad/registro` | Visitante | RF-D-USU-01.1 |
 | Identidad | `POST /identidad/token` · `POST /identidad/token/renovar` · `POST /identidad/salir` | Usuario | RF-D-USU-01.2 |
 | Identidad | `POST /identidad/recuperacion` · `GET y POST /identidad/recuperacion/{token}` | Visitante | RF-D-USU-01.3 |
-| Identidad | `GET y PATCH /identidad/perfil` · `POST /identidad/perfil/desactivar` | Con sesión | RF-D-USU-01.4 |
+| Identidad | `GET y PATCH /identidad/perfil` | Huésped, Anfitrión, Administrador | RF-D-USU-01.4 |
+| Identidad | `POST /identidad/perfil/desactivar` | Huésped, Anfitrión | RF-D-USU-01.4 |
+| Identidad | `GET /identidad/permisos` | Todos (sin sesión, los del Visitante) | RF-D-USU-02.1 |
 | Identidad | `POST y DELETE /admin/usuarios/{id}/restriccion` | Administrador | RF-D-ADM-02.1 |
 | Catálogo | `POST /catalogo/publicaciones` · `GET /catalogo/mis-publicaciones` | Anfitrión | RF-D-ALO-01.1, 02.1 |
 | Catálogo | `GET y PATCH /catalogo/publicaciones/{id}` · `POST .../pausar` · `POST .../reactivar` | Anfitrión dueño, Administrador | RF-D-ALO-02.1, ADM-01.1 |
 | Catálogo | `POST /catalogo/publicaciones/{id}/enviar-revision` | Anfitrión | RF-D-ALO-01.2 |
 | Reservas | `GET y POST /catalogo/publicaciones/{id}/calendario` (la ruta se conserva; la atiende Reservas) | Anfitrión dueño | RF-D-ALO-02.2 |
-| Catálogo | `GET /catalogo/ciudades` · `/tipos-alojamiento` · `/servicios` | Todos | Catálogos |
+| Catálogo | `GET /catalogo/ciudades` · `/tipos-alojamiento` · `/servicios` | Todos | RF-D-RES-01.1, ALO-01.1, ADM-05.2 |
 | Catálogo | `GET /admin/publicaciones?estado=` | Administrador | Apoya RF-D-ADM-01.1 |
 | Catálogo | `POST /admin/publicaciones/{id}/revision` (`APROBAR` o `DEVOLVER`) | Administrador | RF-D-ADM-01.1 |
 | Catálogo | `POST y DELETE /admin/publicaciones/{id}/bloqueo` | Administrador | RF-D-ADM-01.2 |
-| Búsqueda | `GET /busqueda/publicaciones?ciudad&llegada&salida&huespedes&tipo&precio_min&precio_max&servicios` | Todos (pública) | RF-D-RES-01.1 |
-| Búsqueda | `GET /busqueda/publicaciones/{id}?desde&hasta` | Todos (pública) | RF-D-RES-01.2 |
+| Búsqueda | `GET /busqueda/publicaciones?ciudad&llegada&salida&huespedes&tipo&precio_min&precio_max&servicios` | Visitante, Huésped | RF-D-RES-01.1 |
+| Búsqueda | `GET /busqueda/publicaciones/{id}?desde&hasta` | Visitante, Huésped | RF-D-RES-01.2 |
 | Reservas | `POST /reservas/cotizaciones` · `GET /reservas/cotizaciones/{id}` | Huésped | RF-D-RES-02.1 |
 | Reservas | `POST /reservas` | Huésped | RF-D-RES-02.2 |
 | Reservas | `GET /reservas/mias` | Huésped | RF-D-RES-02.3, HU-14 |
@@ -93,7 +95,7 @@ Registro, sesión (`usuario`) y perfil devuelven:
 | Reservas | `GET /reservas/{id}/cancelar` (simula la devolución) · `POST /reservas/{id}/cancelar` | Huésped dueño | RF-D-RES-03.1 |
 | Reservas | `GET /admin/reservas?estado=EN_REVISION` · `POST /admin/reservas/{id}/resolver` | Administrador | RF-D-ADM-01.2 |
 | Reservas | `GET y PUT /admin/tarifa-servicio` | Administrador | RF-D-ADM-03.1 |
-| Notificaciones | `GET /notificaciones` · `POST /notificaciones/{id}/leida` · `POST /notificaciones/leidas` | Con sesión | RF-D-RES-04.1 |
+| Notificaciones | `GET /notificaciones` · `POST /notificaciones/{id}/leida` · `POST /notificaciones/leidas` | Huésped, Anfitrión, Administrador | RF-D-RES-04.1 |
 | Interno | `POST /interno/tareas/diarias` (encabezado `X-Token-Tareas`) | Tarea programada | RF-D-RES-02.3, CA-20.5 |
 | Identidad | `GET /admin/usuarios?rol&q` | Administrador | RF-D-ADM-02.1, HU-21 |
 | Auditoría | `GET /admin/auditoria?usuario&tipo&accion&desde&hasta` (opcional `exitoso`) | Administrador | RF-D-ADM-04.1, CA-23.1, CA-23.3 |
@@ -108,6 +110,50 @@ en curso. Ver la sección "Tablero y reportes".
 Fuera de la tabla 3.4, el backend agrega tres rutas que el frontend necesita: `GET /catalogo/publicaciones/{id}`,
 `GET /admin/publicaciones` y `GET /identidad/recuperacion/{token}` (estado del enlace). El cambio de contraseña
 con sesión iniciada va en `PATCH /identidad/perfil` con `password_actual` y `password_nueva`.
+
+## Permisos por rol (RF-D-USU-02.1)
+
+Cada cuenta tiene un único rol (`usuario.rol`) y quien no inició sesión es **Visitante**. La matriz vive en
+`apps/comun/rbac.py` (`PERMISOS`: rol -> permisos `modulo.accion`), sin tablas: el esquema de la base no cambia. Cada
+vista declara `permission_classes = [RequierePermiso("modulo.accion")]` (`apps/comun/permisos.py`); con varios
+permisos basta tener uno.
+
+- **Sin sesión** en una ruta cuyo permiso no tiene el Visitante: **401** (CA-05.1).
+- **Con sesión sin el permiso: 403**, y queda en la auditoría `AccesoDenegado` con `exitoso=false` y `detalle` =
+  `ruta`, `metodo`, `permiso` que faltó y `rol` (CA-05.2).
+- El permiso dice **qué** puede hacer el rol. **Sobre qué** recurso (la regla de dueño, CA-05.3) lo revisa el service:
+  un anfitrión con `publicaciones.gestionar_propias` recibe 403 sobre una publicación ajena.
+- `GET /identidad/permisos` devuelve `{"rol", "permisos"}` de quien llama; sin sesión, los del Visitante.
+- Rutas sin `RequierePermiso` (lista blanca, verificada por `apps/comun/tests/test_rbac.py`): `salud`, `token`,
+  `token/renovar`, `salir`, `recuperacion`, `recuperacion/{token}`, `permisos` y `interno/tareas/diarias` (su propio
+  token). El sitio `/admin/` de Django queda fuera de la API.
+
+| Permiso | Roles | Rutas | RF |
+|---|---|---|---|
+| `busqueda.ver` | Visitante, Huésped | `GET /busqueda/publicaciones` · `GET /busqueda/publicaciones/{id}` | RF-D-RES-01.1, 01.2 |
+| `cuenta.registrar` | Visitante | `POST /identidad/registro` | RF-D-USU-01.1 |
+| `catalogo.ver` | Visitante, Huésped, Anfitrión, Administrador | `GET /catalogo/ciudades` · `/tipos-alojamiento` · `/servicios` | RF-D-RES-01.1, ALO-01.1, ADM-05.2 |
+| `reservas.cotizar` | Huésped | `POST /reservas/cotizaciones` · `GET /reservas/cotizaciones/{id}` | RF-D-RES-02.1 |
+| `reservas.crear` | Huésped | `POST /reservas` | RF-D-RES-02.2 |
+| `reservas.ver_propias` | Huésped | `GET /reservas/mias` · `GET /reservas/{id}` | RF-D-RES-02.3, HU-14 |
+| `reservas.cancelar_propia` | Huésped | `GET y POST /reservas/{id}/cancelar` | RF-D-RES-03.1 |
+| `perfil.gestionar` | Huésped, Anfitrión, Administrador | `GET y PATCH /identidad/perfil` | RF-D-USU-01.4 |
+| `cuenta.desactivar` | Huésped, Anfitrión | `POST /identidad/perfil/desactivar` | RF-D-USU-01.4 |
+| `notificaciones.ver` | Huésped, Anfitrión, Administrador | `GET /notificaciones` · `POST /notificaciones/{id}/leida` · `POST /notificaciones/leidas` | RF-D-RES-04.1 |
+| `publicaciones.gestionar_propias` | Anfitrión | `POST /catalogo/publicaciones` · `GET /catalogo/mis-publicaciones` · `GET y PATCH /catalogo/publicaciones/{id}` · `POST .../pausar` · `POST .../reactivar` · `POST .../enviar-revision` | RF-D-ALO-01.1, 01.2, 02.1 |
+| `calendario.gestionar` | Anfitrión | `GET y POST /catalogo/publicaciones/{id}/calendario` | RF-D-ALO-02.2 |
+| `reservas.ver_de_mis_alojamientos` | Anfitrión | `GET /reservas/de-mis-alojamientos` · `GET /reservas/{id}` | RF-D-RES-02.3, HU-26 |
+| `publicaciones.moderar` | Administrador | `GET /admin/publicaciones` · `POST /admin/publicaciones/{id}/revision` · `POST y DELETE /admin/publicaciones/{id}/bloqueo` · `GET y PATCH /catalogo/publicaciones/{id}` · `POST .../pausar` · `POST .../reactivar` | RF-D-ADM-01.1, 01.2, ALO-02.1 |
+| `reservas.resolver` | Administrador | `GET /admin/reservas` · `POST /admin/reservas/{id}/resolver` · `GET /reservas/{id}` | RF-D-ADM-01.2 |
+| `usuarios.ver` | Administrador | `GET /admin/usuarios` | RF-D-ADM-02.1, HU-21 |
+| `usuarios.restringir` | Administrador | `POST y DELETE /admin/usuarios/{id}/restriccion` | RF-D-ADM-02.1 |
+| `tarifa.configurar` | Administrador | `GET y PUT /admin/tarifa-servicio` | RF-D-ADM-03.1 |
+| `auditoria.consultar` | Administrador | `GET /admin/auditoria` | RF-D-ADM-04.1 |
+| `tablero.ver` | Administrador | `GET /admin/tablero` | RF-D-ADM-05.1 |
+| `reportes.descargar` | Administrador | `GET /admin/reportes/{tipo}` | RF-D-ADM-05.2 |
+
+Las rutas que aparecen con dos o tres permisos aceptan cualquiera de ellos: `GET /reservas/{id}` (huésped dueño,
+anfitrión de la publicación o administrador) y las de una publicación (anfitrión dueño o administrador).
 
 ## Decisiones de implementación
 

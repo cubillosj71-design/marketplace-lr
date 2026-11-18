@@ -23,8 +23,9 @@ export default function App() {
       <Route path="/recuperar" element={usuario ? <Navigate to="/inicio" replace /> : <Recuperar />} />
       <Route path="/restablecer/:token" element={usuario ? <Navigate to="/inicio" replace /> : <Restablecer />} />
       <Route path="/inicio" element={<Inicio />} />
-      <Route path="/explorar-publico" element={<ExplorarPublico />} />
-      <Route path="/explorar-publico/:id" element={<ExplorarPublicoDetalle />} />
+      {/* Búsqueda pública: solo sin sesión. Con sesión, cada rol entra a su inicio (RF-D-USU-02.1). */}
+      <Route path="/explorar-publico" element={usuario ? <Navigate to="/inicio" replace /> : <ExplorarPublico />} />
+      <Route path="/explorar-publico/:id" element={usuario ? <Navigate to="/inicio" replace /> : <ExplorarPublicoDetalle />} />
 
       {/* Con sesión */}
       <Route element={<AppLayout />}>
