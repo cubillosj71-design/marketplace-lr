@@ -40,7 +40,6 @@ api.interceptors.request.use((config) => {
 
 // Rutas que no se reintentan: las de sesión, y las públicas que se piden también sin sesión.
 const RUTAS_DE_SESION = ["/identidad/token", "/identidad/salir", "/identidad/permisos", "/identidad/roles"];
-let renovacionEnCurso: Promise<string | null> | null = null;
 
 api.interceptors.response.use(undefined, async (error: AxiosError) => {
   const original = error.config as (InternalAxiosRequestConfig & { _reintentada?: boolean }) | undefined;
@@ -48,11 +47,7 @@ api.interceptors.response.use(undefined, async (error: AxiosError) => {
   if (error.response?.status !== 401 || !original || original._reintentada || esRutaDeSesion) throw error;
 
   original._reintentada = true;
-  // Si varias peticiones fallan a la vez, todas esperan la misma renovación.
-  renovacionEnCurso ??= renovarSesion()
-    .then((s) => s?.access ?? null)
-    .finally(() => { renovacionEnCurso = null; });
-  const nuevo = await renovacionEnCurso;
+  const nuevo = (await renovarSesion())?.access ?? null;
   if (!nuevo) { alPerderSesion(); throw error; }
   original.headers.Authorization = `Bearer ${nuevo}`;
   return api(original);
@@ -79,15 +74,29 @@ export interface SesionApi {
   aviso?: string;
 }
 
-export async function renovarSesion(): Promise<SesionApi | null> {
-  try {
-    const { data } = await api.post<SesionApi>("/identidad/token/renovar");
-    guardarTokenAcceso(data.access);
-    return data;
-  } catch {
-    guardarTokenAcceso(null);
-    return null;
-  }
+let renovacionEnCurso: Promise<SesionApi | null> | null = null;
+
+/**
+ * Renueva la sesión con la cookie `renovacion`. Las llamadas simultáneas comparten una sola petición.
+ *
+ * El backend rota la cookie y pone la anterior en la lista negra (ADR-005), así que renovar no es
+ * idempotente: si dos peticiones salen a la vez con la misma cookie, la primera gana y la segunda
+ * recibe 401 y cierra la sesión. Pasa al recargar la página (React.StrictMode ejecuta dos veces el
+ * efecto que recupera la sesión) y cuando varias peticiones vencen juntas.
+ */
+export function renovarSesion(): Promise<SesionApi | null> {
+  renovacionEnCurso ??= api
+    .post<SesionApi>("/identidad/token/renovar")
+    .then(({ data }) => {
+      guardarTokenAcceso(data.access);
+      return data;
+    })
+    .catch(() => {
+      guardarTokenAcceso(null);
+      return null;
+    })
+    .finally(() => { renovacionEnCurso = null; });
+  return renovacionEnCurso;
 }
 
 export const identidadApi = {
