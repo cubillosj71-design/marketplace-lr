@@ -200,7 +200,10 @@ class RecuperacionVista(VistaPublica):
 class RecuperacionTokenVista(VistaPublica):
     """GET: ¿el enlace todavía sirve? (para avisar apenas se abre, CA-03.2). POST: definir la nueva contraseña."""
 
-    throttle_scope = "recuperacion"
+    # Límite propio y más amplio que el de pedir enlaces: abrir y usar un enlace
+    # hace varias peticiones seguidas, y adivinar un token de 256 bits es
+    # imposible aunque no hubiera límite.
+    throttle_scope = "recuperacion_enlace"
 
     def get(self, request, token: str):
         try:

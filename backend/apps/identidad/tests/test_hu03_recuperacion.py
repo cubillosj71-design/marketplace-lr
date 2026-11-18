@@ -125,3 +125,13 @@ def test_cambiar_la_contrasena_cierra_las_sesiones_abiertas(cliente, crear_usuar
     cliente.post(f"{SOLICITAR}/{token}", {"password": NUEVA}, format="json")
 
     assert cliente.post("/api/v1/identidad/token/renovar").status_code == 401
+
+
+@pytest.mark.django_db
+def test_abrir_y_usar_el_enlace_no_choca_con_el_limite_de_solicitudes(cliente, crear_usuario):
+    """Regresión: el límite de 5/min de pedir enlaces no debe contar las visitas al enlace."""
+    crear_usuario()
+    token = solicitar(cliente)
+    for _ in range(6):
+        assert cliente.get(f"{SOLICITAR}/{token}").status_code == 200
+    assert cliente.post(f"{SOLICITAR}/{token}", {"password": NUEVA}, format="json").status_code == 200

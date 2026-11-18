@@ -163,6 +163,7 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "inicio_sesion": os.environ.get("LIMITE_INICIO_SESION", "10/min"),
         "recuperacion": os.environ.get("LIMITE_RECUPERACION", "5/min"),
+        "recuperacion_enlace": os.environ.get("LIMITE_RECUPERACION_ENLACE", "30/min"),
         "registro": os.environ.get("LIMITE_REGISTRO", "10/min"),
     },
 }
