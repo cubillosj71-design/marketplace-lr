@@ -7,3 +7,11 @@ class NotificacionesConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "apps.notificaciones"
     verbose_name = "SRV-07 Notificaciones"
+
+    def ready(self):
+        from apps.comun.eventos import evento_dominio
+
+        from . import services
+
+        # C4 nivel 3: "Entrega las notificaciones a [señal, después de confirmar]"
+        evento_dominio.connect(services.al_evento, dispatch_uid="notificaciones_al_evento")

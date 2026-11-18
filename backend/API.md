@@ -87,7 +87,14 @@ Registro, sesión (`usuario`) y perfil devuelven:
 | Búsqueda | `GET /busqueda/publicaciones/{id}?desde&hasta` | Todos (pública) | RF-D-RES-01.2 |
 | Reservas | `POST /reservas/cotizaciones` · `GET /reservas/cotizaciones/{id}` | Huésped | RF-D-RES-02.1 |
 | Reservas | `POST /reservas` | Huésped | RF-D-RES-02.2 |
+| Reservas | `GET /reservas/mias` | Huésped | RF-D-RES-02.3, HU-14 |
+| Reservas | `GET /reservas/de-mis-alojamientos` | Anfitrión | HU-26 |
+| Reservas | `GET /reservas/{id}` | Huésped dueño, anfitrión de la publicación, Administrador | HU-14, HU-26 |
+| Reservas | `GET /reservas/{id}/cancelar` (simula la devolución) · `POST /reservas/{id}/cancelar` | Huésped dueño | RF-D-RES-03.1 |
+| Reservas | `GET /admin/reservas?estado=EN_REVISION` · `POST /admin/reservas/{id}/resolver` | Administrador | RF-D-ADM-01.2 |
 | Reservas | `GET y PUT /admin/tarifa-servicio` | Administrador | RF-D-ADM-03.1 |
+| Notificaciones | `GET /notificaciones` · `POST /notificaciones/{id}/leida` · `POST /notificaciones/leidas` | Con sesión | RF-D-RES-04.1 |
+| Interno | `POST /interno/tareas/diarias` (encabezado `X-Token-Tareas`) | Tarea programada | RF-D-RES-02.3, CA-20.5 |
 | Auditoría | `GET /admin/auditoria?usuario&accion&desde&hasta` (opcional `exitoso`) | Administrador | RF-D-ADM-04.1, CA-23.1 |
 | Reportes | `GET /admin/tablero?desde&hasta` | Administrador | RF-D-ADM-05.1 |
 | Reportes | `GET /admin/reportes/{tipo}?formato=pdf\|xlsx&desde&hasta` | Administrador | RF-D-ADM-05.2 |
@@ -103,14 +110,17 @@ con sesión iniciada va en `PATCH /identidad/perfil` con `password_actual` y `pa
 ## Decisiones de implementación
 
 - **Fronteras entre servicios (ADR-001).** Cada servicio expone `services.py`; nadie importa los modelos de otro.
-  `lint-imports` verifica 14 reglas, entre ellas que Catálogo no depende de Reservas, Identidad solo consulta a
+  `lint-imports` verifica 15 reglas, entre ellas que Catálogo no depende de Reservas, Identidad solo consulta a
   Reservas (sección 3.3), Auditoría no importa ninguna otra app salvo `apps.comun` (C4 nivel 3, vista b), Búsqueda
-  solo lee vistas y `services` (MOD-03) y Pagos no depende de Reservas.
-- **Eventos de dominio (ADR-007).** `apps/comun/eventos.publicar()` se usa solo para los eventos de dominio del
-  diagrama: `PublicacionAprobada`, `PublicacionDevuelta`, `PublicacionBloqueada`, `PublicacionDesbloqueada`,
-  `PublicacionPausada` y `PublicacionReactivada` (más adelante `ReservaConfirmada`, `ReservaCancelada`,
-  `ReservaEnRevision` y `ReservaResuelta`). Salen con `transaction.on_commit` y los reciben Reservas y Notificaciones;
-  Reservas escucha `PublicacionBloqueada` y pasa las reservas futuras a EN_REVISION. Publicar otro nombre lanza error.
+  solo lee vistas y `services` (MOD-03), Pagos no depende de Reservas y Notificaciones no importa ninguna otra app
+  de negocio (MOD-07: todo le llega en los eventos).
+- **Eventos de dominio (ADR-007, C4 nivel 3).** `apps/comun/eventos.publicar()` se usa solo para los eventos de
+  dominio del diagrama: `PublicacionAprobada`, `PublicacionDevuelta`, `PublicacionBloqueada`,
+  `PublicacionDesbloqueada`, `PublicacionPausada`, `PublicacionReactivada`, `ReservaConfirmada`, `ReservaCancelada`,
+  `ReservaEnRevision` y `ReservaResuelta`. Publicar otro nombre lanza error. Cada evento sale por dos señales:
+  - `evento_dominio_en_transaccion`: síncrona, en la **misma transacción**. Reservas escucha `PublicacionBloqueada`
+    y pasa las reservas futuras CONFIRMADAS a EN_REVISION (CA-20.1). Si falla, el bloqueo también se revierte.
+  - `evento_dominio`: **después de confirmar** (`on_commit` y `send_robust`). Notificaciones crea los avisos.
 - **Cómo se audita (MOD-08, C4 nivel 3 vista b).** Auditoría no escucha eventos. Cada módulo llama a
   `auditoria.services.registrar(actor_id, accion, *, entidad=None, entidad_id=None, exitoso=True, detalle=None, ip=None)`
   dentro de la misma transacción del cambio: si el cambio se revierte, el evento también. Los inicios de sesión
@@ -121,8 +131,8 @@ con sesión iniciada va en `PATCH /identidad/perfil` con `password_actual` y `pa
   La API la devuelve con esos mismos nombres.
 - **Auditoría de solo inserción (RNF-E-CON-01, CA-23.2).** Un trigger por fila rechaza UPDATE y DELETE, y otro a
   nivel de sentencia (`BEFORE TRUNCATE ... FOR EACH STATEMENT`) rechaza TRUNCATE.
-- **Tablas protegidas y `flush`.** `evento_auditoria`, `reserva` y `pago` rechazan TRUNCATE. Django vacía la base con
-  TRUNCATE en `flush`, así que `apps/comun/bd.vaciado_permitido()` apaga esos tres triggers solo mientras corre:
+- **Tablas protegidas y `flush`.** `evento_auditoria`, `reserva`, `pago` y `cancelacion` rechazan TRUNCATE. Django
+  vacía la base con TRUNCATE en `flush`, así que `apps/comun/bd.vaciado_permitido()` apaga esos triggers solo mientras corre:
   lo usan `cargar_demo --reiniciar` (exige `DJANGO_DEBUG=1`) y la limpieza de las pruebas con `transaction=True`
   (`conftest.py`). Ningún flujo de la aplicación los apaga.
 - **Doble reserva (sección 10.1).** Restricción `EXCLUDE USING gist` en `reserva` con la extensión btree_gist.
@@ -141,8 +151,8 @@ con sesión iniciada va en `PATCH /identidad/perfil` con `password_actual` y `pa
   anteriores sin usar.
 - **Reportes (ADR-009).** ReportLab y openpyxl en el servidor, con las mismas funciones del tablero (CA-25.1).
   Cada descarga queda en la auditoría como `ReporteDescargado` (CA-25.2).
-- **Alcance de Reservas.** Existen calendario, tarifa de servicio, cotización y reserva con pago. La cancelación con
-  devolución (`ServicioPagos.devolver`) llega en el paso siguiente.
+- **Reloj inyectable.** Las reglas que dependen del día (cancelación, COMPLETADA, EN_REVISION vencidas, límite de
+  12 meses) leen la fecha en `apps/comun/reloj.py` (hora de Colombia). Las pruebas la fijan con `reloj.fijar()`.
 - **Imágenes.** Se guardan como rutas o URL (`imagen_publicacion.ruta`). La subida de archivos queda para el despliegue.
 
 
@@ -213,6 +223,81 @@ EN_REVISION→CONFIRMADA y EN_REVISION→CANCELADA.
 `CompositePrimaryKey`). `tarifa_servicio.administrador_id` es NOT NULL: si al migrar no hay administrador, la tarifa
 inicial del 10 % la crea `cargar_demo`.
 
+## Consultar, cancelar y revisar reservas (MOD-04)
+
+**Consultas.** `GET /reservas/mias` (Huésped, solo las suyas, CA-14.3), `GET /reservas/de-mis-alojamientos`
+(Anfitrión, solo sus publicaciones e incluidas las CANCELADAS, CA-26.1, CA-26.2) y `GET /reservas/{id}` (huésped
+dueño, anfitrión de la publicación o Administrador; los demás reciben 403 y queda registrado). Cada reserva trae
+`estado`, `alojamiento`, fechas, `noches`, `num_huespedes`, `total`, `cancelable` y, si está cancelada,
+`cancelacion` con `fecha`, `motivo`, `porcentaje_devolucion` y `valor_devolucion`.
+
+**COMPLETADA (RF-D-RES-02.3).** `reservas.services.completar_vencidas()` pasa a COMPLETADA las CONFIRMADAS cuya
+fecha de salida ya pasó (`Reserva.completar()`). La corre la tarea diaria y también cada consulta, así la respuesta
+nunca muestra CONFIRMADA una reserva vencida (CA-14.2).
+
+**Cancelar (RF-D-RES-03.1).** `POST /reservas/{id}/cancelar` con `{"motivo": "..."}`, solo el huésped dueño.
+`GET` con la misma ruta devuelve cuánto se devolvería hoy, para mostrarlo antes de confirmar.
+- Solo CONFIRMADA y antes del día de llegada: desde ese día responde 409 y la reserva sigue CONFIRMADA (CA-15.5).
+- `dias_anticipacion` = días calendario entre hoy (hora de Colombia) y la llegada. El porcentaje sale de
+  `PoliticaCancelacion.porcentaje_devolucion(dias)` de la **política guardada en la reserva** (`politica_id`).
+  Moderada: 7 o más días 100 %, de 2 a 6 días 50 %, menos de 2 días 0 % (CA-15.1 a CA-15.4).
+- En una sola transacción: reserva CANCELADA, fila en `cancelacion`, pago `DEVOLUCION` simulado (si el valor es
+  mayor que 0), auditoría `ReservaCancelada` (quién, cuándo, motivo y valor, CA-15.3) y evento `ReservaCancelada`.
+  Las noches quedan libres.
+
+Tabla `cancelacion`: `id`, `reserva_id` único, `cancelada_por_id` NULL (NULL = automática), `fecha`, `motivo`,
+`dias_anticipacion`, `porcentaje_devolucion` (0 a 100) y `valor_devolucion`. Es de solo inserción: un trigger rechaza
+UPDATE, DELETE y TRUNCATE.
+
+**Reservas EN_REVISION (RF-D-ADM-01.2).**
+- Al bloquear una publicación, sus reservas futuras CONFIRMADAS pasan a EN_REVISION en la misma transacción del
+  bloqueo y se publica `ReservaEnRevision` por cada una (CA-20.1).
+- `GET /admin/reservas?estado=EN_REVISION` las lista.
+- `POST /admin/reservas/{id}/resolver` (`Reserva.resolver(mantener)`):
+  - Con `{"mantener": true}` la reserva vuelve a CONFIRMADA (CA-20.2).
+  - Con `{"mantener": false, "motivo": "..."}` queda CANCELADA con devolución del 100 % y `cancelada_por` = el
+    administrador (CA-20.3).
+  - En ambos casos publica `ReservaResuelta`, y también `ReservaCancelada` si se cancela.
+- `reservas.services.cancelar_en_revision_vencidas()` (`Reserva.cancelar_sin_resolucion()`) cancela las EN_REVISION
+  cuya fecha de llegada llegó: 100 %, motivo "Sin resolución antes de la llegada", `cancelada_por` NULL, y avisa al
+  huésped y al anfitrión (CA-20.5).
+- Restringir una cuenta no cambia el estado de sus reservas (RF-D-ADM-02.1).
+
+## Notificaciones (MOD-07)
+
+Tabla `notificacion`: `id`, `destinatario_id`, `tipo` VARCHAR(40), `mensaje` VARCHAR(300), `entidad` NULL,
+`entidad_id` NULL, `leida` y `fecha`. `Notificacion.marcar_leida()`.
+
+Notificaciones escucha los eventos de dominio **después de confirmar** la transacción. Los destinatarios y los
+textos llegan en el detalle del evento, así no importa otras apps. Si crear un aviso falla, lo registra en la
+auditoría (`NotificacionFallida`, en una transacción propia) y la operación sigue (CA-16.3, C4 nivel 3).
+
+| Evento | Destinatarios |
+|---|---|
+| `ReservaConfirmada`, `ReservaCancelada`, `ReservaEnRevision` | Huésped y anfitrión |
+| `ReservaResuelta` | Huésped |
+| `PublicacionAprobada`, `PublicacionDevuelta`, `PublicacionBloqueada`, `PublicacionDesbloqueada` | Anfitrión |
+| `PublicacionPausada`, `PublicacionReactivada` | Anfitrión, solo si lo hizo el Administrador |
+
+`ResenaPublicada` llega con el módulo de Reseñas. `GET /notificaciones` devuelve `no_leidas` y la lista, primero las
+no leídas y luego por fecha (CA-16.2). `POST /notificaciones/{id}/leida` marca una y `POST /notificaciones/leidas`
+marca todas.
+
+## Tareas programadas (operación interna)
+
+`POST /interno/tareas/diarias` no usa JWT: compara el encabezado `X-Token-Tareas` con la variable `TOKEN_TAREAS`
+(sin valor en el repositorio). Sin token o con uno incorrecto responde 403 y registra `AccesoDenegado`. Con el token
+correcto ejecuta, en este orden:
+
+1. `completar_vencidas()`
+2. `cancelar_en_revision_vencidas()`
+3. `conciliar_pagos()`
+
+Registra `TareasDiarias` en la auditoría y responde
+`{"reservas_completadas", "reservas_canceladas_sin_resolucion", "pagos_conciliados"}`. Para correrlo a mano:
+`python manage.py tareas_diarias`. El workflow `.github/workflows/tareas-diarias.yml` lo llama a diario a las 05:10
+UTC (00:10 en Colombia) con los secretos `API_URL` y `TOKEN_TAREAS`. `/api/v1/salud` sigue pública.
+
 ## Pagos (MOD-05)
 
 Tabla `pago`: `id`, `cotizacion_id`, `reserva_id` NULL, `tipo` (`COBRO`, `DEVOLUCION`), `monto > 0`, `estado`
@@ -227,7 +312,11 @@ Un trigger impide DELETE y TRUNCATE, y solo permite cambiar `estado` y `referenc
   - Se elige por variable de entorno: con `STRIPE_SECRET_KEY` se usa Stripe; sin ella, el simulado. Las pruebas
     usan siempre el simulado.
 - `ServicioPagos.cobrar(cotizacion, clave, medio, reserva_id=...)` guarda el pago y lo registra en la auditoría
-  (`PagoAprobado` o `PagoNoAprobado`) en la misma transacción. `ServicioPagos.devolver(...)` llega con la cancelación.
+  (`PagoAprobado` o `PagoNoAprobado`) en la misma transacción. `ServicioPagos.devolver(cotizacion_id=..., reserva_id=..., monto=...)` registra una devolución **simulada**
+  (`DEVOLUCION`, APROBADO, referencia `SIM-DEV-...`). Si el valor es 0 no crea pago (`monto > 0`). `PasarelaPagos` no
+  tiene reembolsos, así que la devolución es simulada también cuando el cobro se hizo con Stripe en modo prueba.
+- `pagos.services.conciliar_pagos()` (tarea diaria) consulta en la pasarela los pagos EN_VERIFICACION y actualiza
+  `estado` y `referencia_externa`.
 
 ## Variables de entorno
 
@@ -235,6 +324,8 @@ Un trigger impide DELETE y TRUNCATE, y solo permite cambiar `estado` y `referenc
 |---|---|---|
 | `STRIPE_SECRET_KEY` | `backend/.env` o Render | Llave secreta de Stripe en modo prueba (`sk_test_...`). Vacía = pago simulado. |
 | `VITE_STRIPE_PUBLIC_KEY` | `frontend/.env` o Render | Llave publicable (`pk_test_...`) para Stripe Elements. Vacía = pago simulado con opción de forzar rechazo. |
+| `TOKEN_TAREAS` | `backend/.env`, Render y secreto de GitHub | Token del encabezado `X-Token-Tareas` de `/interno/tareas/diarias`. Vacío = la ruta responde 403 a todos. |
+| `API_URL` | Secreto de GitHub | URL base del backend que llama el workflow `tareas-diarias.yml`. |
 
 Las llaves van **solo** en variables de entorno: nunca en el código, en los `.env.example` (solo el nombre vacío) ni
 en commits. Tarjeta de prueba de Stripe: 4242 4242 4242 4242.

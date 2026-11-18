@@ -138,3 +138,47 @@ def dias():
     from django.utils import timezone
 
     return lambda n: timezone.localdate() + timedelta(days=n)
+
+
+@pytest.fixture
+def reloj():
+    """reloj("2026-11-15") fija el día (hora de Colombia, 09:00) para las reglas que dependen de la fecha."""
+    from datetime import datetime
+
+    from django.utils import timezone
+
+    from apps.comun import reloj as r
+
+    def _fijar(texto: str):
+        r.fijar(timezone.make_aware(datetime.fromisoformat(texto if "T" in texto else texto + "T09:00")))
+
+    yield _fijar
+    r.fijar(None)
+
+
+@pytest.fixture
+def alojamiento_740(publicar):
+    """Ejemplo del SRS: $200.000 por noche, limpieza $50.000 y desayuno $30.000. Con 3 noches, desayuno y la
+    tarifa del 10 %, la reserva cuesta $740.000 (CA-12.1, CA-15.1)."""
+    return publicar("Ejemplo 740", precio=200000, limpieza=50000, adicionales=[("Desayuno", 30000)], capacidad=4)
+
+
+@pytest.fixture
+def reservar(entrar):
+    """Cotiza y reserva por la API real con el pago simulado. Devuelve el JSON de la reserva."""
+    import uuid
+
+    from django.apps import apps
+
+    def _reservar(pid, llegada, salida, huespedes=2, desayuno=True, correo="huesped@correo.com", clave="Clave1234"):
+        h = entrar(correo, clave)
+        adicionales = list(apps.get_model("catalogo", "ServicioAdicional").objects.filter(publicacion_id=pid).values_list("id", flat=True)) if desayuno else []
+        cot = h.post("/api/v1/reservas/cotizaciones", {"publicacion": pid, "fecha_llegada": llegada, "fecha_salida": salida,
+                                                       "num_huespedes": huespedes, "adicionales": adicionales}, format="json")
+        assert cot.status_code == 201, cot.content
+        r = h.post("/api/v1/reservas", {"cotizacion": cot.json()["id"], "clave_idempotencia": str(uuid.uuid4()),
+                                        "medio_pago": "simulado"}, format="json")
+        assert r.status_code == 201, r.content
+        return r.json()
+
+    return _reservar

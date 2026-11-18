@@ -216,6 +216,10 @@ CORS_ALLOWED_ORIGINS = os.environ.get("CORS_ALLOWED_ORIGINS", "http://localhost:
 # Stripe en modo prueba: las claves solo llegan por variables de entorno (ADR-006)
 STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
 
+# Tareas programadas (/api/v1/interno/tareas/diarias): el token solo llega por variable de entorno.
+# Sin valor, la ruta responde 403 a todos.
+TOKEN_TAREAS = os.environ.get("TOKEN_TAREAS", "")
+
 # HTTPS obligatorio fuera de desarrollo (RNF-P-SEG-02)
 if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")

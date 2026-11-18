@@ -257,3 +257,19 @@ source_modules =
     apps.pagos
 forbidden_modules =
     apps.reservas
+
+# MOD-07 Notificaciones recibe todo lo que necesita en el detalle de los eventos de dominio (después de confirmar):
+# no importa (ni directa ni indirectamente) otras apps de negocio. Solo usa Auditoría (avisos fallidos) y apps.comun.
+[importlinter:contract:notificaciones-solo-eventos]
+name = Notificaciones solo recibe eventos de dominio (MOD-07)
+type = forbidden
+source_modules =
+    apps.notificaciones
+forbidden_modules =
+    apps.identidad
+    apps.catalogo
+    apps.busqueda
+    apps.reservas
+    apps.pagos
+    apps.resenas
+    apps.reportes

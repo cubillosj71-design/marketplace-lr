@@ -1,9 +1,10 @@
 import {
-  CalendarDays, CheckCircle2, FileBarChart2, Percent, FileSpreadsheet, ChevronRight, ClipboardCheck, Compass, History, Home, KeyRound, LayoutList, LogOut,
+  Bell, CalendarCheck, CalendarDays, CheckCircle2, ClipboardList, FileBarChart2, Percent, FileSpreadsheet, ChevronRight, ClipboardCheck, Compass, History, Home, KeyRound, LayoutList, LogOut,
   PlusCircle, RotateCcw, ShieldCheck, Star, UserRound,
 } from "lucide-react";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { notificacionesApi } from "./api";
 import { ROL_TXT, iniciales, type Rol } from "./data";
 import { useStore, useToast } from "./store";
 import { ImageTile, Logo } from "./ui";
@@ -51,11 +52,15 @@ function useNav(): { titulo: string; items: Item[] }[] {
     { to: "/roles", label: "Roles y permisos", icon: ShieldCheck },
   ];
   const porRol: Record<Rol, Item[]> = {
-    HUESPED: [{ to: "/explorar", label: "Explorar alojamientos", icon: Compass }],
+    HUESPED: [
+      { to: "/explorar", label: "Explorar alojamientos", icon: Compass },
+      { to: "/reservas", label: "Mis reservas", icon: CalendarCheck },
+    ],
     ANFITRION: [
       { to: "/publicaciones", label: "Mis publicaciones", icon: LayoutList, end: true },
       { to: "/publicaciones/nueva", label: "Nueva publicación", icon: PlusCircle },
       { to: "/calendario", label: "Calendario", icon: CalendarDays },
+      { to: "/reservas-alojamientos", label: "Reservas de mis alojamientos", icon: CalendarCheck },
     ],
     ADMINISTRADOR: [
       { to: "/admin/publicaciones", label: "Todas las publicaciones", icon: LayoutList },
@@ -63,6 +68,7 @@ function useNav(): { titulo: string; items: Item[] }[] {
         to: "/admin/revision", label: "Pendientes de revisión", icon: ClipboardCheck,
         count: publicaciones.filter((p) => p.estado === "PENDIENTE_REVISION").length,
       },
+      { to: "/admin/reservas", label: "Reservas en revisión", icon: ClipboardList },
       { to: "/admin/reportes/publicaciones", label: "Reporte de publicaciones", icon: FileSpreadsheet },
       { to: "/admin/tarifa", label: "Tarifa de servicio", icon: Percent },
       { to: "/admin/registro", label: "Registro de acciones", icon: History },
@@ -93,10 +99,38 @@ const MIGAS: [RegExp, string][] = [
   [/^\/admin\/revision/, "Pendientes de revisión"],
   [/^\/admin\/publicaciones/, "Todas las publicaciones"],
   [/^\/admin\/registro/, "Registro de acciones"],
+  [/^\/admin\/reservas/, "Reservas en revisión"],
+  [/^\/reservas-alojamientos/, "Reservas de mis alojamientos"],
+  [/^\/reservas/, "Mis reservas"],
+  [/^\/cotizacion/, "Cotización"],
+  [/^\/avisos/, "Avisos"],
   [/^\/admin\/tarifa/, "Tarifa de servicio"],
   [/^\/admin\/reportes\/usuarios/, "Reporte de usuarios"],
   [/^\/admin\/reportes\/publicaciones/, "Reporte de publicaciones"],
 ];
+
+/** HU-16: campana con el número de avisos no leídos. Se actualiza al navegar, cada minuto y cuando la bandeja cambia. */
+function Campana() {
+  const loc = useLocation();
+  const [noLeidas, setNoLeidas] = useState(0);
+  useEffect(() => {
+    let activo = true;
+    const cargar = () => notificacionesApi.bandeja().then((r) => { if (activo) setNoLeidas(r.data.no_leidas); }).catch(() => {});
+    cargar();
+    const intervalo = window.setInterval(cargar, 60000);
+    window.addEventListener("avisos-cambiaron", cargar);
+    return () => { activo = false; window.clearInterval(intervalo); window.removeEventListener("avisos-cambiaron", cargar); };
+  }, [loc.pathname]);
+  return (
+    <Link to="/avisos" className="btn btn-ghost btn-sm" aria-label={`Avisos: ${noLeidas} sin leer`} style={{ position: "relative" }}>
+      <Bell />
+      {noLeidas > 0 && (
+        <span className="count" style={{ position: "absolute", top: -2, right: -2, minWidth: 18, height: 18, fontSize: 11, display: "grid", placeItems: "center",
+          borderRadius: 999, background: "var(--err)", color: "#fff", padding: "0 4px" }}>{noLeidas > 99 ? "99+" : noLeidas}</span>
+      )}
+    </Link>
+  );
+}
 
 export function AppLayout() {
   const { usuario, cerrarSesion, restablecerDatos } = useStore();
@@ -141,6 +175,7 @@ export function AppLayout() {
           <span className="topbar-logo"><Logo /></span>
           <div className="crumbs"><span>{seccion}</span><ChevronRight /><b>{miga}</b></div>
           <div className="user-chip">
+            <Campana />
             <span className="avatar" aria-hidden>{iniciales(usuario.nombre)}</span>
             <div className="who"><b>{usuario.nombre}</b><span>{ROL_TXT[usuario.rol]}</span></div>
             <button className="btn btn-ghost btn-sm" onClick={async () => { await cerrarSesion(); go("/ingresar"); }}>

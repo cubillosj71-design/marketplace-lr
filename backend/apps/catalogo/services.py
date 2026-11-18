@@ -155,6 +155,18 @@ def detalle_publico(publicacion_id: int) -> dict | None:
     }
 
 
+def porcentaje_devolucion(politica_id: int, dias: int) -> Decimal:
+    """PoliticaCancelacion.porcentaje_devolucion(dias) para Reservas (RF-D-RES-03.1)."""
+    politica = PoliticaCancelacion.objects.filter(pk=politica_id).first()
+    return politica.porcentaje_devolucion(dias) if politica else Decimal("0")
+
+
+def titulos_y_anfitriones(ids) -> dict[int, dict]:
+    """{id: {"titulo", "anfitrion"}} para los listados de reservas y los avisos."""
+    return {p["id"]: {"titulo": p["titulo"], "anfitrion": p["anfitrion_id"]}
+            for p in Publicacion.objects.filter(pk__in=list(ids)).values("id", "titulo", "anfitrion_id")}
+
+
 def nombres_adicionales(ids) -> dict[int, str]:
     return dict(ServicioAdicional.objects.filter(pk__in=list(ids)).values_list("id", "nombre"))
 
@@ -335,7 +347,9 @@ def cambiar_estado(usuario, publicacion_id: int, nuevo: str, observacion: str | 
         detalle = {"de": anterior, "a": nuevo, **({"observacion": observacion} if observacion else {})}
         auditoria.registrar(usuario.id, nombre, entidad="Publicacion", entidad_id=p.id, detalle=detalle)
         if nombre in EVENTOS_DE_DOMINIO:  # los reciben Reservas y Notificaciones
-            publicar(nombre, usuario_id=usuario.id, entidad="Publicacion", entidad_id=p.id, detalle=detalle)
+            publicar(nombre, usuario_id=usuario.id, entidad="Publicacion", entidad_id=p.id,
+                     detalle={**detalle, "titulo": p.titulo, "anfitrion": p.anfitrion_id,
+                              "por_administrador": usuario.rol == "ADMINISTRADOR"})
     return p
 
 

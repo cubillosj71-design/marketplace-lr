@@ -1,9 +1,11 @@
-"""Vistas REST de SRV-04 Reservas: tarifa de servicio, calendario, cotización y reserva con pago."""
+"""Vistas REST de SRV-04 Reservas: tarifa, calendario, cotización, reserva con pago, consultas, cancelación y
+reservas EN_REVISION."""
 
 from datetime import timedelta
 
 from django.utils import timezone
 from rest_framework import serializers, status
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -117,3 +119,80 @@ class Reservas(APIView):
         d = s.validated_data
         reserva, creada = services.reservar(request.user, d["cotizacion"], d["clave_idempotencia"], d["medio_pago"], ip=ip_de(request))
         return Response(reserva, status=status.HTTP_201_CREATED if creada else status.HTTP_200_OK)
+
+
+# ---------------------------------------------------------------- HU-14, HU-26 Consultar reservas
+
+class MisReservas(APIView):
+    """GET /reservas/mias (Huésped): actuales y pasadas, solo las suyas (CA-14.1 a CA-14.3)."""
+
+    permission_classes = [EsHuesped]
+
+    def get(self, request):
+        return Response(services.mis_reservas(request.user))
+
+
+class DeMisAlojamientos(APIView):
+    """GET /reservas/de-mis-alojamientos (Anfitrión): las de sus publicaciones, incluidas las CANCELADAS."""
+
+    permission_classes = [EsAnfitrion]
+
+    def get(self, request):
+        return Response(services.reservas_de_mis_alojamientos(request.user))
+
+
+class ReservaDetalle(APIView):
+    """GET /reservas/{id}: el huésped dueño, el anfitrión de la publicación o el Administrador."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        return Response(services.obtener_reserva(request.user, pk))
+
+
+# ---------------------------------------------------------------- HU-15 Cancelar
+
+class CancelacionEntrada(serializers.Serializer):
+    motivo = serializers.CharField(allow_blank=True)
+
+
+class Cancelar(APIView):
+    """GET /reservas/{id}/cancelar: cuánto se devolvería hoy. POST: cancela con motivo (RF-D-RES-03.1)."""
+
+    permission_classes = [EsHuesped]
+
+    def get(self, request, pk):
+        return Response(services.simular_cancelacion(request.user, pk))
+
+    def post(self, request, pk):
+        s = CancelacionEntrada(data=request.data)
+        s.is_valid(raise_exception=True)
+        return Response(services.cancelar(request.user, pk, s.validated_data["motivo"], ip=ip_de(request)))
+
+
+# ---------------------------------------------------------------- HU-20 Reservas EN_REVISION (Administrador)
+
+class ReservasAdmin(APIView):
+    """GET /admin/reservas?estado=EN_REVISION."""
+
+    permission_classes = [EsAdministrador]
+
+    def get(self, request):
+        return Response(services.reservas_admin(request.query_params.get("estado") or None))
+
+
+class ResolucionEntrada(serializers.Serializer):
+    mantener = serializers.BooleanField()
+    motivo = serializers.CharField(required=False, allow_blank=True)
+
+
+class Resolver(APIView):
+    """POST /admin/reservas/{id}/resolver con {"mantener": true} o {"mantener": false, "motivo": "..."}."""
+
+    permission_classes = [EsAdministrador]
+
+    def post(self, request, pk):
+        s = ResolucionEntrada(data=request.data)
+        s.is_valid(raise_exception=True)
+        d = s.validated_data
+        return Response(services.resolver(request.user, pk, d["mantener"], d.get("motivo"), ip=ip_de(request)))

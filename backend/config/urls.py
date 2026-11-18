@@ -4,6 +4,8 @@ from django.contrib import admin
 from django.http import JsonResponse
 from django.urls import include, path
 
+from apps.comun import interno
+from apps.notificaciones import views as notificaciones
 from apps.reservas import views as reservas
 
 
@@ -25,6 +27,10 @@ urlpatterns = (
         path("api/v1/reservas", reservas.Reservas.as_view(), name="reservas"),
         # El calendario conserva su ruta de Catálogo para el frontend, pero lo atiende MOD-04 Reservas
         path("api/v1/catalogo/publicaciones/<int:pk>/calendario", reservas.Calendario.as_view(), name="calendario"),
+        # GET /api/v1/notificaciones (HU-16)
+        path("api/v1/notificaciones", notificaciones.Bandeja.as_view(), name="notificaciones"),
+        # Operación interna: tareas programadas protegidas con X-Token-Tareas (C4 nivel 3)
+        path("api/v1/interno/tareas/diarias", interno.TareasDiarias.as_view(), name="tareas-diarias"),
     ]
     + [path(f"api/v1/{s}/", include(f"apps.{s}.urls")) for s in SERVICIOS]
     + [path("api/v1/admin/", include((f"apps.{s}.urls_admin", f"admin-{s}"))) for s in ADMIN]

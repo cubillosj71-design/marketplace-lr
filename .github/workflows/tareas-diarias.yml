@@ -1,0 +1,27 @@
+name: Tareas diarias
+
+# Operación interna (C4 nivel 3): completa reservas vencidas, cancela las EN_REVISION sin resolver y concilia pagos.
+# Corre a las 05:10 UTC (00:10 en Colombia). Los valores van en los secretos del repositorio:
+#   API_URL       URL base del backend, sin barra final (por ejemplo https://<servicio>.onrender.com)
+#   TOKEN_TAREAS  el mismo valor de la variable TOKEN_TAREAS del backend
+on:
+  schedule:
+    - cron: "10 5 * * *"
+  workflow_dispatch:
+
+jobs:
+  tareas:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Llamar a /api/v1/interno/tareas/diarias
+        env:
+          API_URL: ${{ secrets.API_URL }}
+          TOKEN_TAREAS: ${{ secrets.TOKEN_TAREAS }}
+        run: |
+          if [ -z "$API_URL" ] || [ -z "$TOKEN_TAREAS" ]; then
+            echo "Faltan los secretos API_URL o TOKEN_TAREAS." >&2
+            exit 1
+          fi
+          curl --fail-with-body --silent --show-error --retry 3 --retry-delay 20 --max-time 120 \
+            -X POST "$API_URL/api/v1/interno/tareas/diarias" \
+            -H "X-Token-Tareas: $TOKEN_TAREAS"

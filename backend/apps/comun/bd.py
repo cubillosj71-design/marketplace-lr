@@ -1,6 +1,6 @@
 """Utilidades de base de datos transversales.
 
-Las tablas evento_auditoria, reserva y pago tienen un trigger BEFORE TRUNCATE que impide vaciarlas
+Las tablas evento_auditoria, reserva, pago y cancelacion tienen un trigger BEFORE TRUNCATE que impide vaciarlas
 (RNF-E-CON-01). Django vacía la base con TRUNCATE en `flush`, que usan `cargar_demo --reiniciar`
 (solo desarrollo) y la limpieza de las pruebas con transaction=True. Solo esos dos casos usan
 `vaciado_permitido()`, que apaga esos triggers mientras corre y los vuelve a encender al salir.
@@ -14,6 +14,7 @@ TRIGGERS_SIN_VACIAR = (
     ("evento_auditoria", "evento_auditoria_sin_vaciar"),
     ("reserva", "reserva_sin_vaciar"),
     ("pago", "pago_sin_vaciar"),
+    ("cancelacion", "cancelacion_sin_vaciar"),
 )
 
 
