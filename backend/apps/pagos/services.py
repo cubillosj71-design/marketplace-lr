@@ -15,7 +15,7 @@ from django.db import transaction
 from apps.auditoria import services as auditoria
 
 from .models import EstadoPago, Pago, TipoPago
-from .pasarela import PasarelaPagos, obtener_pasarela
+from .pasarela import AdaptadorSimulado, PasarelaPagos, obtener_pasarela
 
 
 class ServicioPagos:
@@ -47,20 +47,28 @@ class ServicioPagos:
 
     def devolver(self, *, cotizacion_id: int, reserva_id: int, monto: Decimal, actor_id: int | None = None,
                  ip: str | None = None) -> Pago | None:
-        """Devolución simulada de una cancelación (RF-D-RES-03.1): registra un pago DEVOLUCION APROBADO.
+        """Devolución de una cancelación (RF-D-RES-03.1): pide a la pasarela devolver(referencia, monto) sobre el
+        cobro aprobado de la cotización y guarda el pago DEVOLUCION con el estado que responda.
 
         Debe llamarse dentro de la transacción de la cancelación. Si el valor es 0 no se crea pago
-        (pago.monto > 0). PasarelaPagos no expone reembolsos, así que la devolución es simulada también
-        cuando el cobro se hizo con Stripe en modo prueba."""
+        (pago.monto > 0). La devolución va por la misma pasarela que hizo el cobro: un cobro simulado (SIM-...)
+        se devuelve con el simulado aunque ahora haya llave de Stripe."""
         if monto <= 0:
             return None
-        clave = uuid4()
+        cobro = (Pago.objects.filter(cotizacion_id=cotizacion_id, tipo=TipoPago.COBRO, estado=EstadoPago.APROBADO)
+                 .order_by("-fecha").first())
+        referencia = cobro.referencia_externa if cobro else None
+        pasarela = self.pasarela if referencia and not referencia.startswith("SIM-") else AdaptadorSimulado()
+        resultado = pasarela.devolver(referencia or "", monto)
         pago = Pago.objects.create(
             cotizacion_id=cotizacion_id, reserva_id=reserva_id, tipo=TipoPago.DEVOLUCION, monto=monto,
-            estado=EstadoPago.APROBADO, referencia_externa=f"SIM-DEV-{str(clave)[:8]}", clave_idempotencia=clave,
+            estado=resultado.estado, referencia_externa=resultado.referencia, clave_idempotencia=uuid4(),
         )
-        auditoria.registrar(actor_id, "DevolucionRegistrada", entidad="Pago", entidad_id=pago.id, ip=ip,
-                            detalle={"reserva": reserva_id, "monto": str(monto), "referencia": pago.referencia_externa})
+        aprobada = resultado.estado == EstadoPago.APROBADO
+        auditoria.registrar(actor_id, "DevolucionRegistrada", entidad="Pago", entidad_id=pago.id, ip=ip, exitoso=aprobada,
+                            detalle={"reserva": reserva_id, "monto": str(monto), "estado": pago.estado,
+                                     "referencia": pago.referencia_externa, "cobro": referencia,
+                                     **({"motivo": resultado.motivo} if resultado.motivo else {})})
         return pago
 
 

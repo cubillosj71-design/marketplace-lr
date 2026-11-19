@@ -111,10 +111,8 @@ def registrar(*, nombre_completo, correo, telefono, password, rol, acepta_datos,
     _validar_clave(password, Usuario(correo=correo, nombre_completo=nombre_completo))
     ciudad = _limpiar_ciudad(ciudad)
     with transaction.atomic():
-        u = Usuario.objects.create_user(
-            correo=correo, password=password, nombre_completo=nombre_completo.strip(), telefono=telefono.strip(),
-            rol=rol, ciudad=ciudad, autorizacion_datos=timezone.now(),
-        )
+        u = Usuario.registrar(correo, password, rol, nombre_completo=nombre_completo.strip(), telefono=telefono.strip(),
+                              ciudad=ciudad)
         auditoria.registrar(u.id, "UsuarioRegistrado", entidad="Usuario", entidad_id=u.id, detalle={"rol": rol}, ip=ip)
     return u
 
@@ -125,7 +123,7 @@ def iniciar_sesion(correo: str, password: str, ip=None) -> dict:
     u = Usuario.objects.filter(correo__iexact=(correo or "").strip()).first()
     # Los intentos fallidos se registran fuera de transaction.atomic ("transacción propia"):
     # quedan en la auditoría aunque la petición termine en error.
-    if not u or not u.check_password(password or ""):
+    if not u or not u.iniciar_sesion(correo, password):
         auditoria.registrar(u.id if u else None, "InicioSesion", entidad="Usuario", entidad_id=u.id if u else None,
                             exitoso=False, detalle={"motivo": "Credenciales incorrectas", "correo": (correo or "")[:254]}, ip=ip)
         raise ErrorNegocio("Correo o contraseña incorrectos. Revisa los datos e inténtalo de nuevo.", codigo=401)
@@ -141,9 +139,9 @@ def iniciar_sesion(correo: str, password: str, ip=None) -> dict:
     reactivada = not u.activa
     with transaction.atomic():
         if reactivada:  # CA-04.4: la cuenta se reactiva al volver a ingresar
-            u.activa = True
+            u.reactivar()
         u.last_login = timezone.now()
-        u.save(update_fields=["activa", "last_login"])
+        u.save(update_fields=["last_login"])
         auditoria.registrar(u.id, "InicioSesion", entidad="Usuario", entidad_id=u.id, detalle={"reactivada": reactivada}, ip=ip)
     refresh = RefreshToken.for_user(u)
     return {"access": str(refresh.access_token), "refresh": str(refresh), "usuario": _dict(u),
@@ -240,14 +238,8 @@ def restablecer_clave(token: str, password: str, ip=None) -> None:
 # ---------------------------------------------------------------- CU-USU-04 Perfil
 
 def actualizar_perfil(u: Usuario, datos: dict, ip=None) -> Usuario:
-    campos = []
-    for campo in ("nombre_completo", "telefono"):
-        if campo in datos:
-            valor = (datos[campo] or "").strip()
-            if not valor:
-                raise ErrorNegocio("Este dato no puede quedar vacío.", campo=campo)
-            setattr(u, campo, valor)
-            campos.append(campo)
+    campos = u.actualizar_perfil(**{arg: datos[campo] for arg, campo in (("nombre", "nombre_completo"), ("telefono", "telefono"))
+                                    if campo in datos})
     if "ciudad" in datos:  # texto opcional: vacío o null la quita (CA-04.1)
         u.ciudad = _limpiar_ciudad(datos["ciudad"])
         campos.append("ciudad")
@@ -279,8 +271,7 @@ def desactivar_cuenta(u: Usuario, ip=None) -> None:
             "No puedes desactivar tu cuenta: tienes reservas CONFIRMADAS o EN_REVISION pendientes.", extra={"reservas": pendientes}
         )
     with transaction.atomic():
-        u.activa = False
-        u.save(update_fields=["activa"])
+        u.desactivar()
         _cerrar_todas_las_sesiones(u)
         auditoria.registrar(u.id, "CuentaDesactivada", entidad="Usuario", entidad_id=u.id, ip=ip)
 

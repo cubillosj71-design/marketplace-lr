@@ -153,11 +153,11 @@ def calcular(publicacion: dict, noches: int, adicionales: list[Decimal] | None =
     servicio = ((base - descuento) * pct / 100).quantize(CENT, ROUND_HALF_UP)
     limpieza = Decimal(publicacion.get("tarifa_limpieza") or 0)
     extra = sum(adicionales or [], Decimal("0"))
-    return {
+    partes = {
         "noches": noches, "precio_noche": precio_noche, "precio_base": base, "descuento": descuento,
         "tarifa_limpieza": limpieza, "tarifa_servicio": servicio, "total_adicionales": extra,
-        "total": base - descuento + limpieza + servicio + extra,
     }
+    return {**partes, "total": Cotizacion(**partes).calcular_total()}  # la fórmula del total vive en el modelo
 
 
 # ---------------------------------------------------------------- CU-ALO-06 Calendario (PeriodoCalendario)
@@ -519,23 +519,19 @@ def obtener_reserva(usuario, reserva_id: int) -> dict:
 
 # ---------------------------------------------------------------- HU-15 Cancelar (RF-D-RES-03.1)
 
-def _cancelar(r: Reserva, *, cancelada_por_id: int | None, motivo: str, dias: int, porcentaje: Decimal,
-              ip=None, extra_evento: dict | None = None, transicion=None) -> Cancelacion:
-    """Cancela dentro de la transacción del llamador: reserva CANCELADA, Cancelacion, pago DEVOLUCION (si el valor
-    es mayor que 0), auditoría y evento ReservaCancelada. Las noches quedan libres (v_noche_no_disponible)."""
-    valor = (r.total * porcentaje / 100).quantize(CENT, ROUND_HALF_UP)
-    (transicion or r.cancelar)()  # método del diagrama que corresponde: cancelar, resolver o cancelar_sin_resolucion
-    c = Cancelacion.objects.create(reserva=r, cancelada_por_id=cancelada_por_id, fecha=reloj.ahora(), motivo=motivo,
-                                   dias_anticipacion=dias, porcentaje_devolucion=porcentaje, valor_devolucion=valor)
-    pago = pagos.ServicioPagos().devolver(cotizacion_id=r.cotizacion_id, reserva_id=r.id, monto=valor,
-                                          actor_id=cancelada_por_id, ip=ip)
+def _tras_cancelar(r: Reserva, c: Cancelacion, ip=None) -> None:
+    """Lo que sigue a cancelar(), resolver(False) o cancelar_sin_resolucion(), dentro de la transacción del llamador:
+    pago DEVOLUCION (si el valor es mayor que 0), auditoría y evento ReservaCancelada. Las noches quedan libres
+    (v_noche_no_disponible)."""
+    pago = pagos.ServicioPagos().devolver(cotizacion_id=r.cotizacion_id, reserva_id=r.id, monto=c.valor_devolucion,
+                                          actor_id=c.cancelada_por_id, ip=ip)
     # CA-15.3: el registro de acciones muestra quién canceló (actor), cuándo (fecha), el motivo y el valor devuelto
-    auditoria.registrar(cancelada_por_id, "ReservaCancelada", entidad="Reserva", entidad_id=r.id, ip=ip, detalle={
-        "motivo": motivo, "valor_devolucion": f"{valor:.2f}", "porcentaje_devolucion": f"{Decimal(porcentaje):.2f}",
-        "dias_anticipacion": dias, "automatica": cancelada_por_id is None, "pago_devolucion": pago.id if pago else None,
+    auditoria.registrar(c.cancelada_por_id, "ReservaCancelada", entidad="Reserva", entidad_id=r.id, ip=ip, detalle={
+        "motivo": c.motivo, "valor_devolucion": f"{c.valor_devolucion:.2f}",
+        "porcentaje_devolucion": f"{Decimal(c.porcentaje_devolucion):.2f}", "dias_anticipacion": c.dias_anticipacion,
+        "automatica": c.cancelada_por_id is None, "pago_devolucion": pago.id if pago else None,
     })
-    _evento_reserva("ReservaCancelada", r, cancelada_por_id, motivo=motivo, valor_devolucion=f"{valor:.2f}", **(extra_evento or {}))
-    return c
+    _evento_reserva("ReservaCancelada", r, c.cancelada_por_id, motivo=c.motivo, valor_devolucion=f"{c.valor_devolucion:.2f}")
 
 
 def cancelar(huesped, reserva_id: int, motivo: str, ip=None) -> dict:
@@ -557,8 +553,8 @@ def cancelar(huesped, reserva_id: int, motivo: str, ip=None) -> dict:
         dias = (r.fecha_llegada - reloj.hoy()).days  # días calendario en hora de Colombia
         if dias < 1:  # CA-15.5
             raise Conflicto("La fecha de llegada ya llegó: la reserva ya no se puede cancelar.")
-        _cancelar(r, cancelada_por_id=huesped.id, motivo=motivo, dias=dias,
-                  porcentaje=catalogo.porcentaje_devolucion(r.politica_id, dias), ip=ip)
+        c = r.cancelar(motivo, porcentaje=catalogo.porcentaje_devolucion(r.politica_id, dias), cancelada_por_id=huesped.id)
+        _tras_cancelar(r, c, ip=ip)
     return reserva_dict(Reserva.objects.select_related("cancelacion").get(pk=reserva_id))
 
 
@@ -572,13 +568,11 @@ def simular_cancelacion(usuario, reserva_id: int) -> dict:
     dias = (r.fecha_llegada - reloj.hoy()).days
     pct = catalogo.porcentaje_devolucion(r.politica_id, dias) if dias >= 1 else Decimal("0")
     return {"reserva": r.id, "cancelable": r.estado == EstadoReserva.CONFIRMADA and dias >= 1, "dias_anticipacion": dias,
-            "porcentaje_devolucion": f"{pct:.2f}", "valor_devolucion": f"{(r.total * pct / 100).quantize(CENT, ROUND_HALF_UP):.2f}"}
+            "porcentaje_devolucion": f"{pct:.2f}",
+            "valor_devolucion": f"{Cancelacion(reserva=r, porcentaje_devolucion=pct).calcular_devolucion():.2f}"}
 
 
 # ---------------------------------------------------------------- HU-20 Reservas EN_REVISION (RF-D-ADM-01.2)
-
-MOTIVO_SIN_RESOLUCION = "Sin resolución antes de la llegada"
-
 
 def resolver(admin, reserva_id: int, mantener: bool, motivo: str | None = None, ip=None) -> dict:
     """resolver(mantener) del diagrama: mantener -> CONFIRMADA (CA-20.2); si no, CANCELADA con devolución del
@@ -599,8 +593,7 @@ def resolver(admin, reserva_id: int, mantener: bool, motivo: str | None = None, 
         else:
             auditoria.registrar(admin.id, "ReservaResuelta", entidad="Reserva", entidad_id=r.id, ip=ip, detalle={"mantener": False, "motivo": motivo})
             _evento_reserva("ReservaResuelta", r, admin.id, mantener=False, motivo=motivo)
-            _cancelar(r, cancelada_por_id=admin.id, motivo=motivo, dias=(r.fecha_llegada - reloj.hoy()).days,
-                      porcentaje=Decimal("100"), ip=ip, transicion=lambda: r.resolver(False))
+            _tras_cancelar(r, r.resolver(False, motivo=motivo, administrador_id=admin.id), ip=ip)
     return reserva_dict(Reserva.objects.select_related("cancelacion").get(pk=reserva_id))
 
 
@@ -614,7 +607,6 @@ def cancelar_en_revision_vencidas() -> int:
             r = Reserva.objects.select_for_update().get(pk=rid)
             if r.estado != EstadoReserva.EN_REVISION:
                 continue
-            _cancelar(r, cancelada_por_id=None, motivo=MOTIVO_SIN_RESOLUCION, dias=(r.fecha_llegada - reloj.hoy()).days,
-                      porcentaje=Decimal("100"), transicion=r.cancelar_sin_resolucion)
+            _tras_cancelar(r, r.cancelar_sin_resolucion())
         canceladas += 1
     return canceladas

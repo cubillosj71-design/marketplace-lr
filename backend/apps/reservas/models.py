@@ -6,6 +6,8 @@ Vista de solo lectura que publica: v_noche_no_disponible.
 Ver las secciones 9 y 10 del documento de diseño y el diagrama de clases.
 """
 
+from decimal import ROUND_HALF_UP, Decimal
+
 from django.conf import settings
 from django.contrib.postgres.constraints import ExclusionConstraint
 from django.contrib.postgres.fields import DateRangeField, RangeOperators
@@ -13,6 +15,9 @@ from django.db import models
 from django.db.models import F, Func, Q, Value
 
 from apps.comun import reloj
+
+PESO = Decimal("1")  # los montos se redondean al peso
+MOTIVO_SIN_RESOLUCION = "Sin resolución antes de la llegada"
 
 
 class EstadoReserva(models.TextChoices):
@@ -84,6 +89,11 @@ class Cotizacion(models.Model):
             models.CheckConstraint(condition=Q(noches__gt=0), name="cotizacion_noches_mayor_0"),
         ]
 
+    def calcular_total(self) -> Decimal:
+        """calcularTotal() del diagrama: precio base - descuento + limpieza + tarifa de servicio + adicionales
+        (CA-12.1). reservas.services.calcular calcula cada parte y usa este método para el total."""
+        return self.precio_base - self.descuento + self.tarifa_limpieza + self.tarifa_servicio + self.total_adicionales
+
 
 class CotizacionServicioAdicional(models.Model):
     """Servicio adicional elegido en la cotización, con el precio que tenía en ese momento.
@@ -133,9 +143,9 @@ class Reserva(models.Model):
             ),
         ]
 
-    # ---- métodos del diagrama de clases. Solo cambian el estado; el trigger de reserva acepta únicamente las
-    # transiciones de la sección 3.6 del SRS. Lo demás (cancelación, devolución, auditoría, eventos) lo
-    # orquesta reservas.services en la misma transacción.
+    # ---- métodos del diagrama de clases. Cambian el estado (el trigger de reserva acepta únicamente las
+    # transiciones de la sección 3.6 del SRS) y, al cancelar, crean la Cancelacion. Lo demás (devolución,
+    # auditoría, eventos) lo orquesta reservas.services en la misma transacción.
     def _pasar_a(self, estado: str) -> None:
         self.estado = estado
         self.save(update_fields=["estado", "actualizada"])
@@ -143,8 +153,11 @@ class Reserva(models.Model):
     def confirmar(self) -> None:
         self._pasar_a(EstadoReserva.CONFIRMADA)
 
-    def cancelar(self) -> None:
+    def cancelar(self, motivo: str, *, porcentaje: Decimal, cancelada_por_id: int | None = None) -> "Cancelacion":
+        """cancelar(motivo): Cancelacion del diagrama. El porcentaje sale de la política guardada en la reserva
+        (lo calcula reservas.services); cancelada_por_id NULL = cancelación automática."""
         self._pasar_a(EstadoReserva.CANCELADA)
+        return Cancelacion.registrar(self, motivo, porcentaje, cancelada_por_id)
 
     def completar(self) -> None:
         """RF-D-RES-02.3: CONFIRMADA cuya fecha de salida ya pasó."""
@@ -153,13 +166,18 @@ class Reserva(models.Model):
     def pasar_a_revision(self) -> None:
         self._pasar_a(EstadoReserva.EN_REVISION)
 
-    def resolver(self, mantener: bool) -> None:
-        """EN_REVISION -> CONFIRMADA si se mantiene, CANCELADA si no (CA-20.2, CA-20.3)."""
-        self.confirmar() if mantener else self.cancelar()
+    def resolver(self, mantener: bool, *, motivo: str | None = None, administrador_id: int | None = None) -> "Cancelacion | None":
+        """EN_REVISION -> CONFIRMADA si se mantiene (CA-20.2); si no, CANCELADA con devolución del 100 % y la
+        Cancelacion a nombre del administrador (CA-20.3)."""
+        if mantener:
+            self.confirmar()
+            return None
+        return self.cancelar(motivo, porcentaje=Decimal("100"), cancelada_por_id=administrador_id)
 
-    def cancelar_sin_resolucion(self) -> None:
-        """EN_REVISION que llegó a su fecha de llegada sin resolverse (CA-20.5)."""
-        self.cancelar()
+    def cancelar_sin_resolucion(self) -> "Cancelacion":
+        """cancelarSinResolucion(): Cancelacion del diagrama. EN_REVISION que llegó a su fecha de llegada sin
+        resolverse: se cancela sola, con 100 % de devolución (CA-20.5)."""
+        return self.cancelar(MOTIVO_SIN_RESOLUCION, porcentaje=Decimal("100"))
 
 
 class Cancelacion(models.Model):
@@ -180,6 +198,20 @@ class Cancelacion(models.Model):
             models.CheckConstraint(condition=Q(porcentaje_devolucion__gte=0, porcentaje_devolucion__lte=100), name="cancelacion_porcentaje_0_100"),
             models.CheckConstraint(condition=Q(valor_devolucion__gte=0), name="cancelacion_valor_no_negativo"),
         ]
+
+    @classmethod
+    def registrar(cls, reserva: Reserva, motivo: str, porcentaje: Decimal, cancelada_por_id: int | None) -> "Cancelacion":
+        """Se inserta una sola vez con todos sus valores: la tabla no admite UPDATE (trigger)."""
+        c = cls(reserva=reserva, cancelada_por_id=cancelada_por_id, fecha=reloj.ahora(), motivo=motivo,
+                dias_anticipacion=(reserva.fecha_llegada - reloj.hoy()).days,  # /diasAnticipacion, hora de Colombia
+                porcentaje_devolucion=porcentaje)
+        c.valor_devolucion = c.calcular_devolucion()
+        c.save()
+        return c
+
+    def calcular_devolucion(self) -> Decimal:
+        """calcularDevolucion() del diagrama: porcentaje de devolución sobre el total de la reserva, al peso."""
+        return (self.reserva.total * Decimal(self.porcentaje_devolucion) / 100).quantize(PESO, ROUND_HALF_UP)
 
 
 class NocheNoDisponible(models.Model):
