@@ -396,6 +396,9 @@ al bruto y $30.000 a la plataforma.
 - `reservas_por_estado` y `reservas_total` del periodo.
 - `ingresos.bruto` e `ingresos.plataforma` del periodo.
 - `top_ciudades`: las 5 ciudades con más reservas, de `v_demanda`.
+- `serie_diaria`: `[{"fecha", "reservas", "monto_bruto", "ingreso_plataforma"}]` por día de creación, de `v_demanda`,
+  solo los días con reservas (el frontend completa con 0 y agrupa por mes si el periodo pasa de 62 días). Suma lo mismo
+  que `reservas_total` e `ingresos`.
 
 **Reportes.** Los cinco (`usuarios`, `publicaciones`, `reservas`, `ingresos`, `demanda`), en PDF o Excel, usan las
 mismas funciones de consulta del tablero (`reservas_del_periodo`, `conteo_por_estado`, `ingresos` y `demanda`), así
