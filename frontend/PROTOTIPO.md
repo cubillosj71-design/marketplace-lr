@@ -63,8 +63,13 @@ cliente: el correo y la contraseña se escriben a mano.
 ## Imágenes de las publicaciones
 
 La API guarda la dirección (URL) de cada imagen (`imagen_publicacion.ruta`, hasta 500 caracteres). El formulario
-agrega imágenes por URL o con "Agregar imagen de ejemplo". No hay subida de archivos: el backend no tiene un servicio
-de almacenamiento de archivos y el esquema no se cambia.
+agrega imágenes por URL. No hay subida de archivos: el backend no tiene un servicio de almacenamiento de archivos y el
+esquema no se cambia.
+
+Las fotos de los datos de demostración (`cargar_demo`) están en `public/alojamientos/` y el sitio las sirve en
+`/alojamientos/`, así se ven sin conexión a internet. Son de Wikimedia Commons con licencia libre (CC0, CC BY y
+CC BY-SA): el autor, la licencia y el enlace de cada una están en `public/alojamientos/CREDITOS.md`, que las licencias
+CC BY exigen. Para cambiar una, reemplaza el archivo con el mismo nombre y actualiza sus créditos.
 
 ## Estructura
 

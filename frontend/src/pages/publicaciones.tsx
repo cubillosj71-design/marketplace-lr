@@ -1,6 +1,6 @@
 import {
   ArrowLeft, CalendarDays, Check, CheckCircle2, CircleDashed, ClipboardList, FileEdit, Home, ImagePlus,
-  PauseCircle, PlayCircle, Plus, Search, Send, Sparkles, Trash2,
+  PauseCircle, PlayCircle, Plus, Search, Send, Trash2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -412,11 +412,6 @@ export function FormPublicacion() {
     set("imagenes", [...p.imagenes, url.trim()]);
     setUrl(""); setErr({ ...err, imagen: "" });
   };
-  const ejemplo = () => {
-    const nombres = ["Sala", "Habitación", "Cocina", "Baño", "Fachada", "Vista"];
-    const nombre = nombres[p.imagenes.length % nombres.length]!;
-    set("imagenes", [...p.imagenes, `https://placehold.co/600x400?text=${encodeURIComponent(nombre)}`]);
-  };
 
   const enEdicionActiva = existente && estado !== "BORRADOR";
 
@@ -561,10 +556,7 @@ export function FormPublicacion() {
           </div>
 
           <section className="card stack">
-            <div className="row-between">
-              <h3>Imágenes <span className="subtle">(mínimo una; la primera es la portada)</span></h3>
-              <button type="button" className="btn btn-ghost btn-sm" onClick={ejemplo}><Sparkles /> Agregar imagen de ejemplo</button>
-            </div>
+            <h3>Imágenes <span className="subtle">(mínimo una; la primera es la portada)</span></h3>
             <div className="img-grid">
               {p.imagenes.map((ruta, i) => (
                 <ImageTile key={`${i}-${ruta}`} img={imagenDe(ruta, i)} etiqueta={i === 0 ? "Portada" : undefined}
