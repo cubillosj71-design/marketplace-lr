@@ -17,6 +17,22 @@ from django.utils import timezone
 
 from apps.comun.errores import ErrorNegocio
 
+TELEFONO_MIN, TELEFONO_MAX = 7, 15  # un fijo de 7 dígitos hasta un número internacional (E.164)
+
+
+def validar_telefono(valor) -> str:
+    """El teléfono solo lleva números; se aceptan espacios para separarlos (300 123 4567). Devuelve el valor sin
+    espacios sobrantes o lanza ErrorNegocio con campo "telefono"."""
+    valor = " ".join(str(valor or "").split())
+    digitos = valor.replace(" ", "")
+    if not digitos:
+        raise ErrorNegocio("Escribe tu teléfono.", campo="telefono")
+    if not digitos.isdigit() or not digitos.isascii():
+        raise ErrorNegocio("El teléfono solo puede tener números.", campo="telefono")
+    if not TELEFONO_MIN <= len(digitos) <= TELEFONO_MAX:
+        raise ErrorNegocio(f"El teléfono debe tener entre {TELEFONO_MIN} y {TELEFONO_MAX} números.", campo="telefono")
+    return valor
+
 
 class RolUsuario(models.TextChoices):
     HUESPED = "HUESPED", "Huésped"
@@ -99,14 +115,15 @@ class Usuario(AbstractBaseUser):
         """actualizarPerfil(nombre, telefono) del diagrama: cambia los datos que llegan (ninguno puede quedar vacío,
         CA-04.1) y devuelve los campos cambiados para guardarlos. El correo y el rol no se cambian aquí."""
         cambiados = []
-        for campo, valor in (("nombre_completo", nombre), ("telefono", telefono)):
-            if valor is self._SIN_CAMBIO:
-                continue
-            valor = (valor or "").strip()
-            if not valor:
-                raise ErrorNegocio("Este dato no puede quedar vacío.", campo=campo)
-            setattr(self, campo, valor)
-            cambiados.append(campo)
+        if nombre is not self._SIN_CAMBIO:
+            nombre = (nombre or "").strip()
+            if not nombre:
+                raise ErrorNegocio("Este dato no puede quedar vacío.", campo="nombre_completo")
+            self.nombre_completo = nombre
+            cambiados.append("nombre_completo")
+        if telefono is not self._SIN_CAMBIO:
+            self.telefono = validar_telefono(telefono)
+            cambiados.append("telefono")
         return cambiados
 
     def desactivar(self) -> None:
