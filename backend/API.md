@@ -207,6 +207,8 @@ anfitrión de la publicación o administrador) y las de una publicación (anfitr
 - **Reloj inyectable.** Las reglas que dependen del día (cancelación, COMPLETADA, EN_REVISION vencidas, límite de
   12 meses) leen la fecha en `apps/comun/reloj.py` (hora de Colombia). Las pruebas la fijan con `reloj.fijar()`.
 - **Imágenes.** Se guardan como rutas o URL (`imagen_publicacion.ruta`). La subida de archivos queda para el despliegue.
+  Las de `cargar_demo` son rutas locales (`/alojamientos/<nombre>.jpg`) a fotos con licencia libre que sirve el
+  frontend desde `frontend/public/alojamientos/` (créditos en `CREDITOS.md` de esa carpeta).
 
 
 ## Vistas de solo lectura

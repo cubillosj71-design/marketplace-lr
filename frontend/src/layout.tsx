@@ -20,7 +20,7 @@ export function AuthLayout({ children }: { children: ReactNode }) {
           <h1>Tu alojamiento ideal, a un clic.</h1>
           <p className="lead">Anfitriones y huéspedes conectados en un solo lugar, con disponibilidad al día y reglas claras.</p>
           <div className="hero-card" aria-hidden>
-            <ImageTile img={{ id: "h", nombre: "", color: "linear-gradient(135deg,#2d7f74,#8fd3c4)" }} />
+            <ImageTile img={{ id: "h", nombre: "", color: "linear-gradient(135deg,#2d7f74,#8fd3c4)", src: "/alojamientos/lago-muelle.jpg" }} />
             <div className="meta">
               <b>Cabaña del Lago</b>
               <div className="row" style={{ justifyContent: "space-between", marginTop: 4 }}>

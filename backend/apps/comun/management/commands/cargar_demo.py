@@ -35,13 +35,16 @@ USUARIOS = [
     ("sofia@correo.com", "Sofía Mejía", "320 118 9034", "ANFITRION", "Medellín", "2026-09-08"),
     ("restringido@correo.com", "Andrés Silva", "311 902 3321", "ANFITRION", "Bogotá", "2026-10-27"),
 ]
-IMG = "https://placehold.co/800x600?text="
+# Fotos de la demo: viven en frontend/public/alojamientos/ (el sitio las sirve en /alojamientos/), así funcionan sin
+# conexión a internet. Son de Wikimedia Commons con licencia libre; el autor y la licencia de cada una están en
+# frontend/public/alojamientos/CREDITOS.md.
+IMG = "/alojamientos/"
 
 
 def pub(titulo, tipo, ciudad, ubicacion, descripcion, capacidad, precio, limpieza, servicios, reglas, imagenes, **extra):
     return dict(titulo=titulo, tipo=tipo, ciudad=ciudad, ubicacion_textual=ubicacion, descripcion=descripcion, capacidad=capacidad,
                 precio_noche=Decimal(precio), tarifa_limpieza=Decimal(limpieza), servicios=servicios, reglas=reglas,
-                imagenes=[IMG + i.replace(" ", "+") for i in imagenes], **extra)
+                imagenes=[f"{IMG}{i}.jpg" for i in imagenes], **extra)
 
 
 PUBLICACIONES = [
@@ -50,39 +53,39 @@ PUBLICACIONES = [
         "Apartamento con vista a Monserrate", "Apartamento", "Bogotá", "La Candelaria, a 3 cuadras del Chorro de Quevedo",
         "Apartamento luminoso de dos habitaciones con vista a los cerros, cocina equipada y balcón.", 4, 220000, 50000,
         ["Wi-Fi", "Parqueadero", "Cocina", "Agua caliente"], ["No fumar", "Sin fiestas", "Silencio después de las 10 p. m."],
-        ["Sala", "Habitación", "Vista"], descuento_porcentaje=Decimal(10), descuento_min_noches=7,
+        ["monserrate-sala", "monserrate-habitacion", "monserrate-vista"], descuento_porcentaje=Decimal(10), descuento_min_noches=7,
         servicios_adicionales=[{"nombre": "Desayuno", "precio": Decimal(25000)}, {"nombre": "Traslado al aeropuerto", "precio": Decimal(70000)}],
     ), None),
     ("anfitrion@correo.com", "2026-05-18", "PAUSADA", pub(
         "Cabaña El Roble", "Cabaña", "Guatavita", "Vereda El Roble, km 4", "Cabaña de madera junto al embalse, con chimenea y zona de fogata.",
-        5, 310000, 60000, ["Wi-Fi", "Parqueadero", "Cocina"], ["Mascotas pequeñas permitidas"], ["Fachada", "Chimenea"]), None),
+        5, 310000, 60000, ["Wi-Fi", "Parqueadero", "Cocina"], ["Mascotas pequeñas permitidas"], ["roble-fachada", "roble-chimenea"]), None),
     ("anfitrion@correo.com", "2026-06-30", "PENDIENTE_REVISION", pub(
         "Habitación cerca al centro", "Habitación", "Bogotá", "Calle 19 con carrera 4",
         "Habitación privada con baño, a 10 minutos del centro histórico. Incluye Wi-Fi y agua caliente.", 2, 95000, 20000,
-        ["Wi-Fi", "Agua caliente"], ["Llegada desde las 3:00 p. m."], ["Habitación", "Baño", "Escritorio", "Edificio"]), None),
+        ["Wi-Fi", "Agua caliente"], ["Llegada desde las 3:00 p. m."], ["centro-habitacion", "centro-bano", "centro-escritorio", "centro-edificio"]), None),
     ("anfitrion@correo.com", "2026-08-12", "BORRADOR", pub(
         "Casa familiar en Villa de Leyva", "Casa", "Villa de Leyva", "Vereda El Roble, a 5 min de la plaza",
         "Casa de dos pisos a 5 minutos de la plaza principal, con patio y zona BBQ.", 6, 280000, 60000,
-        ["Wi-Fi", "Parqueadero", "Cocina"], ["No fumar", "Mascotas pequeñas permitidas"], ["Fachada"]),
+        ["Wi-Fi", "Parqueadero", "Cocina"], ["No fumar", "Mascotas pequeñas permitidas"], ["leyva-fachada"]),
         ("DEVOLVER", "Las fotos no corresponden al alojamiento. Sube fotos reales de la casa.")),
     ("anfitrion@correo.com", "2026-10-05", "BLOQUEADA", pub(
         "Loft Chapinero", "Apartamento", "Bogotá", "Chapinero Alto", "Loft moderno con terraza.", 2, 180000, 40000,
-        ["Wi-Fi", "TV"], ["No fumar"], ["Loft"]), ("BLOQUEAR", "La dirección publicada no coincide con la del alojamiento.")),
+        ["Wi-Fi", "TV"], ["No fumar"], ["chapinero-loft"]), ("BLOQUEAR", "La dirección publicada no coincide con la del alojamiento.")),
     ("pedro@correo.com", "2026-08-01", "PENDIENTE_REVISION", pub(
         "Estudio Usaquén", "Apartamento", "Bogotá", "Usaquén, cerca del parque", "Estudio para dos con cocineta.", 2, 150000, 30000,
-        ["Wi-Fi", "Cocina"], ["No fumar"], ["Estudio", "Cocineta"]), None),
+        ["Wi-Fi", "Cocina"], ["No fumar"], ["usaquen-estudio", "usaquen-cocineta"]), None),
     ("sofia@correo.com", "2026-09-15", "ACTIVA", pub(
         "Cabaña del Lago", "Cabaña", "Guatapé", "Orilla del embalse, sector La Piedra", "Cabaña con muelle propio y kayak.", 5, 280000, 60000,
-        ["Wi-Fi", "Parqueadero", "Cocina"], ["Sin fiestas"], ["Muelle", "Sala"]), None),
+        ["Wi-Fi", "Parqueadero", "Cocina"], ["Sin fiestas"], ["lago-muelle", "lago-sala"]), None),
     ("sofia@correo.com", "2026-10-01", "ACTIVA", pub(
         "Casa campestre La Ceja", "Casa", "La Ceja", "Vía La Ceja - La Unión, km 2", "Casa campestre con jardín amplio y BBQ.", 8, 390000, 80000,
-        ["Wi-Fi", "Parqueadero", "Cocina", "Piscina"], ["No fumar"], ["Jardín", "Piscina"]), None),
+        ["Wi-Fi", "Parqueadero", "Cocina", "Piscina"], ["No fumar"], ["ceja-jardin", "ceja-piscina"]), None),
     ("sofia@correo.com", "2026-11-03", "ACTIVA", pub(
         "Habitación Laureles", "Habitación", "Medellín", "Laureles, circular 1", "Habitación privada en casa familiar.", 2, 110000, 20000,
-        ["Wi-Fi", "Agua caliente"], ["Silencio después de las 10 p. m."], ["Habitación"]), None),
+        ["Wi-Fi", "Agua caliente"], ["Silencio después de las 10 p. m."], ["laureles-habitacion"]), None),
     ("restringido@correo.com", "2026-10-28", "ACTIVA", pub(
         "Apartamento El Poblado", "Apartamento", "Medellín", "El Poblado",
-        "No aparece en búsquedas porque la cuenta del anfitrión está restringida.", 3, 240000, 40000, ["Wi-Fi"], ["No fumar"], ["Sala"]), None),
+        "No aparece en búsquedas porque la cuenta del anfitrión está restringida.", 3, 240000, 40000, ["Wi-Fi"], ["No fumar"], ["poblado-sala"]), None),
 ]
 # Reservas por el flujo real (cotizar y reservar con el pago simulado). El reloj de la aplicación fija la fecha de
 # creación, que es la que usan el tablero y los reportes (RF-D-ADM-05). Octubre y noviembre de 2026 muestran todos
