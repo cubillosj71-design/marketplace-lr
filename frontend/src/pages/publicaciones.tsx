@@ -9,7 +9,7 @@ import {
   anfitrionApi, catalogoApi, leerError, misReservasApi, textoTramo,
   type ItemCatalogo, type PoliticaApi, type PublicacionAdmin, type PublicacionCompleta, type PublicacionEntrada, type ReservaResumen,
 } from "../api";
-import { cop, fechaLarga, imagenDe, type EstadoPub } from "../data";
+import { ESTADO_TXT, cop, fechaLarga, imagenDe, type EstadoPub } from "../data";
 import { HistorialRevisiones } from "./admin";
 import { Denegado, Page } from "../layout";
 import { useStore, useToast } from "../store";
@@ -79,7 +79,7 @@ export function MisPublicaciones() {
         <div className="search"><Search /><input className="input" placeholder="Buscar por título o ciudad" value={q} onChange={(e) => setQ(e.target.value)} /></div>
         <select className="select" value={estado} onChange={(e) => setEstado(e.target.value as EstadoPub | "")}>
           <option value="">Estado: todos</option>
-          {(["ACTIVA", "PENDIENTE_REVISION", "PAUSADA", "BORRADOR", "BLOQUEADA"] as EstadoPub[]).map((e) => <option key={e} value={e}>{e}</option>)}
+          {(["ACTIVA", "PENDIENTE_REVISION", "PAUSADA", "BORRADOR", "BLOQUEADA"] as EstadoPub[]).map((e) => <option key={e} value={e}>{ESTADO_TXT[e]}</option>)}
         </select>
         <select className="select" value={tipo} onChange={(e) => setTipo(e.target.value)}>
           <option value="">Tipo: todos</option>
@@ -132,7 +132,7 @@ export function DetallePublicacion() {
   const [reservas, setReservas] = useState<ReservaResumen[]>([]);
   const [politicas, setPoliticas] = useState<PoliticaApi[]>([]);
   const [aviso, setAviso] = useState("");  // datos complementarios que no cargaron
-  const [modal, setModal] = useState<null | "pausar" | "reactivar" | { faltan: string[] }>(null);
+  const [modal, setModal] = useState<null | "pausar" | "reactivar" | "eliminar" | { faltan: string[] }>(null);
   const [ocupado, setOcupado] = useState(false);
 
   useEffect(() => {
@@ -183,6 +183,7 @@ export function DetallePublicacion() {
             {["ACTIVA", "PAUSADA", "BORRADOR"].includes(p.estado) &&
               <Link className="btn btn-secondary" to={`/calendario?pub=${p.id}`}><CalendarDays /> Calendario</Link>}
             {editable && <Link className={`btn ${p.estado === "BORRADOR" ? "btn-secondary" : "btn-primary"}`} to={`/publicaciones/${p.id}/editar`}><FileEdit /> Editar</Link>}
+            {p.estado === "BORRADOR" && <button className="btn btn-ghost" disabled={ocupado} onClick={() => setModal("eliminar")}><Trash2 /> Eliminar</button>}
             {p.estado === "BORRADOR" && <button className="btn btn-primary" disabled={ocupado} onClick={enviar}><Send /> Enviar a revisión</button>}
           </div>
         </div>
@@ -247,6 +248,22 @@ export function DetallePublicacion() {
         <p className="subtle">Los cambios de precio o de política no afectan las reservas ya confirmadas.</p>
       </section>
 
+      {modal === "eliminar" && (
+        <Modal onClose={() => setModal(null)}>
+          <span className="ico-big" style={{ background: "#fbe1de", color: "#9b1c12" }}><Trash2 /></span>
+          <h2>¿Eliminar «{p.titulo || "Sin título"}»?</h2>
+          <p className="muted">Se borran el borrador, sus fotos, reglas y servicios. Esta acción no se puede deshacer.</p>
+          <div className="modal-actions">
+            <button className="btn btn-secondary" onClick={() => setModal(null)}>Cancelar</button>
+            <button className="btn btn-danger" disabled={ocupado} onClick={async () => {
+              setOcupado(true);
+              try { await anfitrionApi.eliminarBorrador(p.id); toast("Borrador eliminado"); go("/publicaciones"); }
+              catch (e) { setModal(null); toast(leerError(e).error, "err"); }
+              finally { setOcupado(false); }
+            }}>Eliminar borrador</button>
+          </div>
+        </Modal>
+      )}
       {modal === "pausar" && (
         <Modal onClose={() => setModal(null)}>
           <span className="ico-big" style={{ background: "#e3ecfa", color: "#1e4a8a" }}><PauseCircle /></span>
@@ -443,7 +460,7 @@ export function FormPublicacion() {
 
       {enEdicionActiva && (
         <Alert tipo="info">
-          La publicación sigue {estado}, sin volver a revisión.
+          La publicación sigue {ESTADO_TXT[estado].toLowerCase()}, sin volver a revisión.
           {nReservas > 0 && ` Los cambios de precio o de política no afectan sus ${nReservas} reservas confirmadas.`}
         </Alert>
       )}

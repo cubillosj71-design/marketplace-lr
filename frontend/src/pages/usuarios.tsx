@@ -2,7 +2,7 @@ import { Check, KeyRound, Minus, PowerOff, ShieldCheck, UserRound } from "lucide
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { catalogoApi, identidadApi, leerError, misReservasApi, type ReservaResumen } from "../api";
-import { PERMISO_TXT, ROL_TXT, fechaLarga, iniciales, isoDia } from "../data";
+import { PERMISO_TXT, RESERVA_TXT, ROL_TXT, fechaLarga, iniciales, isoDia } from "../data";
 import { Page } from "../layout";
 import { useStore, useToast } from "../store";
 import { Alert, Field, Modal } from "../ui";
@@ -115,7 +115,7 @@ export function Perfil() {
             </p>
           )}
           <div className="row-between">
-            <span className="subtle">El rol tampoco se cambia: cada cuenta tiene un único rol.</span>
+            <span />
             <button className="btn btn-primary" disabled={!cambiado} onClick={guardar}>Guardar cambios</button>
           </div>
         </section>
@@ -136,11 +136,11 @@ export function Perfil() {
             </p>
             {pendientes.length > 0 && (
               <Alert tipo="warn">
-                No puedes desactivarla: tienes {pendientes.length} {pendientes.length === 1 ? "reserva pendiente" : "reservas pendientes"} (CONFIRMADA o EN_REVISION)
+                No puedes desactivarla: tienes {pendientes.length} {pendientes.length === 1 ? "reserva pendiente" : "reservas pendientes"} (confirmadas o en revisión)
                 {comoAnfitrion ? " en tus alojamientos" : " como huésped"}.
                 <ul>
                   {pendientes.map((r) => (
-                    <li key={r.id}>{r.alojamiento}: {fechaLarga(r.fecha_llegada)} al {fechaLarga(r.fecha_salida)} ({r.estado})</li>
+                    <li key={r.id}>{r.alojamiento}: {fechaLarga(r.fecha_llegada)} al {fechaLarga(r.fecha_salida)} ({RESERVA_TXT[r.estado]?.toLowerCase()})</li>
                   ))}
                 </ul>
               </Alert>

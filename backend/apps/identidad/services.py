@@ -272,7 +272,7 @@ def desactivar_cuenta(u: Usuario, ip=None) -> None:
     pendientes = reservas.reservas_pendientes(u.id, es_anfitrion=u.rol == RolUsuario.ANFITRION)
     if pendientes:  # CA-04.2, CA-04.5
         raise Conflicto(
-            "No puedes desactivar tu cuenta: tienes reservas CONFIRMADAS o EN_REVISION pendientes.", extra={"reservas": pendientes}
+            "No puedes desactivar tu cuenta: tienes reservas confirmadas o en revisión pendientes.", extra={"reservas": pendientes}
         )
     with transaction.atomic():
         u.desactivar()

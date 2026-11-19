@@ -123,6 +123,17 @@ class MisPublicaciones(ListAPIView):
         return services.mis_publicaciones(self.request.user, self.request.query_params.get("estado"))
 
 
+class MiPublicacion(APIView):
+    """DELETE /catalogo/mis-publicaciones/{id}: el anfitrión dueño elimina su publicación en BORRADOR.
+    Solo publicaciones.gestionar_propias: borrar el borrador de otra persona no es tarea del administrador."""
+
+    permission_classes = [RequierePermiso("publicaciones.gestionar_propias")]
+
+    def delete(self, request, pk):
+        services.eliminar_borrador(request.user, pk)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
 class PublicacionDetalle(APIView):
     """GET y PATCH /catalogo/publicaciones/{id}: anfitrión dueño o administrador (RF-D-ALO-02.1, ADM-01.1)."""
 

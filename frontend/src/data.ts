@@ -18,6 +18,10 @@ export const ESTADO_TXT: Record<EstadoPub, string> = {
   PAUSADA: "Pausada",
   BLOQUEADA: "Bloqueada",
 };
+/** Estados de una reserva como los lee el cliente (el código interno no se muestra). */
+export const RESERVA_TXT: Record<string, string> = {
+  CONFIRMADA: "Confirmada", CANCELADA: "Cancelada", COMPLETADA: "Completada", EN_REVISION: "En revisión",
+};
 
 /** Descripción de cada permiso de la matriz (mismo nombre que en el backend). */
 export const PERMISO_TXT: Record<string, string> = {

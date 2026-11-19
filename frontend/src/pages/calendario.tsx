@@ -96,7 +96,7 @@ export function Calendario() {
       // CA-09.2: no se bloquean noches con una reserva CONFIRMADA; la API manda cuáles
       const choque = isAxiosError(e) ? ((e.response?.data as { fechas?: string[] })?.fechas ?? []) : [];
       setError(choque.length
-        ? `No se puede bloquear ${choque.length > 1 ? `del ${fechaLarga(choque[0]!)} al ${fechaLarga(choque[choque.length - 1]!)}` : `el ${fechaLarga(choque[0]!)}`}: ${choque.length > 1 ? "tienen" : "tiene"} una reserva CONFIRMADA.`
+        ? `No se puede bloquear ${choque.length > 1 ? `del ${fechaLarga(choque[0]!)} al ${fechaLarga(choque[choque.length - 1]!)}` : `el ${fechaLarga(choque[0]!)}`}: ${choque.length > 1 ? "tienen" : "tiene"} una reserva confirmada.`
         : leerError(e).error);
     } finally {
       setGuardando(false);
