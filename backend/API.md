@@ -90,6 +90,7 @@ Registro, sesión (`usuario`) y perfil devuelven:
 | Identidad | `GET /identidad/roles` (la matriz completa) | Administrador (`usuarios.ver`) | RF-D-USU-02.1 |
 | Identidad | `POST y DELETE /admin/usuarios/{id}/restriccion` | Administrador | RF-D-ADM-02.1 |
 | Catálogo | `POST /catalogo/publicaciones` · `GET /catalogo/mis-publicaciones` | Anfitrión | RF-D-ALO-01.1, 02.1 |
+| Catálogo | `DELETE /catalogo/mis-publicaciones/{id}`: elimina una publicación propia en BORRADOR (204; 409 si no está en borrador; 403 si es ajena). Queda `PublicacionEliminada` en la auditoría | Anfitrión dueño | Pedido del PO (2026-11-18), fuera del SRS v3.5 |
 | Catálogo | `GET y PATCH /catalogo/publicaciones/{id}` · `POST .../pausar` · `POST .../reactivar` | Anfitrión dueño, Administrador | RF-D-ALO-02.1, ADM-01.1 |
 | Catálogo | `POST /catalogo/publicaciones/{id}/enviar-revision` | Anfitrión | RF-D-ALO-01.2 |
 | Reservas | `GET y POST /catalogo/publicaciones/{id}/calendario` (la ruta se conserva; la atiende Reservas) | Anfitrión dueño | RF-D-ALO-02.2 |
@@ -157,7 +158,7 @@ permisos basta tener uno.
 | `perfil.gestionar` | Huésped, Anfitrión, Administrador | `GET y PATCH /identidad/perfil` | RF-D-USU-01.4 |
 | `cuenta.desactivar` | Huésped, Anfitrión | `POST /identidad/perfil/desactivar` | RF-D-USU-01.4 |
 | `notificaciones.ver` | Huésped, Anfitrión, Administrador | `GET /notificaciones` · `POST /notificaciones/{id}/leida` · `POST /notificaciones/leidas` | RF-D-RES-04.1 |
-| `publicaciones.gestionar_propias` | Anfitrión | `POST /catalogo/publicaciones` · `GET /catalogo/mis-publicaciones` · `GET y PATCH /catalogo/publicaciones/{id}` · `POST .../pausar` · `POST .../reactivar` · `POST .../enviar-revision` | RF-D-ALO-01.1, 01.2, 02.1 |
+| `publicaciones.gestionar_propias` | Anfitrión | `POST /catalogo/publicaciones` · `GET /catalogo/mis-publicaciones` · `DELETE /catalogo/mis-publicaciones/{id}` · `GET y PATCH /catalogo/publicaciones/{id}` · `POST .../pausar` · `POST .../reactivar` · `POST .../enviar-revision` | RF-D-ALO-01.1, 01.2, 02.1 |
 | `calendario.gestionar` | Anfitrión | `GET y POST /catalogo/publicaciones/{id}/calendario` | RF-D-ALO-02.2 |
 | `reservas.ver_de_mis_alojamientos` | Anfitrión | `GET /reservas/de-mis-alojamientos` · `GET /reservas/{id}` | RF-D-RES-02.3, HU-26 |
 | `publicaciones.moderar` | Administrador | `GET /admin/publicaciones` · `POST /admin/publicaciones/{id}/revision` · `POST y DELETE /admin/publicaciones/{id}/bloqueo` · `GET y PATCH /catalogo/publicaciones/{id}` · `POST .../pausar` · `POST .../reactivar` | RF-D-ADM-01.1, 01.2, ALO-02.1 |

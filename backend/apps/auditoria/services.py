@@ -44,7 +44,7 @@ TIPOS_ACCION: dict[str, dict] = {
     "acceso_no_permitido": {"nombre": "Intento de usar una función no permitida", "acciones": ["AccesoDenegado"]},
     "estado_publicacion": {"nombre": "Cambio de estado de una publicación", "acciones": [
         "PublicacionEnviadaARevision", "PublicacionAprobada", "PublicacionDevuelta", "PublicacionBloqueada",
-        "PublicacionDesbloqueada", "PublicacionPausada", "PublicacionReactivada"]},
+        "PublicacionDesbloqueada", "PublicacionPausada", "PublicacionReactivada", "PublicacionEliminada"]},
     "estado_reserva": {"nombre": "Cambio de estado de una reserva", "acciones": [
         "ReservaConfirmada", "ReservaEnRevision", "ReservaResuelta", "ReservaCompletada"]},
     "reserva_rechazada": {"nombre": "Intento de reserva rechazado", "acciones": ["ReservaRechazada"]},

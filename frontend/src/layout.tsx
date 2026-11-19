@@ -201,14 +201,10 @@ export function AppLayout() {
   );
 }
 
-/** Contenido de una página con su etiqueta de trazabilidad al pie. */
-export function Page({ req, children }: { req: string; children: ReactNode }) {
-  return (
-    <>
-      <div className="content">{children}</div>
-      <div className="req-tag">{req}</div>
-    </>
-  );
+/** Contenido de una página. `req` es la trazabilidad (requisito y caso de uso) para quien lee el código: no se
+ *  muestra, porque el cliente no usa esos códigos. */
+export function Page({ req: _req, children }: { req: string; children: ReactNode }) {
+  return <div className="content">{children}</div>;
 }
 
 /** Protección por permiso (RF-D-USU-02.1). Sin sesión lleva a "Ingresar"; sin el permiso muestra el aviso.

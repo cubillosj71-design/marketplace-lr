@@ -214,7 +214,7 @@ def modificar_calendario(usuario, publicacion_id: int, inicio: date, fin: date, 
         if cerrar:
             choque = nuevas & noches_ocupadas(publicacion_id, inicio, fin)
             if choque:  # CA-09.2
-                raise Conflicto("No se pueden bloquear fechas con una reserva CONFIRMADA.", extra={"fechas": sorted(choque)})
+                raise Conflicto("No se pueden bloquear fechas con una reserva confirmada.", extra={"fechas": sorted(choque)})
         periodos = PeriodoCalendario.objects.filter(publicacion_id=publicacion_id)
         actuales = {d for x in periodos.filter(disponible=False) for d in _dias(x.fecha_inicio, x.fecha_fin)}
         resultado = actuales | nuevas if cerrar else actuales - nuevas
@@ -553,7 +553,7 @@ def cancelar(huesped, reserva_id: int, motivo: str, ip=None) -> dict:
     with transaction.atomic():
         r = Reserva.objects.select_for_update().get(pk=reserva_id)
         if r.estado != EstadoReserva.CONFIRMADA:
-            raise Conflicto(f"Solo se puede cancelar una reserva CONFIRMADA; esta está {r.estado}.")
+            raise Conflicto(f"Solo se puede cancelar una reserva confirmada; esta está {EstadoReserva(r.estado).label.lower()}.")
         dias = (r.fecha_llegada - reloj.hoy()).days  # días calendario en hora de Colombia
         if dias < 1:  # CA-15.5
             raise Conflicto("La fecha de llegada ya llegó: la reserva ya no se puede cancelar.")
@@ -589,7 +589,7 @@ def resolver(admin, reserva_id: int, mantener: bool, motivo: str | None = None, 
         if not r:
             raise NoEncontrado("La reserva no existe.")
         if r.estado != EstadoReserva.EN_REVISION:
-            raise Conflicto(f"Solo se resuelven reservas EN_REVISION; esta está {r.estado}.")
+            raise Conflicto(f"Solo se resuelven reservas en revisión; esta está {EstadoReserva(r.estado).label.lower()}.")
         if mantener:
             r.resolver(True)
             auditoria.registrar(admin.id, "ReservaResuelta", entidad="Reserva", entidad_id=r.id, ip=ip, detalle={"mantener": True})

@@ -8,6 +8,7 @@ app_name = "catalogo"
 urlpatterns = [
     path("publicaciones", views.Publicaciones.as_view(), name="publicaciones"),
     path("mis-publicaciones", views.MisPublicaciones.as_view(), name="mis-publicaciones"),
+    path("mis-publicaciones/<int:pk>", views.MiPublicacion.as_view(), name="mi-publicacion"),
     path("publicaciones/<int:pk>", views.PublicacionDetalle.as_view(), name="publicacion"),
     path("publicaciones/<int:pk>/pausar", views.Pausar.as_view(), name="pausar"),
     path("publicaciones/<int:pk>/reactivar", views.Reactivar.as_view(), name="reactivar"),

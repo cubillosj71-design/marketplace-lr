@@ -8,7 +8,7 @@ import {
   adminApi, leerError,
   type EventoAuditoriaApi, type PublicacionAdmin, type PublicacionCompleta, type RevisionApi, type TableroApi, type UsuarioAdmin,
 } from "../api";
-import { ROL_TXT, cop, type AccionModeracion, type EstadoPub, type Rol } from "../data";
+import { ESTADO_TXT, RESERVA_TXT, ROL_TXT, cop, type AccionModeracion, type EstadoPub, type Rol } from "../data";
 import { Page } from "../layout";
 import { useToast } from "../store";
 import { Alert, Badge, Field, Modal } from "../ui";
@@ -66,7 +66,7 @@ function AccionesPublicacion({ p, alCambiar, compacto }: { p: Pick<PublicacionAd
         <Modal onClose={() => setBloquear(false)}>
           <span className="ico-big" style={{ background: "var(--err-soft)", color: "var(--err)" }}><Ban /></span>
           <h2>Bloquear «{p.titulo}»</h2>
-          <p className="muted">Deja de aparecer en las búsquedas y sus reservas futuras pasan a EN_REVISION. El anfitrión ve el motivo.</p>
+          <p className="muted">Deja de aparecer en las búsquedas y sus reservas futuras quedan en revisión. El anfitrión ve el motivo.</p>
           <Field label="Motivo" hint="Obligatorio." error={error}>
             <textarea className="textarea" placeholder="Ej. La dirección publicada no coincide con la del alojamiento." value={motivo} onChange={(e) => setMotivo(e.target.value)} />
           </Field>
@@ -115,7 +115,7 @@ export function AdminPublicaciones({ soloPendientes = false }: { soloPendientes?
         {!soloPendientes && (
           <select className="select" value={estado} onChange={(e) => setEstado(e.target.value as EstadoPub | "")} aria-label="Estado">
             <option value="">Estado: todos</option>
-            {(["PENDIENTE_REVISION", "ACTIVA", "PAUSADA", "BLOQUEADA"] as EstadoPub[]).map((e) => <option key={e} value={e}>{e.replace("_", " ")}</option>)}
+            {(["PENDIENTE_REVISION", "ACTIVA", "PAUSADA", "BLOQUEADA"] as EstadoPub[]).map((e) => <option key={e} value={e}>{ESTADO_TXT[e]}</option>)}
           </select>
         )}
       </div>
@@ -220,7 +220,7 @@ export function RevisarPublicacion() {
       {devolver && (
         <Modal onClose={() => setDevolver(false)}>
           <h2>Devolver al anfitrión</h2>
-          <p className="muted">La publicación vuelve a BORRADOR y el anfitrión ve la observación.</p>
+          <p className="muted">La publicación vuelve a borrador y el anfitrión ve la observación.</p>
           <Field label="Observación" hint="Obligatoria.">
             <textarea className="textarea" placeholder="Ej. Las fotos no corresponden al alojamiento." value={obs} onChange={(e) => setObs(e.target.value)} />
           </Field>
@@ -291,7 +291,7 @@ export function UsuariosAdmin() {
                     <td className="cell-2"><b>{u.nombre_completo}</b><span className="subtle">{u.correo}</span></td>
                     <td>{ROL_TXT[u.rol]}</td>
                     <td>
-                      <span className={`badge ${estado(u) === "ACTIVA" ? "badge-ACTIVA" : estado(u) === "RESTRINGIDA" ? "badge-BLOQUEADA" : "badge-PAUSADA"}`}>{estado(u)}</span>
+                      <span className={`badge ${estado(u) === "ACTIVA" ? "badge-ACTIVA" : estado(u) === "RESTRINGIDA" ? "badge-BLOQUEADA" : "badge-PAUSADA"}`}>{{ ACTIVA: "Activa", RESTRINGIDA: "Restringida", DESACTIVADA: "Desactivada" }[estado(u)]}</span>
                       {u.motivo_restriccion && <span className="subtle" style={{ display: "block", marginTop: 4, maxWidth: 260 }}>
                         {u.motivo_restriccion}{u.restriccion_hasta ? ` · hasta ${new Date(u.restriccion_hasta).toLocaleDateString("es-CO")}` : ""}</span>}
                     </td>
@@ -388,7 +388,7 @@ export function RegistroAcciones() {
                   <td className="cell-2"><b>{e.actor_nombre ?? (e.actor_id ? `#${e.actor_id}` : "Sistema o visitante")}</b>{e.actor_correo && <span className="subtle">{e.actor_correo}</span>}</td>
                   <td>{e.accion}</td>
                   <td>{sobreQue(e)}</td>
-                  <td><span className={`badge ${e.exitoso ? "badge-ACTIVA" : "badge-BLOQUEADA"}`}>{e.exitoso ? "ÉXITO" : "FALLO"}</span></td>
+                  <td><span className={`badge ${e.exitoso ? "badge-ACTIVA" : "badge-BLOQUEADA"}`}>{e.exitoso ? "Éxito" : "Fallo"}</span></td>
                   <td className="subtle" style={{ maxWidth: 320 }}>{detalleCorto(e)}</td>
                 </tr>
               ))}
@@ -462,7 +462,7 @@ export function TarifaServicioPage() {
             <input className="input" type="number" step="0.5" min={0} max={30} value={nuevo} onChange={(e) => setNuevo(e.target.value)} />
           </Field>
           <button className="btn btn-primary" disabled={!datos || nuevo === "" || Number(nuevo) === Number(datos?.porcentaje)} onClick={guardar}>Guardar</button>
-          <Alert tipo="info">Las reservas ya confirmadas conservan los valores con los que se cotizaron (CA-22.1).</Alert>
+          <Alert tipo="info">Las reservas ya confirmadas conservan los valores con los que se cotizaron.</Alert>
         </section>
         <section className="card stack">
           <h3 className="row" style={{ gap: 8 }}><History size={18} /> Historial</h3>
@@ -536,7 +536,7 @@ export function Tablero() {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: 14 }}>
             <Stat icon={BarChart3} v={pesos(t.ingresos.bruto)} label="Monto bruto de reservas" bg="#dcf3e4" fg="#166534" />
             <Stat icon={Percent} v={pesos(t.ingresos.plataforma)} label="Ingreso de la plataforma" bg="#e3ecfa" fg="#1e4a8a" />
-            <Stat icon={CheckCircle2} v={t.publicaciones_activas} label="Publicaciones ACTIVAS" bg="#fdf0c8" fg="#8a4b05" />
+            <Stat icon={CheckCircle2} v={t.publicaciones_activas} label="Publicaciones activas" bg="#fdf0c8" fg="#8a4b05" />
             <Stat icon={ClipboardList} v={t.reservas_total} label="Reservas creadas" bg="#f1f1ef" fg="#57534e" />
           </div>
           <div className="detail-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 20, alignItems: "start" }}>
@@ -544,7 +544,7 @@ export function Tablero() {
               <h3>Reservas por estado</h3>
               <ul className="list-plain stack" style={{ gap: 8 }}>
                 {ESTADOS_RESERVA.map(([e, bg, fg]) => (
-                  <li key={e} className="row-between"><span className="badge" style={{ background: bg, color: fg }}>{e.replace("_", " ")}</span><b>{t.reservas_por_estado[e] ?? 0}</b></li>
+                  <li key={e} className="row-between"><span className="badge" style={{ background: bg, color: fg }}>{RESERVA_TXT[e]}</span><b>{t.reservas_por_estado[e] ?? 0}</b></li>
                 ))}
               </ul>
             </section>

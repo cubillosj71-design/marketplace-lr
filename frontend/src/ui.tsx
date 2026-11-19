@@ -25,7 +25,7 @@ export function Alert({ tipo, children }: { tipo: "error" | "ok" | "warn" | "inf
 }
 
 export const Badge = ({ estado }: { estado: EstadoPub }) => (
-  <span className={`badge badge-${estado}`} title={ESTADO_TXT[estado]}>{estado}</span>
+  <span className={`badge badge-${estado}`} >{ESTADO_TXT[estado]}</span>
 );
 
 export function Modal({ onClose, children }: { onClose: () => void; children: ReactNode }) {
@@ -61,4 +61,3 @@ export const Logo = () => (
   <span className="logo"><span className="mark">LR</span>Alojamientos LR</span>
 );
 
-export const ReqTag = ({ children }: { children: ReactNode }) => <div className="req-tag">{children}</div>;

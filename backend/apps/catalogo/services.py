@@ -10,7 +10,7 @@ from __future__ import annotations
 from decimal import Decimal
 
 from django.db import transaction
-from django.db.models import Count
+from django.db.models import Count, ProtectedError
 
 from apps.auditoria import services as auditoria
 from apps.comun.errores import Conflicto, ErrorNegocio, NoEncontrado, SinPermiso
@@ -232,7 +232,7 @@ def obtener(usuario, publicacion_id: int) -> Publicacion:
         raise NoEncontrado("La publicación no existe.")
     if not puede_ver(usuario, p):
         _negar(usuario, p, "Ver o modificar una publicación ajena")
-        raise SinPermiso("Solo el anfitrión dueño o un administrador pueden modificarla (CA-05.3).")
+        raise SinPermiso("Solo el anfitrión dueño o un administrador pueden modificarla.")
     return p
 
 
@@ -312,7 +312,7 @@ def crear(anfitrion, d: dict) -> Publicacion:
 def actualizar(usuario, publicacion_id: int, d: dict) -> Publicacion:
     p = obtener(usuario, publicacion_id)
     if usuario.rol == "ANFITRION" and p.estado not in EDITABLE_POR_ANFITRION:
-        raise ErrorNegocio(f"No puedes editar una publicación {p.estado}.", codigo=409)
+        raise ErrorNegocio(f"No puedes editar una publicación {E(p.estado).label.lower()}.", codigo=409)
     if "titulo" in d and not (d["titulo"] or "").strip():
         raise ErrorNegocio("Escribe un título.", campo="titulo")
     _validar_datos({**{c: getattr(p, c) for c in ("descuento_porcentaje", "descuento_min_noches")}, **d})
@@ -332,7 +332,7 @@ def cambiar_estado(usuario, publicacion_id: int, nuevo: str, observacion: str | 
     anterior = p.estado
     if (anterior, nuevo) not in TRANSICIONES.get(usuario.rol, set()):
         _negar(usuario, p, f"{anterior} → {nuevo}")
-        raise ErrorNegocio(f"No se puede pasar de {anterior} a {nuevo}.", codigo=409)
+        raise ErrorNegocio(f"No se puede pasar de «{E(anterior).label}» a «{E(nuevo).label}».", codigo=409)
     if nuevo == E.PENDIENTE_REVISION and (f := faltantes(p)):
         raise ErrorNegocio("No se puede enviar a revisión. Falta: " + ", ".join(f) + ".", extra={"faltantes": f})
     accion = ACCION.get((anterior, nuevo)) if usuario.rol == "ADMINISTRADOR" else None
@@ -357,6 +357,28 @@ def cambiar_estado(usuario, publicacion_id: int, nuevo: str, observacion: str | 
                      detalle={**detalle, "titulo": p.titulo, "anfitrion": p.anfitrion_id,
                               "por_administrador": usuario.rol == "ADMINISTRADOR"})
     return p
+
+
+def eliminar_borrador(anfitrion, publicacion_id: int) -> None:
+    """El anfitrión elimina su publicación en BORRADOR (pedido del PO el 2026-11-18; no está en el SRS v3.5).
+
+    Solo BORRADOR: nunca estuvo activa, así que no tiene cotizaciones ni reservas. Sus imágenes, reglas, servicios,
+    calendario e historial de revisiones se borran con ella; la auditoría conserva la eliminación."""
+    p = obtener(anfitrion, publicacion_id)
+    no_se_puede = "Solo puedes eliminar una publicación en borrador. Si ya está publicada, puedes pausarla."
+    if p.estado != E.BORRADOR:
+        raise Conflicto(no_se_puede)
+    with transaction.atomic():
+        p = Publicacion.objects.select_for_update().get(pk=p.pk)
+        if p.estado != E.BORRADOR:  # cambió mientras tanto (por ejemplo, se envió a revisión)
+            raise Conflicto(no_se_puede)
+        titulo = p.titulo
+        try:
+            p.delete()
+        except ProtectedError as e:  # defensa: una cotización o reserva la protege (on_delete=PROTECT)
+            raise Conflicto("Esta publicación tiene cotizaciones o reservas y no se puede eliminar.") from e
+        auditoria.registrar(anfitrion.id, "PublicacionEliminada", entidad="Publicacion", entidad_id=publicacion_id,
+                            detalle={"titulo": titulo})
 
 
 def revisar(admin, publicacion_id: int, accion: str, observacion: str | None) -> Publicacion:

@@ -61,7 +61,7 @@ AVISOS = {
     "PublicacionAprobada": (("anfitrion",), lambda d: f"Tu publicación «{d.get('titulo')}» fue aprobada y ya aparece en las búsquedas."),
     "PublicacionDevuelta": (("anfitrion",), lambda d: f"Tu publicación «{d.get('titulo')}» fue devuelta. Observación: {d.get('observacion', '')}"),
     "PublicacionBloqueada": (("anfitrion",), lambda d: f"Tu publicación «{d.get('titulo')}» fue bloqueada. Motivo: {d.get('observacion', '')}"),
-    "PublicacionDesbloqueada": (("anfitrion",), lambda d: f"Tu publicación «{d.get('titulo')}» fue desbloqueada y quedó PAUSADA. Puedes reactivarla."),
+    "PublicacionDesbloqueada": (("anfitrion",), lambda d: f"Tu publicación «{d.get('titulo')}» fue desbloqueada y quedó pausada. Puedes reactivarla."),
     "PublicacionPausada": (("anfitrion",), lambda d: f"El administrador pausó tu publicación «{d.get('titulo')}»."),
     "PublicacionReactivada": (("anfitrion",), lambda d: f"El administrador reactivó tu publicación «{d.get('titulo')}»."),
 }

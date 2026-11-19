@@ -138,7 +138,7 @@ def test_ca_04_5_tampoco_desactiva_con_reservas_en_revision(demo, entrar):
     for correo in ("huesped@correo.com", "anfitrion@correo.com"):
         r = entrar(correo).post("/api/v1/identidad/perfil/desactivar")
         assert r.status_code == 409 and {x["estado"] for x in r.json()["reservas"]} == {"EN_REVISION"}
-        assert "EN_REVISION" in r.json()["detalle"]
+        assert "en revisión" in r.json()["detalle"]
 
 
 def test_ca_04_4_desactivar_y_reactivar_al_ingresar(demo, entrar):

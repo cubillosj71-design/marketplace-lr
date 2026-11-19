@@ -277,7 +277,6 @@ table.table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .page-head p { color: var(--muted); margin-top: 4px; }
 .back { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; margin-bottom: 6px; }
 .back svg { width: 15px; height: 15px; }
-.req-tag { font-family: var(--font-mono); font-size: 11.5px; color: var(--subtle); text-align: right; padding: 0 28px 16px; }
 
 .toolbar { display: flex; gap: 12px; flex-wrap: wrap; }
 .toolbar .search { position: relative; flex: 1; min-width: 220px; }
@@ -396,7 +395,6 @@ table.table { width: 100%; border-collapse: collapse; font-size: 14px; }
   .toolbar .select { flex: 1; }
   .day { min-height: 54px; padding: 6px; }
   .day small { display: none; }
-  .req-tag { padding: 0 16px 16px; }
 }
 
 /* ---------- reportes ---------- */

@@ -312,6 +312,8 @@ export const anfitrionApi = {
   enviarRevision: (id: number) => api.post<PublicacionCompleta>(`/catalogo/publicaciones/${id}/enviar-revision`),
   pausar: (id: number) => api.post<PublicacionCompleta>(`/catalogo/publicaciones/${id}/pausar`),
   reactivar: (id: number) => api.post<PublicacionCompleta>(`/catalogo/publicaciones/${id}/reactivar`),
+  /** Solo BORRADOR y solo el anfitrión dueño. */
+  eliminarBorrador: (id: number) => api.delete(`/catalogo/mis-publicaciones/${id}`),
   /** RF-D-ALO-02.2: la ruta se conserva en Catálogo, pero la atiende Reservas. */
   calendario: (id: number, desde: string, hasta: string) =>
     api.get<CalendarioApi>(`/catalogo/publicaciones/${id}/calendario`, { params: { desde, hasta } }),

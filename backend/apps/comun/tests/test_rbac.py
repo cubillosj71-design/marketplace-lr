@@ -162,6 +162,12 @@ class Caso:
         return f"{self.metodo} {self.patron}"
 
 
+def _borrador_nuevo(ctx) -> int:
+    from apps.catalogo import services as catalogo
+
+    return catalogo.crear(ctx["usuarios"][A], {"titulo": "Borrador para eliminar"}).id
+
+
 def _fija(ruta, cuerpo=None):
     return lambda ctx, rol: (ruta, cuerpo)
 
@@ -185,6 +191,8 @@ CASOS = [
     # Publicaciones del anfitrión (RF-D-ALO-01.x, 02.1); el administrador modifica cualquiera (ALO-02.1, ADM-01.x)
     Caso("POST", "api/v1/catalogo/publicaciones", frozenset({A}), _fija("/api/v1/catalogo/publicaciones", {"titulo": "Nueva"}), 201),
     Caso("GET", "api/v1/catalogo/mis-publicaciones", frozenset({A}), _fija("/api/v1/catalogo/mis-publicaciones")),
+    Caso("DELETE", "api/v1/catalogo/mis-publicaciones/<int:pk>", frozenset({A}),
+         lambda c, r: (f"/api/v1/catalogo/mis-publicaciones/{_borrador_nuevo(c)}", None), 204),
     Caso("GET", "api/v1/catalogo/publicaciones/<int:pk>", frozenset({A, ADM}),
          lambda c, r: (f"/api/v1/catalogo/publicaciones/{c['pub']}", None)),
     Caso("PATCH", "api/v1/catalogo/publicaciones/<int:pk>", frozenset({A, ADM}),

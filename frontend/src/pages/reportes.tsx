@@ -83,7 +83,7 @@ export function Reportes() {
                 <option value="">Todos</option>{(Object.keys(ROL_TXT) as Rol[]).map((r) => <option key={r} value={r}>{ROL_TXT[r]}</option>)}
               </select></Field>
               <Field label="Estado de la cuenta"><select className="select" value={filtros.estado_cuenta} onChange={(e) => set("estado_cuenta", e.target.value)}>
-                <option value="">Todos</option>{["ACTIVA", "DESACTIVADA", "RESTRINGIDA"].map((e) => <option key={e} value={e}>{e}</option>)}
+                <option value="">Todos</option>{([["ACTIVA", "Activa"], ["DESACTIVADA", "Desactivada"], ["RESTRINGIDA", "Restringida"]] as const).map(([e, t]) => <option key={e} value={e}>{t}</option>)}
               </select></Field>
             </div>
           )}
