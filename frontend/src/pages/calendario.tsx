@@ -6,7 +6,7 @@ import { anfitrionApi, leerError, misReservasApi, type PublicacionAdmin, type Re
 import { fechaLarga, isoDia } from "../data";
 import { Page } from "../layout";
 import { useToast } from "../store";
-import { Alert, Badge } from "../ui";
+import { Alert } from "../ui";
 
 const DOW = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 
@@ -159,7 +159,7 @@ export function Calendario() {
 
         <aside className="stack">
           <section className="card stack">
-            <div className="row-between"><h3>Fechas seleccionadas</h3>{pub && <Badge estado={pub.estado} />}</div>
+            <h3>Fechas seleccionadas</h3>
             {r.length ? (
               <p><b>{r.length === 1 ? fechaLarga(r[0]!) : `${fechaLarga(r[0]!)} – ${fechaLarga(r[r.length - 1]!)}`}</b> · {r.length} {r.length === 1 ? "noche" : "noches"}</p>
             ) : (
