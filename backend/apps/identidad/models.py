@@ -15,6 +15,8 @@ from django.db import models
 from django.db.models import Q
 from django.utils import timezone
 
+from apps.comun.errores import ErrorNegocio
+
 
 class RolUsuario(models.TextChoices):
     HUESPED = "HUESPED", "Huésped"
@@ -78,6 +80,45 @@ class Usuario(AbstractBaseUser):
         """SimpleJWT la revisa en cada petición: una cuenta desactivada o restringida pierde el
         acceso en la siguiente petición (ADR-005)."""
         return self.activa and not self.restringida
+
+    # ---- operaciones del diagrama de clases (MOD-01). Cambian el estado de la cuenta; los permisos, los
+    # mensajes, la auditoría y los tokens los orquesta identidad.services en la misma transacción.
+    @classmethod
+    def registrar(cls, correo: str, clave: str, rol: str, **datos) -> "Usuario":
+        """registrar(correo, clave, rol) del diagrama: crea la cuenta con la contraseña cifrada y la fecha de la
+        autorización de tratamiento de datos (Ley 1581). Las validaciones previas las hace identidad.services."""
+        return cls.objects.create_user(correo=correo, password=clave, rol=rol, autorizacion_datos=timezone.now(), **datos)
+
+    def iniciar_sesion(self, correo: str, clave: str) -> bool:
+        """iniciarSesion(correo, clave) del diagrama: True si el correo y la contraseña son de esta cuenta."""
+        return (correo or "").strip().lower() == self.correo.lower() and self.check_password(clave or "")
+
+    _SIN_CAMBIO = object()
+
+    def actualizar_perfil(self, nombre=_SIN_CAMBIO, telefono=_SIN_CAMBIO) -> list[str]:
+        """actualizarPerfil(nombre, telefono) del diagrama: cambia los datos que llegan (ninguno puede quedar vacío,
+        CA-04.1) y devuelve los campos cambiados para guardarlos. El correo y el rol no se cambian aquí."""
+        cambiados = []
+        for campo, valor in (("nombre_completo", nombre), ("telefono", telefono)):
+            if valor is self._SIN_CAMBIO:
+                continue
+            valor = (valor or "").strip()
+            if not valor:
+                raise ErrorNegocio("Este dato no puede quedar vacío.", campo=campo)
+            setattr(self, campo, valor)
+            cambiados.append(campo)
+        return cambiados
+
+    def desactivar(self) -> None:
+        """desactivar() del diagrama: la cuenta queda inactiva (CA-04.2). Las reglas previas (no ser administrador,
+        no tener reservas pendientes) las revisa identidad.services.desactivar_cuenta."""
+        self.activa = False
+        self.save(update_fields=["activa"])
+
+    def reactivar(self) -> None:
+        """reactivar() del diagrama: la cuenta desactivada vuelve a estar activa al ingresar de nuevo (CA-04.4)."""
+        self.activa = True
+        self.save(update_fields=["activa"])
 
     def has_perm(self, perm, obj=None) -> bool:
         return self.is_staff
