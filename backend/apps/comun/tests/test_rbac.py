@@ -242,6 +242,11 @@ CASOS = [
          lambda c, r: (f"/api/v1/admin/usuarios/{c['pedro']}/restriccion", {"motivo": "Cobros por fuera"}), 201),
     Caso("DELETE", "api/v1/admin/usuarios/<int:usuario_id>/restriccion", frozenset({ADM}),
          lambda c, r: (f"/api/v1/admin/usuarios/{c['restringido']}/restriccion", None), 204),
+    # RBAC dinámico (ADR-010): conceder y retirar un permiso a un rol
+    Caso("PUT", "api/v1/admin/roles/<str:rol>/permisos/<str:codigo>", frozenset({ADM}),
+         _fija("/api/v1/admin/roles/ANFITRION/permisos/tablero.ver")),
+    Caso("DELETE", "api/v1/admin/roles/<str:rol>/permisos/<str:codigo>", frozenset({ADM}),
+         _fija("/api/v1/admin/roles/HUESPED/permisos/reservas.cancelar_propia")),
     Caso("GET", "api/v1/admin/tarifa-servicio", frozenset({ADM}), _fija("/api/v1/admin/tarifa-servicio")),
     Caso("PUT", "api/v1/admin/tarifa-servicio", frozenset({ADM}), _fija("/api/v1/admin/tarifa-servicio", {"porcentaje": "12.00"})),
     Caso("GET", "api/v1/admin/reservas", frozenset({ADM}), _fija("/api/v1/admin/reservas")),
@@ -364,7 +369,8 @@ ESPERADOS = {
     A: {"publicaciones.gestionar_propias", "calendario.gestionar", "reservas.ver_de_mis_alojamientos", "perfil.gestionar",
         "cuenta.desactivar", "notificaciones.ver", "catalogo.ver"},
     ADM: {"publicaciones.moderar", "reservas.resolver", "usuarios.ver", "usuarios.restringir", "tarifa.configurar",
-          "auditoria.consultar", "tablero.ver", "reportes.descargar", "perfil.gestionar", "notificaciones.ver", "catalogo.ver"},
+          "auditoria.consultar", "tablero.ver", "reportes.descargar", "perfil.gestionar", "notificaciones.ver", "catalogo.ver",
+          "roles.gestionar"},
 }
 
 

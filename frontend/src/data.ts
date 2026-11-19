@@ -19,31 +19,6 @@ export const ESTADO_TXT: Record<EstadoPub, string> = {
   BLOQUEADA: "Bloqueada",
 };
 
-/** Descripción de cada permiso de la matriz (mismo nombre que en el backend). */
-export const PERMISO_TXT: Record<string, string> = {
-  "busqueda.ver": "Buscar alojamientos y ver su detalle",
-  "cuenta.registrar": "Registrarse",
-  "catalogo.ver": "Consultar ciudades, tipos, servicios y políticas",
-  "reservas.cotizar": "Cotizar una estancia",
-  "reservas.crear": "Reservar y pagar",
-  "reservas.ver_propias": "Consultar sus reservas",
-  "reservas.cancelar_propia": "Cancelar sus reservas",
-  "perfil.gestionar": "Actualizar su perfil y su contraseña",
-  "cuenta.desactivar": "Desactivar su cuenta",
-  "notificaciones.ver": "Ver sus notificaciones",
-  "publicaciones.gestionar_propias": "Crear, editar, enviar a revisión, pausar y reactivar sus publicaciones",
-  "calendario.gestionar": "Administrar el calendario de sus alojamientos",
-  "reservas.ver_de_mis_alojamientos": "Consultar las reservas de sus alojamientos",
-  "publicaciones.moderar": "Aprobar, devolver, bloquear y modificar cualquier publicación",
-  "reservas.resolver": "Resolver reservas EN_REVISION",
-  "usuarios.ver": "Consultar las cuentas de usuario",
-  "usuarios.restringir": "Restringir cuentas y quitar la restricción",
-  "tarifa.configurar": "Configurar la tarifa de servicio",
-  "auditoria.consultar": "Consultar el registro de acciones",
-  "tablero.ver": "Ver el tablero",
-  "reportes.descargar": "Descargar reportes (PDF o Excel)",
-};
-
 export const PALETA = [
   "linear-gradient(135deg,#2d7f74,#8fd3c4)",
   "linear-gradient(135deg,#c2410c,#f5a97f)",

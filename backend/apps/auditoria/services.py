@@ -54,6 +54,7 @@ TIPOS_ACCION: dict[str, dict] = {
     "cuenta": {"nombre": "Cuenta de usuario", "acciones": [
         "UsuarioRegistrado", "PerfilActualizado", "CuentaDesactivada", "RecuperacionSolicitada", "ContrasenaRestablecida",
         "CuentaRestringida", "RestriccionLevantada"]},
+    "permisos": {"nombre": "Cambio de permisos de un rol", "acciones": ["PermisoConcedido", "PermisoRetirado"]},
     "pago": {"nombre": "Pagos y devoluciones", "acciones": ["PagoAprobado", "PagoNoAprobado", "DevolucionRegistrada", "PagoConciliado"]},
     "operacion": {"nombre": "Operación y fallas", "acciones": ["ErrorOperacion", "NotificacionFallida", "TareasDiarias"]},
 }

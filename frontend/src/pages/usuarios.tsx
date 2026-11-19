@@ -1,8 +1,8 @@
-import { Check, KeyRound, Minus, PowerOff, ShieldCheck, UserRound } from "lucide-react";
+import { Check, KeyRound, Lock, Minus, PowerOff, ShieldCheck, UserRound } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { catalogoApi, identidadApi, leerError, misReservasApi, type ReservaResumen } from "../api";
-import { PERMISO_TXT, ROL_TXT, fechaLarga, iniciales, isoDia } from "../data";
+import { adminApi, catalogoApi, identidadApi, leerError, misReservasApi, type MatrizApi, type ReservaResumen, type RolMatrizApi } from "../api";
+import { ROL_TXT, fechaLarga, iniciales, isoDia } from "../data";
 import { Page } from "../layout";
 import { useStore, useToast } from "../store";
 import { Alert, Field, Modal } from "../ui";
@@ -203,28 +203,79 @@ export function CambiarContrasena() {
   );
 }
 
-/* ---------------- RF-D-USU-02.1 Roles y permisos (consulta) ---------------- */
+/* ---------------- RF-D-USU-02.1 Roles y permisos (RBAC dinámico, ADR-010) ---------------- */
 const CORTO: Record<string, string> = { VISITANTE: "Visit.", HUESPED: "Huésp.", ANFITRION: "Anfit.", ADMINISTRADOR: "Admin" };
 
-/** La matriz sale de GET /identidad/roles (rbac.PERMISOS en el backend); se resalta la columna del usuario actual. */
+/**
+ * La matriz sale de GET /identidad/roles (tabla rol_permiso); se resalta la columna del usuario actual.
+ * Quien tiene roles.gestionar (el Administrador) concede o retira permisos con un clic. El backend decide qué se
+ * puede cambiar: los permisos "fijos" no se quitan y los que no son "asignables" a un rol no se le dan.
+ */
 export function Roles() {
-  const { usuario } = useStore();
-  const [roles, setRoles] = useState<{ rol: string; permisos: string[] }[] | null>(null);
+  const { usuario, tiene, recargarPermisos } = useStore();
+  const toast = useToast();
+  const [matriz, setMatriz] = useState<MatrizApi | null>(null);
   const [error, setError] = useState("");
+  const [guardando, setGuardando] = useState("");  // "ROL|permiso" mientras se guarda esa celda
   useEffect(() => {
-    identidadApi.roles().then((r) => setRoles(r.data.roles)).catch((e) => setError(leerError(e).error));
+    identidadApi.roles().then((r) => setMatriz(r.data)).catch((e) => setError(leerError(e).error));
   }, []);
+  const editable = tiene("roles.gestionar");
   const actual = usuario?.rol ?? "VISITANTE";  // solo para resaltar la columna
-  const filas = roles ? [...new Set(roles.flatMap((r) => r.permisos))] : [];
-  const porRol = new Map((roles ?? []).map((r) => [r.rol, new Set(r.permisos)]));
+  const roles = matriz?.roles ?? [];
+  // Filas en el orden de los roles; los asignables incluyen los que hoy no tiene nadie
+  const filas = [...new Set(roles.flatMap((r) => r.asignables))];
+  const descripcion = new Map((matriz?.permisos ?? []).map((p) => [p.codigo, p.descripcion]));
+
+  const cambiar = async (r: RolMatrizApi, p: string) => {
+    const conceder = !r.permisos.includes(p);
+    setGuardando(`${r.rol}|${p}`);
+    try {
+      const { data } = conceder ? await adminApi.concederPermiso(r.rol, p) : await adminApi.retirarPermiso(r.rol, p);
+      setMatriz((m) => m && { ...m, roles: m.roles.map((x) => (x.rol === r.rol ? { ...x, permisos: data.permisos } : x)) });
+      toast(`${conceder ? "Permiso concedido a" : "Permiso retirado a"} ${ROL_TXT[r.rol] ?? r.rol}: ${descripcion.get(p) ?? p}.`);
+      if (r.rol === actual) await recargarPermisos();  // el menú del propio Administrador cambia de inmediato
+    } catch (e) {
+      toast(leerError(e).error, "err");
+    } finally {
+      setGuardando("");
+    }
+  };
+
+  const celda = (r: RolMatrizApi, p: string) => {
+    const lo_tiene = r.permisos.includes(p);
+    const icono = lo_tiene
+      ? <Check size={18} color="var(--ok)" aria-label="Permitido" />
+      : <Minus size={18} color="#c4ccca" aria-label="No permitido" />;
+    if (!editable) return icono;
+    if (r.fijos.includes(p)) {
+      return <span className="celda-permiso fija" title="Este permiso no se puede quitar: el rol lo necesita para funcionar."><Check size={18} color="var(--ok)" aria-label="Permitido" /><Lock size={11} /></span>;
+    }
+    if (!r.asignables.includes(p)) {
+      return <span className="celda-permiso no-asignable" title="Este rol no puede tener este permiso.">{icono}</span>;
+    }
+    const nombre = `${lo_tiene ? "Retirar" : "Conceder"} "${descripcion.get(p) ?? p}" a ${ROL_TXT[r.rol] ?? r.rol}`;
+    return (
+      <button type="button" className="celda-permiso" aria-pressed={lo_tiene} aria-label={nombre} title={nombre}
+        disabled={guardando !== ""} onClick={() => cambiar(r, p)}>
+        {guardando === `${r.rol}|${p}` ? <span className="subtle">…</span> : icono}
+      </button>
+    );
+  };
 
   return (
-    <Page req="RF-D-USU-02.1 · HU-05 · GET /identidad/roles">
+    <Page req="RF-D-USU-02.1 · HU-05 · ADR-010">
       <div className="page-head">
-        <div><h1>Roles y permisos</h1><p>Cada cuenta tiene un único rol. Si alguien intenta usar una función que no le corresponde, el sistema la niega.</p></div>
+        <div>
+          <h1>Roles y permisos</h1>
+          <p>
+            Cada cuenta tiene un único rol. Si alguien intenta usar una función que no le corresponde, el sistema la niega.
+            {editable && " Haz clic en una casilla para conceder o retirar ese permiso: el cambio rige desde la siguiente acción de cada usuario."}
+          </p>
+        </div>
       </div>
       {error && <Alert tipo="error">{error}</Alert>}
-      {!roles ? (!error && <p className="muted">Cargando…</p>) : (
+      {!matriz ? (!error && <p className="muted">Cargando…</p>) : (
         <div className="card" style={{ padding: 0, overflow: "hidden" }}>
           <div className="table-wrap">
             <table className="table matriz-roles">
@@ -242,12 +293,10 @@ export function Roles() {
               <tbody>
                 {filas.map((p) => (
                   <tr key={p}>
-                    <td>{PERMISO_TXT[p] ?? p}<br /><code className="subtle">{p}</code></td>
+                    <td>{descripcion.get(p) ?? p}</td>
                     {roles.map((r) => (
                       <td key={r.rol} style={{ textAlign: "center", background: r.rol === actual ? "var(--accent-soft)" : undefined }}>
-                        {porRol.get(r.rol)?.has(p)
-                          ? <Check size={18} color="var(--ok)" aria-label="Permitido" />
-                          : <Minus size={18} color="#c4ccca" aria-label="No permitido" />}
+                        {celda(r, p)}
                       </td>
                     ))}
                   </tr>
@@ -256,6 +305,11 @@ export function Roles() {
             </table>
           </div>
         </div>
+      )}
+      {editable && (
+        <p className="subtle" style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+          <Lock size={13} /> Con candado: permisos que el rol necesita para funcionar. Atenuados: permisos que ese rol no puede tener.
+        </p>
       )}
       <p className="subtle" style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
         <UserRound size={14} /> El Visitante es quien entra sin cuenta o sin haber iniciado sesión.

@@ -13,3 +13,4 @@ Copia de la sección 11 del documento de diseño (`docs/diseno`). Si una decisi�
 | [ADR-007](ADR-007-comunicacion-entre-servicios-interfaces-sincronas-y.md) | Comunicación entre servicios: interfaces síncronas y eventos de dominio | Aceptada |
 | [ADR-008](ADR-008-despliegue-en-render-con-docker-e-integracion-continua.md) | Despliegue en Render con Docker e integración continua en GitHub Actions | Aceptada |
 | [ADR-009](ADR-009-reportes-generados-en-el-servidor-con-reportlab-y.md) | Reportes generados en el servidor con ReportLab y openpyxl | Aceptada |
+| [ADR-010](ADR-010-matriz-de-permisos-editable-rbac-dinamico.md) | Matriz de permisos editable por el Administrador (RBAC dinámico). Complementa a ADR-005 | Propuesta |

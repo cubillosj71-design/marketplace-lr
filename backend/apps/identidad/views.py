@@ -163,14 +163,27 @@ class Permisos(APIView):
 
 
 class Roles(APIView):
-    """GET /identidad/roles (RF-D-USU-02.1): la matriz completa de apps.comun.rbac, para la pantalla "Roles y
-    permisos". Es pública: no revela datos de nadie, solo qué puede hacer cada rol."""
+    """GET /identidad/roles (RF-D-USU-02.1): la matriz vigente (tabla rol_permiso), para la pantalla "Roles y
+    permisos". Trae el catálogo de permisos con su descripción y, por rol, los permisos que se le pueden dar
+    (asignables) y los que no se le pueden quitar (fijos). Es pública: no revela datos de nadie."""
 
     permission_classes = [AllowAny]
 
     def get(self, request):
-        orden = [rbac.VISITANTE, "HUESPED", "ANFITRION", "ADMINISTRADOR"]
-        return Response({"roles": [{"rol": r, "permisos": sorted(rbac.PERMISOS[r])} for r in orden]})
+        return Response(services.matriz())
+
+
+class PermisoDeRolAdmin(APIView):
+    """PUT y DELETE /admin/roles/{rol}/permisos/{codigo} (RF-D-USU-02.1, ADR-010): el Administrador concede o
+    retira un permiso a un rol. Rige desde la siguiente petición de cualquier cuenta de ese rol."""
+
+    permission_classes = [RequierePermiso("roles.gestionar")]
+
+    def put(self, request, rol, codigo):
+        return Response(services.cambiar_permiso(request.user, rol, codigo, conceder=True, ip=ip_de(request)))
+
+    def delete(self, request, rol, codigo):
+        return Response(services.cambiar_permiso(request.user, rol, codigo, conceder=False, ip=ip_de(request)))
 
 
 class PerfilSerializer(serializers.Serializer):

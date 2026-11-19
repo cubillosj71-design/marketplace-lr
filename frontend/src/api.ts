@@ -73,6 +73,19 @@ export interface UsuarioApi {
   fecha_registro: string | null;
 }
 
+/** Matriz de permisos por rol (GET /identidad/roles). */
+export interface RolMatrizApi {
+  rol: string;
+  permisos: string[];    // los que tiene hoy
+  asignables: string[];  // los que se le pueden dar
+  fijos: string[];       // los que no se le pueden quitar
+}
+
+export interface MatrizApi {
+  permisos: { codigo: string; descripcion: string }[];
+  roles: RolMatrizApi[];
+}
+
 export interface SesionApi {
   access: string;
   usuario: UsuarioApi;
@@ -111,8 +124,8 @@ export const identidadApi = {
   desactivar: () => api.post("/identidad/perfil/desactivar"),
   /** GET /identidad/permisos: rol y permisos de quien llama (sin sesión, los del VISITANTE). */
   permisos: () => api.get<{ rol: string; permisos: string[] }>("/identidad/permisos"),
-  /** GET /identidad/roles: la matriz completa de rbac.PERMISOS (pública). */
-  roles: () => api.get<{ roles: { rol: string; permisos: string[] }[] }>("/identidad/roles"),
+  /** GET /identidad/roles: la matriz vigente (tabla rol_permiso, ADR-010). Pública. */
+  roles: () => api.get<MatrizApi>("/identidad/roles"),
 };
 
 /**
@@ -349,6 +362,11 @@ export const adminApi = {
   restringir: (id: number, motivo: string, fecha_fin?: string | null) =>
     api.post(`/admin/usuarios/${id}/restriccion`, { motivo, ...(fecha_fin ? { fecha_fin } : {}) }),
   quitarRestriccion: (id: number) => api.delete(`/admin/usuarios/${id}/restriccion`),
+  /** RBAC dinámico (ADR-010): concede o retira un permiso a un rol. */
+  concederPermiso: (rol: string, codigo: string) =>
+    api.put<{ rol: string; permisos: string[] }>(`/admin/roles/${rol}/permisos/${encodeURIComponent(codigo)}`),
+  retirarPermiso: (rol: string, codigo: string) =>
+    api.delete<{ rol: string; permisos: string[] }>(`/admin/roles/${rol}/permisos/${encodeURIComponent(codigo)}`),
   tarifa: () => api.get<{ porcentaje: string; historial: { porcentaje: string; vigente_desde: string; administrador: number }[] }>("/admin/tarifa-servicio"),
   cambiarTarifa: (porcentaje: string) => api.put<{ porcentaje: string; vigente_desde: string }>("/admin/tarifa-servicio", { porcentaje }),
   auditoria: (f: { usuario?: number; tipo?: string; desde?: string; hasta?: string; page?: number }) =>

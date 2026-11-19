@@ -77,6 +77,7 @@ Registro, sesión (`usuario`) y perfil devuelven:
 | Identidad | `POST /identidad/perfil/desactivar` | Huésped, Anfitrión | RF-D-USU-01.4 |
 | Identidad | `GET /identidad/permisos` | Todos (sin sesión, los del Visitante) | RF-D-USU-02.1 |
 | Identidad | `GET /identidad/roles` (la matriz completa) | Todos (pública) | RF-D-USU-02.1 |
+| Identidad | `PUT y DELETE /admin/roles/{rol}/permisos/{codigo}` (conceder y retirar) | Administrador | RF-D-USU-02.1, ADR-010 |
 | Identidad | `POST y DELETE /admin/usuarios/{id}/restriccion` | Administrador | RF-D-ADM-02.1 |
 | Catálogo | `POST /catalogo/publicaciones` · `GET /catalogo/mis-publicaciones` | Anfitrión | RF-D-ALO-01.1, 02.1 |
 | Catálogo | `GET y PATCH /catalogo/publicaciones/{id}` · `POST .../pausar` · `POST .../reactivar` | Anfitrión dueño, Administrador | RF-D-ALO-02.1, ADM-01.1 |
@@ -109,17 +110,33 @@ la restricción vigente), `publicaciones` (filtros `estado`, y `ciudad` y `tipo`
 en curso. Ver la sección "Tablero y reportes".
 
 Fuera de la tabla 3.4, el backend agrega rutas que el frontend necesita: `GET /catalogo/publicaciones/{id}`,
-`GET /admin/publicaciones`, `GET /identidad/recuperacion/{token}` (estado del enlace), `GET /catalogo/politicas` y
-`GET /identidad/roles`. `GET /catalogo/mis-publicaciones` y `GET /admin/publicaciones` traen `imagen` (portada) y
+`GET /admin/publicaciones`, `GET /identidad/recuperacion/{token}` (estado del enlace), `GET /catalogo/politicas`,
+`GET /identidad/roles` y `PUT y DELETE /admin/roles/{rol}/permisos/{codigo}` (ADR-010). `GET /catalogo/mis-publicaciones` y `GET /admin/publicaciones` traen `imagen` (portada) y
 `ultima_revision`; el detalle trae `administrador_nombre` en cada revisión. El cambio de contraseña
 con sesión iniciada va en `PATCH /identidad/perfil` con `password_actual` y `password_nueva`.
 
 ## Permisos por rol (RF-D-USU-02.1)
 
-Cada cuenta tiene un único rol (`usuario.rol`) y quien no inició sesión es **Visitante**. La matriz vive en
-`apps/comun/rbac.py` (`PERMISOS`: rol -> permisos `modulo.accion`), sin tablas: el esquema de la base no cambia. Cada
-vista declara `permission_classes = [RequierePermiso("modulo.accion")]` (`apps/comun/permisos.py`); con varios
-permisos basta tener uno.
+Cada cuenta tiene un único rol (`usuario.rol`) y quien no inició sesión es **Visitante**. Los roles son fijos; los
+**permisos de cada rol son editables** por el Administrador (RBAC dinámico, ADR-010) y viven en las tablas `permiso` y
+`rol_permiso` de Identidad. Cada vista declara `permission_classes = [RequierePermiso("modulo.accion")]`
+(`apps/comun/permisos.py`); con varios permisos basta tener uno.
+
+**Matriz editable (ADR-010).**
+- `rbac.permisos_de()` lee `rol_permiso` en cada petición, sin caché: un cambio rige desde la siguiente petición de
+  cualquier cuenta de ese rol, aunque su token siga vigente.
+- `apps/comun/rbac.py` guarda lo que no se edita: `PERMISOS` (la matriz inicial del SRS, que es la tabla de abajo),
+  `ASIGNABLES` (qué permisos se le pueden dar a cada rol) y `FIJOS` (los que no se le pueden quitar).
+  - Se pueden dar a Huésped y Anfitrión las consultas de administración que solo dependen del permiso: `usuarios.ver`,
+    `tablero.ver`, `reportes.descargar` y `auditoria.consultar`. Las acciones que el service ata a un rol (moderar,
+    resolver, restringir, configurar la tarifa, gestionar publicaciones) no se le dan a otro rol: 400.
+  - El Visitante solo puede tener permisos públicos.
+  - Fijos: `catalogo.ver` en todos los roles y `roles.gestionar` del Administrador. Quitarlos responde 400.
+- La matriz inicial se carga en `post_migrate` (después de `migrate` y de `flush`) **solo si `rol_permiso` está
+  vacía**, así un despliegue no deshace los cambios del Administrador.
+- `PUT /admin/roles/{rol}/permisos/{codigo}` concede y `DELETE` retira; los dos responden 200 con
+  `{"rol", "permisos"}`. Rol o permiso inexistente: 404. Cada cambio queda en la auditoría como `PermisoConcedido` o
+  `PermisoRetirado` (tipo `permisos`), con `detalle` = `rol` y `permiso`. Repetir un cambio no registra nada nuevo.
 
 - **Sin sesión** en una ruta cuyo permiso no tiene el Visitante: **401** (CA-05.1).
 - **Con sesión sin el permiso: 403**, y queda en la auditoría `AccesoDenegado` con `exitoso=false` y `detalle` =
@@ -127,8 +144,9 @@ permisos basta tener uno.
 - El permiso dice **qué** puede hacer el rol. **Sobre qué** recurso (la regla de dueño, CA-05.3) lo revisa el service:
   un anfitrión con `publicaciones.gestionar_propias` recibe 403 sobre una publicación ajena.
 - `GET /identidad/permisos` devuelve `{"rol", "permisos"}` de quien llama; sin sesión, los del Visitante.
-- `GET /identidad/roles` devuelve la matriz completa `{"roles": [{"rol", "permisos"}]}` (Visitante, Huésped,
-  Anfitrión, Administrador). La pantalla "Roles y permisos" se arma con ella.
+- `GET /identidad/roles` devuelve la matriz vigente: `{"permisos": [{"codigo", "descripcion"}], "roles": [{"rol",
+  "permisos", "asignables", "fijos"}]}` (Visitante, Huésped, Anfitrión, Administrador). La pantalla "Roles y permisos"
+  se arma con ella; quien tiene `roles.gestionar` la edita con un clic por casilla.
 - Rutas sin `RequierePermiso` (lista blanca, verificada por `apps/comun/tests/test_rbac.py`): `salud`, `token`,
   `token/renovar`, `salir`, `recuperacion`, `recuperacion/{token}`, `permisos`, `roles` y `interno/tareas/diarias` (su propio
   token). El sitio `/admin/` de Django queda fuera de la API.
@@ -156,6 +174,9 @@ permisos basta tener uno.
 | `auditoria.consultar` | Administrador | `GET /admin/auditoria` | RF-D-ADM-04.1 |
 | `tablero.ver` | Administrador | `GET /admin/tablero` | RF-D-ADM-05.1 |
 | `reportes.descargar` | Administrador | `GET /admin/reportes/{tipo}` | RF-D-ADM-05.2 |
+| `roles.gestionar` | Administrador (fijo) | `PUT y DELETE /admin/roles/{rol}/permisos/{codigo}` | RF-D-USU-02.1, ADR-010 |
+
+La tabla es la matriz **inicial**. La vigente es la de `rol_permiso`, que se consulta en `GET /identidad/roles`.
 
 Las rutas que aparecen con dos o tres permisos aceptan cualquiera de ellos: `GET /reservas/{id}` (huésped dueño,
 anfitrión de la publicación o administrador) y las de una publicación (anfitrión dueño o administrador).

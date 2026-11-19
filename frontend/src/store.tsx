@@ -31,6 +31,8 @@ interface Sesion {
   actualizarUsuario: (u: UsuarioApi) => void;
   /** La cuenta se desactivó: se olvida la sesión sin llamar a /salir (la API ya cerró todas). */
   olvidarSesion: () => void;
+  /** Vuelve a pedir los permisos (el Administrador cambió la matriz de su propio rol, ADR-010). */
+  recargarPermisos: () => Promise<void>;
 }
 
 const Ctx = createContext<Sesion | null>(null);
@@ -102,6 +104,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     actualizarUsuario: (u) => setUsuario(u),
     olvidarSesion,
+    recargarPermisos: async () => setPermisos(await cargarPermisos()),
   }), [usuario, permisos, cargandoSesion, avisoSesion, abrir, olvidarSesion]);
 
   // Mientras se recupera la sesión no se pintan las rutas: si no, las protegidas

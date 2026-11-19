@@ -22,9 +22,10 @@ from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, Ou
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.auditoria import services as auditoria
+from apps.comun import rbac
 from apps.comun.errores import Conflicto, ErrorNegocio, NoEncontrado, SinPermiso
 
-from .models import RestriccionUsuario, RolUsuario, TokenRecuperacion, Usuario
+from .models import Permiso, RestriccionUsuario, RolPermiso, RolUsuario, TokenRecuperacion, Usuario
 
 ROLES_REGISTRO = (RolUsuario.HUESPED, RolUsuario.ANFITRION)
 
@@ -349,3 +350,56 @@ def _dict(u: Usuario, restringida: bool | None = None) -> dict:
 
 def a_dict(u: Usuario) -> dict:
     return _dict(u)
+
+
+# ---------------------------------------------------------------- matriz de permisos (RBAC dinámico, ADR-010)
+
+def permisos_del_rol(rol: str) -> frozenset[str]:
+    """Los permisos vigentes del rol según rol_permiso. Lo usa apps.comun.rbac en cada petición."""
+    return frozenset(RolPermiso.objects.filter(rol=rol).values_list("permiso_id", flat=True))
+
+
+def asegurar_matriz(**_) -> None:
+    """Deja el catálogo de permisos al día y carga la matriz inicial del SRS si rol_permiso está vacía.
+
+    Corre en post_migrate (apps.py): después de cada migrate y de cada flush, que vacía la base en
+    `cargar_demo --reiniciar` y en las pruebas con transaction=True. Si la matriz ya tiene filas no la toca, así un
+    despliegue no deshace lo que cambió el Administrador. Los permisos fijos se vuelven a poner siempre."""
+    for codigo, descripcion in rbac.PERMISOS_INFO.items():
+        Permiso.objects.update_or_create(codigo=codigo, defaults={"descripcion": descripcion})
+    if not RolPermiso.objects.exists():
+        RolPermiso.objects.bulk_create(
+            [RolPermiso(rol=rol, permiso_id=p) for rol, ps in rbac.PERMISOS.items() for p in sorted(ps)])
+    for rol, fijos in rbac.FIJOS.items():
+        for p in fijos:
+            RolPermiso.objects.get_or_create(rol=rol, permiso_id=p)
+
+
+def matriz() -> dict:
+    """GET /identidad/roles: cada rol con sus permisos, los que se le pueden dar y los que no se le pueden quitar."""
+    return {
+        "permisos": [{"codigo": c, "descripcion": d} for c, d in Permiso.objects.values_list("codigo", "descripcion")],
+        "roles": [{"rol": r, "permisos": sorted(permisos_del_rol(r)), "asignables": sorted(rbac.ASIGNABLES[r]),
+                   "fijos": sorted(rbac.FIJOS[r])} for r in rbac.ROLES],
+    }
+
+
+def cambiar_permiso(admin: Usuario, rol: str, codigo: str, conceder: bool, ip=None) -> dict:
+    """Concede o retira un permiso a un rol (RF-D-USU-02.1, ADR-010). Rige desde la siguiente petición."""
+    if rol not in rbac.ROLES:
+        raise NoEncontrado("El rol no existe.")
+    if codigo not in rbac.TODOS:
+        raise NoEncontrado("El permiso no existe.")
+    if conceder and codigo not in rbac.ASIGNABLES[rol]:
+        raise ErrorNegocio(f"Ese permiso no se le puede dar al rol {rol}: el sistema lo ata a otro rol.", campo="permiso")
+    if not conceder and codigo in rbac.FIJOS[rol]:
+        raise ErrorNegocio("Ese permiso no se puede quitar: el rol lo necesita para funcionar.", campo="permiso")
+    with transaction.atomic():
+        if conceder:
+            _, cambio = RolPermiso.objects.get_or_create(rol=rol, permiso_id=codigo)
+        else:
+            cambio = RolPermiso.objects.filter(rol=rol, permiso_id=codigo).delete()[0] > 0
+        if cambio:
+            auditoria.registrar(admin.id, "PermisoConcedido" if conceder else "PermisoRetirado", entidad="Rol", ip=ip,
+                                detalle={"rol": rol, "permiso": codigo})
+    return {"rol": rol, "permisos": sorted(permisos_del_rol(rol))}

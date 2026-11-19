@@ -1,7 +1,8 @@
 """Modelos de SRV-01 Identidad.
 
-Tablas de este servicio: usuario, restriccion_usuario, token_recuperacion.
-Ver la sección 9 del documento de diseño (docs/diseno).
+Tablas de este servicio: usuario, restriccion_usuario, token_recuperacion, permiso y rol_permiso.
+Ver la sección 9 del documento de diseño (docs/diseno). permiso y rol_permiso guardan la matriz de permisos por
+rol, que el Administrador puede editar (RBAC dinámico, ADR-010).
 
 Usuario se define desde el Sprint 0 porque Django exige fijar AUTH_USER_MODEL
 antes de la primera migración. Hereda de AbstractBaseUser, que aporta los
@@ -127,3 +128,33 @@ class TokenRecuperacion(models.Model):
     def es_valido(self, ahora=None) -> bool:
         ahora = ahora or timezone.now()
         return self.usado_en is None and ahora < self.vence
+
+
+# Roles de la matriz: los de usuario.rol más el VISITANTE, que es quien no ha iniciado sesión.
+ROLES_MATRIZ = ["VISITANTE", *RolUsuario.values]
+
+
+class Permiso(models.Model):
+    """Catálogo de permisos "modulo.accion" (RF-D-USU-02.1). Lo llena apps.comun.rbac.PERMISOS_INFO."""
+
+    codigo = models.CharField(max_length=60, primary_key=True)
+    descripcion = models.CharField(max_length=120)
+
+    class Meta:
+        db_table = "permiso"
+        ordering = ["codigo"]
+
+
+class RolPermiso(models.Model):
+    """Un permiso concedido a un rol (ADR-010). Que exista la fila es que el rol tiene el permiso."""
+
+    rol = models.CharField(max_length=15)
+    permiso = models.ForeignKey(Permiso, on_delete=models.CASCADE, db_column="permiso_codigo", related_name="+")
+
+    class Meta:
+        db_table = "rol_permiso"
+        constraints = [
+            models.UniqueConstraint(fields=["rol", "permiso"], name="rol_permiso_unico"),
+            # CHECK rol IN ('VISITANTE','HUESPED','ANFITRION','ADMINISTRADOR')
+            models.CheckConstraint(condition=Q(rol__in=ROLES_MATRIZ), name="rol_permiso_rol_valido"),
+        ]
