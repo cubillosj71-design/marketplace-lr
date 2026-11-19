@@ -24,7 +24,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from apps.auditoria import services as auditoria
 from apps.comun.errores import Conflicto, ErrorNegocio, NoEncontrado, SinPermiso
 
-from .models import RestriccionUsuario, RolUsuario, TokenRecuperacion, Usuario
+from .models import RestriccionUsuario, RolUsuario, TokenRecuperacion, Usuario, validar_telefono
 
 ROLES_REGISTRO = (RolUsuario.HUESPED, RolUsuario.ANFITRION)
 
@@ -108,10 +108,11 @@ def registrar(*, nombre_completo, correo, telefono, password, rol, acepta_datos,
     correo = Usuario.objects.normalize_email(correo.strip()).lower()
     if Usuario.objects.filter(correo__iexact=correo).exists():
         raise Conflicto("Este correo ya está registrado.", extra={"campo": "correo"})
+    telefono = validar_telefono(telefono)
     _validar_clave(password, Usuario(correo=correo, nombre_completo=nombre_completo))
     ciudad = _limpiar_ciudad(ciudad)
     with transaction.atomic():
-        u = Usuario.registrar(correo, password, rol, nombre_completo=nombre_completo.strip(), telefono=telefono.strip(),
+        u = Usuario.registrar(correo, password, rol, nombre_completo=nombre_completo.strip(), telefono=telefono,
                               ciudad=ciudad)
         auditoria.registrar(u.id, "UsuarioRegistrado", entidad="Usuario", entidad_id=u.id, detalle={"rol": rol}, ip=ip)
     return u

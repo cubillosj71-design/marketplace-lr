@@ -2,7 +2,7 @@ import { ArrowLeft, Building2, Check, Circle, Clock, Compass, Copy, Eye, EyeOff,
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import { identidadApi, leerError } from "../api";
-import type { Rol } from "../data";
+import { TELEFONO_VALIDO, soloNumeros, type Rol } from "../data";
 import { AuthLayout, usePrimeraPantalla } from "../layout";
 import { useStore, useToast } from "../store";
 import { Alert, Field } from "../ui";
@@ -114,6 +114,7 @@ export function Registro() {
     if (!f.nombre.trim()) er.nombre = "Escribe tu nombre completo.";
     if (!correoValido(f.correo)) er.correo = "Escribe un correo válido.";
     if (!f.telefono.trim()) er.telefono = "Escribe tu teléfono.";
+    else if (!TELEFONO_VALIDO(f.telefono)) er.telefono = "El teléfono debe tener entre 7 y 15 números.";
     if (f.clave.length < 8) er.clave = "La contraseña debe tener al menos 8 caracteres.";
     if (!f.acepta) er.acepta = "La autorización es obligatoria: sin ella no se crea la cuenta.";
     if (!Object.keys(er).length) {
@@ -156,7 +157,7 @@ export function Registro() {
             <input className="input" type="email" placeholder="tu@correo.com" value={f.correo} onChange={(e) => set("correo", e.target.value)} />
           </Field>
           <Field label="Teléfono" error={err.telefono}>
-            <input className="input" inputMode="tel" placeholder="310 555 0182" value={f.telefono} onChange={(e) => set("telefono", e.target.value)} />
+            <input className="input" inputMode="numeric" maxLength={20} placeholder="310 555 0182" value={f.telefono} onChange={(e) => set("telefono", soloNumeros(e.target.value))} />
           </Field>
         </div>
         <Field label="Contraseña" error={err.clave} hint="Mínimo 8 caracteres.">

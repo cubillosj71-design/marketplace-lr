@@ -2,7 +2,7 @@ import { Check, KeyRound, Minus, PowerOff, ShieldCheck, UserRound } from "lucide
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { catalogoApi, identidadApi, leerError, misReservasApi, type ReservaResumen } from "../api";
-import { PERMISO_TXT, RESERVA_TXT, ROL_TXT, fechaLarga, iniciales, isoDia } from "../data";
+import { PERMISO_TXT, RESERVA_TXT, ROL_TXT, TELEFONO_VALIDO, fechaLarga, iniciales, isoDia, soloNumeros } from "../data";
 import { Page } from "../layout";
 import { useStore, useToast } from "../store";
 import { Alert, Field, Modal } from "../ui";
@@ -44,6 +44,7 @@ export function Perfil() {
     const er: Record<string, string> = {};
     if (!f.nombre.trim()) er.nombre = "El nombre no puede quedar vacío.";
     if (!f.telefono.trim()) er.telefono = "El teléfono no puede quedar vacío.";
+    else if (!TELEFONO_VALIDO(f.telefono)) er.telefono = "El teléfono debe tener entre 7 y 15 números.";
     setErr(er);
     if (Object.keys(er).length) return;
     try {
@@ -92,7 +93,7 @@ export function Perfil() {
               <input className="input" value={f.nombre} onChange={(e) => setF({ ...f, nombre: e.target.value })} />
             </Field>
             <Field label="Teléfono" error={err.telefono}>
-              <input className="input" value={f.telefono} onChange={(e) => setF({ ...f, telefono: e.target.value })} />
+              <input className="input" inputMode="numeric" maxLength={20} value={f.telefono} onChange={(e) => setF({ ...f, telefono: soloNumeros(e.target.value) })} />
             </Field>
             <Field label="Ciudad (opcional)" error={err.ciudad}>
               <select className="select" value={f.ciudad} onChange={(e) => setF({ ...f, ciudad: e.target.value })}>

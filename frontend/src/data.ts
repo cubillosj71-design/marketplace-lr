@@ -68,6 +68,11 @@ export const cop = (n: number | string | null | undefined) =>
 export const iniciales = (nombre: string) =>
   nombre.split(" ").filter(Boolean).slice(0, 2).map((s) => s[0]!.toUpperCase()).join("");
 
+/** Teléfono: solo números y espacios para separarlos; lo que no sea número se descarta al escribir o pegar. */
+export const soloNumeros = (texto: string) => texto.replace(/[^0-9 ]/g, "").replace(/ {2,}/g, " ");
+/** Entre 7 y 15 números, la misma regla que valida el backend (identidad.models.validar_telefono). */
+export const TELEFONO_VALIDO = (texto: string) => /^[0-9]{7,15}$/.test(texto.replace(/ /g, ""));
+
 export function isoDia(d: Date) {
   const z = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`;
