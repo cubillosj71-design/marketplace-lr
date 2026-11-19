@@ -242,7 +242,7 @@ export function Roles() {
               <tbody>
                 {filas.map((p) => (
                   <tr key={p}>
-                    <td>{PERMISO_TXT[p] ?? p}<br /><code className="subtle">{p}</code></td>
+                    <td>{PERMISO_TXT[p] ?? p}</td>
                     {roles.map((r) => (
                       <td key={r.rol} style={{ textAlign: "center", background: r.rol === actual ? "var(--accent-soft)" : undefined }}>
                         {porRol.get(r.rol)?.has(p)
