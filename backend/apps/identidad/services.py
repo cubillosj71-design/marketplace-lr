@@ -151,6 +151,8 @@ def iniciar_sesion(correo: str, password: str, ip=None) -> dict:
 def renovar_sesion(refresh: str) -> dict:
     """Rota el token de renovación (ADR-005). Solo renueva si la cuenta sigue activa y sin restricción
     vigente: así una cuenta restringida o desactivada no recupera la sesión aunque conserve la cookie."""
+    if not isinstance(refresh, str) or not refresh:  # RefreshToken(None) no falla: crea un token nuevo y vacío
+        raise ErrorNegocio("Tu sesión terminó. Inicia sesión de nuevo.", codigo=401)
     try:
         anterior = RefreshToken(refresh)  # verifica firma, vencimiento y lista negra
     except TokenError as e:
@@ -165,6 +167,8 @@ def renovar_sesion(refresh: str) -> dict:
 
 def cerrar_sesion(refresh: str, ip=None) -> None:
     """Pone el refresh en la lista negra. Si ya no servía, no hay nada que cerrar."""
+    if not isinstance(refresh, str) or not refresh:  # RefreshToken(None) crearía un token nuevo sin usuario
+        return
     try:
         token = RefreshToken(refresh)
     except TokenError:

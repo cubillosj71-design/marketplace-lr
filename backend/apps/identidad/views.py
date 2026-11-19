@@ -14,6 +14,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.comun import rbac
+from apps.comun.entrada import texto_de
 from apps.comun.errores import ErrorNegocio
 from apps.comun.eventos import ip_de
 from apps.comun.permisos import RequierePermiso
@@ -70,7 +71,7 @@ def _quitar_cookie(respuesta: Response) -> Response:
 
 def _refresh_de(request) -> str:
     # La cookie es la vía normal. El cuerpo se acepta para clientes sin navegador (pruebas, Postman).
-    return request.COOKIES.get(COOKIE["nombre"]) or request.data.get("refresh", "")
+    return request.COOKIES.get(COOKIE["nombre"]) or texto_de(request, "refresh")
 
 
 class Token(APIView):
@@ -82,7 +83,7 @@ class Token(APIView):
 
     def post(self, request):
         return _responder_con_sesion(
-            services.iniciar_sesion(request.data.get("correo"), request.data.get("password"), ip=ip_de(request))
+            services.iniciar_sesion(texto_de(request, "correo"), texto_de(request, "password"), ip=ip_de(request))
         )
 
 
@@ -128,7 +129,7 @@ class Recuperacion(APIView):
     throttle_scope = "recuperacion"
 
     def post(self, request):
-        token = services.solicitar_recuperacion(request.data.get("correo", ""), ip=ip_de(request))
+        token = services.solicitar_recuperacion(texto_de(request, "correo"), ip=ip_de(request))
         cuerpo = {"detalle": "Si el correo está registrado, aquí aparece un enlace que sirve una vez y vence en 20 minutos."}
         if token:
             cuerpo["enlace"] = f"{settings.FRONTEND_URL}/#/restablecer/{token}"
@@ -148,7 +149,7 @@ class RecuperacionToken(APIView):
         return Response({"estado": services.estado_enlace(token)})
 
     def post(self, request, token):
-        services.restablecer_clave(token, request.data.get("password", ""), ip=ip_de(request))
+        services.restablecer_clave(token, texto_de(request, "password"), ip=ip_de(request))
         return Response({"detalle": "Tu contraseña se actualizó. Ya puedes iniciar sesión."})
 
 

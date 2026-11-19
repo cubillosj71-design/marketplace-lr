@@ -17,7 +17,7 @@ from django.db.models import Count
 from apps.auditoria import services as auditoria
 from apps.catalogo import services as catalogo
 from apps.comun import reloj
-from apps.comun.errores import Conflicto, ErrorNegocio, NoEncontrado, SinPermiso
+from apps.comun.errores import Conflicto, ErrorNegocio, NoEncontrado, SinPermiso, auditar_falla
 from apps.comun.eventos import publicar
 from apps.comun.fechas import validar_estancia
 from apps.identidad import services as identidad
@@ -460,13 +460,17 @@ def completar_vencidas() -> int:
     La llama la tarea diaria y también cada consulta, para que nunca se muestre CONFIRMADA una reserva vencida."""
     cambiadas = 0
     for rid in Reserva.objects.filter(estado=EstadoReserva.CONFIRMADA, fecha_salida__lt=reloj.hoy()).values_list("id", flat=True):
-        with transaction.atomic():
-            r = Reserva.objects.select_for_update().get(pk=rid)
-            if r.estado != EstadoReserva.CONFIRMADA:
-                continue
-            r.completar()
-            auditoria.registrar(None, "ReservaCompletada", entidad="Reserva", entidad_id=r.id,
-                                detalle={"salida": r.fecha_salida.isoformat()})
+        try:
+            with transaction.atomic():
+                r = Reserva.objects.select_for_update().get(pk=rid)
+                if r.estado != EstadoReserva.CONFIRMADA:
+                    continue
+                r.completar()
+                auditoria.registrar(None, "ReservaCompletada", entidad="Reserva", entidad_id=r.id,
+                                    detalle={"salida": r.fecha_salida.isoformat()})
+        except Exception as e:  # noqa: BLE001  una reserva que falla se revierte sola y no detiene las demás
+            auditar_falla(e, entidad="Reserva", entidad_id=rid, tarea="completar_vencidas")
+            continue
         cambiadas += 1
     return cambiadas
 
@@ -603,10 +607,14 @@ def cancelar_en_revision_vencidas() -> int:
     (CA-20.5)."""
     canceladas = 0
     for rid in Reserva.objects.filter(estado=EstadoReserva.EN_REVISION, fecha_llegada__lte=reloj.hoy()).values_list("id", flat=True):
-        with transaction.atomic():
-            r = Reserva.objects.select_for_update().get(pk=rid)
-            if r.estado != EstadoReserva.EN_REVISION:
-                continue
-            _tras_cancelar(r, r.cancelar_sin_resolucion())
+        try:
+            with transaction.atomic():
+                r = Reserva.objects.select_for_update().get(pk=rid)
+                if r.estado != EstadoReserva.EN_REVISION:
+                    continue
+                _tras_cancelar(r, r.cancelar_sin_resolucion())
+        except Exception as e:  # noqa: BLE001  una reserva que falla se revierte sola y no detiene las demás
+            auditar_falla(e, entidad="Reserva", entidad_id=rid, tarea="cancelar_en_revision_vencidas")
+            continue
         canceladas += 1
     return canceladas

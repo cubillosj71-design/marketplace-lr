@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { HashRouter, MemoryRouter } from "react-router-dom";
 import App from "./App";
+import { LimiteDeError } from "./LimiteDeError";
 import { StoreProvider, ToastProvider } from "./store";
 import "./styles.css";
 
@@ -16,7 +17,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <Router>
       <StoreProvider>
         <ToastProvider>
-          <App />
+          <LimiteDeError completo>
+            <App />
+          </LimiteDeError>
         </ToastProvider>
       </StoreProvider>
     </Router>
