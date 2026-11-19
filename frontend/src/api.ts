@@ -39,7 +39,7 @@ api.interceptors.request.use((config) => {
 });
 
 // Rutas que no se reintentan: las de sesión, y las públicas que se piden también sin sesión.
-const RUTAS_DE_SESION = ["/identidad/token", "/identidad/salir", "/identidad/permisos", "/identidad/roles"];
+const RUTAS_DE_SESION = ["/identidad/token", "/identidad/salir", "/identidad/permisos"];
 
 api.interceptors.response.use(undefined, async (error: AxiosError) => {
   const original = error.config as (InternalAxiosRequestConfig & { _reintentada?: boolean }) | undefined;
@@ -120,7 +120,7 @@ export const identidadApi = {
   desactivar: () => api.post("/identidad/perfil/desactivar"),
   /** GET /identidad/permisos: rol y permisos de quien llama (sin sesión, los del VISITANTE). */
   permisos: () => api.get<{ rol: string; permisos: string[] }>("/identidad/permisos"),
-  /** GET /identidad/roles: la matriz completa de rbac.PERMISOS (pública). */
+  /** GET /identidad/roles: la matriz completa de rbac.PERMISOS (solo el Administrador, usuarios.ver). */
   roles: () => api.get<{ roles: { rol: string; permisos: string[] }[] }>("/identidad/roles"),
 };
 

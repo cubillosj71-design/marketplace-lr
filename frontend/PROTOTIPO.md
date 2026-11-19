@@ -43,7 +43,7 @@ cliente: el correo y la contraseña se escriben a mano.
 | Iniciar sesión, registro, recuperar contraseña | `/ingresar`, `/registro`, `/recuperar`, `/restablecer/:token` | Sin sesión |
 | Explorar sin cuenta y detalle | `/explorar-publico`, `/explorar-publico/:id` | Sin sesión (Visitante: `busqueda.ver`) |
 | Mi perfil y desactivar cuenta · Cambiar contraseña | `/perfil`, `/perfil/contrasena` | `perfil.gestionar` (desactivar: `cuenta.desactivar`) |
-| Roles y permisos (matriz de `GET /identidad/roles`) | `/roles` | Solo sesión |
+| Roles y permisos (matriz de `GET /identidad/roles`) | `/roles` | `usuarios.ver` (solo Administrador) |
 | Avisos | `/avisos` | `notificaciones.ver` |
 | Explorar y detalle | `/explorar`, `/explorar/:id` | `busqueda.ver` |
 | Cotización y pago | `/cotizacion/:id` | `reservas.cotizar` |

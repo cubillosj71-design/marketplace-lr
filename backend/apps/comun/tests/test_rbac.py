@@ -48,7 +48,6 @@ LISTA_BLANCA = {
     "api/v1/identidad/recuperacion": "recuperar la contraseña sin sesión (RF-D-USU-01.3)",
     "api/v1/identidad/recuperacion/<str:token>": "usar el enlace de recuperación sin sesión",
     "api/v1/identidad/permisos": "describe la propia matriz; sin sesión devuelve la del VISITANTE",
-    "api/v1/identidad/roles": "la matriz completa de roles y permisos; no expone datos de nadie",
     "api/v1/interno/tareas/diarias": "tareas programadas con su propio token (X-Token-Tareas)",
 }
 PREFIJOS_FUERA_DE_DRF = ("admin/",)  # sitio de Django: no es parte de la API y exige is_staff
@@ -238,6 +237,7 @@ CASOS = [
     Caso("DELETE", "api/v1/admin/publicaciones/<int:pk>/bloqueo", frozenset({ADM}),
          lambda c, r: (f"/api/v1/admin/publicaciones/{c['bloqueada']}/bloqueo", None)),
     Caso("GET", "api/v1/admin/usuarios", frozenset({ADM}), _fija("/api/v1/admin/usuarios")),
+    Caso("GET", "api/v1/identidad/roles", frozenset({ADM}), _fija("/api/v1/identidad/roles")),
     Caso("POST", "api/v1/admin/usuarios/<int:usuario_id>/restriccion", frozenset({ADM}),
          lambda c, r: (f"/api/v1/admin/usuarios/{c['pedro']}/restriccion", {"motivo": "Cobros por fuera"}), 201),
     Caso("DELETE", "api/v1/admin/usuarios/<int:usuario_id>/restriccion", frozenset({ADM}),
@@ -379,12 +379,17 @@ def test_permisos_del_usuario_actual(ctx, rol):
 
 # ---------------------------------------------------------------- GET /identidad/roles
 
-@pytest.mark.parametrize("rol", ROLES)
-def test_roles_devuelve_la_matriz_completa_a_cualquiera(ctx, rol):
-    r = _cliente(None if rol == V else ctx["usuarios"][rol]).get("/api/v1/identidad/roles")
+def test_roles_devuelve_la_matriz_completa_al_administrador(ctx):
+    r = _cliente(ctx["usuarios"][ADM]).get("/api/v1/identidad/roles")
     assert r.status_code == 200
     assert [x["rol"] for x in r.json()["roles"]] == [V, H, A, ADM]
     assert {x["rol"]: set(x["permisos"]) for x in r.json()["roles"]} == ESPERADOS
+
+
+@pytest.mark.parametrize("rol,codigo", [(V, 401), (H, 403), (A, 403)])
+def test_roles_no_la_ve_nadie_mas(ctx, rol, codigo):
+    r = _cliente(None if rol == V else ctx["usuarios"][rol]).get("/api/v1/identidad/roles")
+    assert r.status_code == codigo and "roles" not in r.json()
 
 
 def test_politicas_trae_la_moderada_con_sus_tramos(ctx):

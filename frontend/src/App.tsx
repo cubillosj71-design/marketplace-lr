@@ -18,7 +18,7 @@ import { useStore } from "./store";
 export const RUTAS: { path: string; permiso: string | string[] | null; api?: string; el: ReactNode }[] = [
   { path: "/perfil", permiso: "perfil.gestionar", api: "/identidad/perfil", el: <Perfil /> },
   { path: "/perfil/contrasena", permiso: "perfil.gestionar", api: "/identidad/perfil", el: <CambiarContrasena /> },
-  { path: "/roles", permiso: null, el: <Roles /> },  // solo muestra la matriz pública (GET /identidad/roles)
+  { path: "/roles", permiso: "usuarios.ver", api: "/identidad/roles", el: <Roles /> },  // solo el Administrador
   { path: "/avisos", permiso: "notificaciones.ver", api: "/notificaciones", el: <Avisos /> },
 
   { path: "/explorar", permiso: "busqueda.ver", api: "/busqueda/publicaciones", el: <Explorar /> },
