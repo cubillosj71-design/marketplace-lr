@@ -170,6 +170,11 @@ def test_ca_25_1_excel_de_reservas_de_octubre_coincide_con_el_tablero(admin, pub
     assert estados == t["reservas_por_estado"]
     resumen = dict(libro["Resumen"].iter_rows(min_row=6, values_only=True))
     assert resumen["Reservas creadas en el periodo"] == t["reservas_total"]
+    # La serie por día de las gráficas suma lo mismo que las cifras del tablero
+    assert sum(d["reservas"] for d in t["serie_diaria"]) == t["reservas_total"]
+    assert sum(Decimal(d["monto_bruto"]) for d in t["serie_diaria"]) == Decimal(t["ingresos"]["bruto"])
+    assert sum(Decimal(d["ingreso_plataforma"]) for d in t["serie_diaria"]) == Decimal(t["ingresos"]["plataforma"])
+    assert [d["fecha"] for d in t["serie_diaria"]] == sorted(d["fecha"] for d in t["serie_diaria"])
 
 
 def test_ingresos_y_demanda_cuadran_con_el_tablero(admin, publicar, reservar_en):

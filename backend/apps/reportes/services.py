@@ -74,6 +74,16 @@ def demanda(desde: date, hasta: date, por: str) -> list[dict]:
              "ingreso_plataforma": f["ingreso_plataforma"] or CERO} for f in filas]
 
 
+def serie_diaria(desde: date, hasta: date) -> list[dict]:
+    """Reservas, monto bruto e ingreso de la plataforma por día de creación (v_demanda), para las gráficas del
+    tablero. Solo trae los días con reservas; el frontend completa con 0 los que faltan."""
+    filas = (Demanda.objects.filter(fecha__gte=desde, fecha__lte=hasta).values("fecha")
+             .annotate(reservas=Sum("reservas"), monto_bruto=Sum("monto_bruto"), ingreso_plataforma=Sum("ingreso_plataforma"))
+             .order_by("fecha"))
+    return [{"fecha": f["fecha"], "reservas": f["reservas"], "monto_bruto": _dinero(f["monto_bruto"] or CERO),
+             "ingreso_plataforma": _dinero(f["ingreso_plataforma"] or CERO)} for f in filas]
+
+
 def usuarios_por_rol(hasta: date) -> dict[str, int]:
     base = {r: 0 for r in ROL_TXT}
     base.update(dict(UsuarioReporte.objects.filter(fecha_registro__date__lte=hasta).order_by().values_list("rol").annotate(n=Count("id"))))
@@ -90,7 +100,7 @@ def _dinero(v) -> str:
 
 def tablero(desde: date, hasta: date) -> dict:
     """RF-D-ADM-05.1: usuarios por rol, publicaciones ACTIVAS, reservas por estado, monto bruto e ingreso de la
-    plataforma del periodo y las 5 ciudades con más reservas."""
+    plataforma del periodo, las 5 ciudades con más reservas y la serie por día para las gráficas."""
     validar_periodo(desde, hasta)
     rs = reservas_del_periodo(desde, hasta)
     bruto, plataforma = ingresos(rs)
@@ -103,6 +113,7 @@ def tablero(desde: date, hasta: date) -> dict:
         "ingresos": {"bruto": _dinero(bruto), "plataforma": _dinero(plataforma)},
         "top_ciudades": [{"ciudad": c["valor"], "reservas": c["reservas"], "monto_bruto": _dinero(c["monto_bruto"])}
                          for c in demanda(desde, hasta, "ciudad")[:5]],
+        "serie_diaria": serie_diaria(desde, hasta),
     }
 
 
