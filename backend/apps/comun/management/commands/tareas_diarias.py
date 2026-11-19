@@ -13,7 +13,9 @@ class Command(BaseCommand):
 
     def handle(self, *args, **opciones):
         r = ejecutar_tareas_diarias("comando")
-        self.stdout.write(self.style.SUCCESS(
-            f"Reservas completadas: {r['reservas_completadas']} · canceladas sin resolución: "
-            f"{r['reservas_canceladas_sin_resolucion']} · pagos conciliados: {r['pagos_conciliados']}"
-        ))
+        resumen = (f"Reservas completadas: {r['reservas_completadas']} · canceladas sin resolución: "
+                   f"{r['reservas_canceladas_sin_resolucion']} · pagos conciliados: {r['pagos_conciliados']}")
+        if r.get("errores"):  # las demás tareas sí corrieron; el detalle quedó en el log y en la auditoría
+            self.stderr.write(self.style.ERROR(f"{resumen} · fallaron: {', '.join(r['errores'])} (ver ErrorOperacion)"))
+        else:
+            self.stdout.write(self.style.SUCCESS(resumen))

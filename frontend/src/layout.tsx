@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 import { adminApi, api, notificacionesApi } from "./api";
 import { ROL_TXT, iniciales } from "./data";
+import { LimiteDeError } from "./LimiteDeError";
 import { useStore } from "./store";
 import { ImageTile, Logo } from "./ui";
 
@@ -194,7 +195,7 @@ export function AppLayout() {
           </div>
         </header>
         <nav className="mobile-nav" aria-label="Navegación">{links.map(renderLink)}</nav>
-        <Outlet />
+        <LimiteDeError reinicio={loc.pathname}><Outlet /></LimiteDeError>
       </div>
     </div>
   );

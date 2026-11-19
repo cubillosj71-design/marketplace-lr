@@ -42,6 +42,17 @@ Cuentas de ejemplo: `admin@inversioneslr.com`, `anfitrion@correo.com`, `huesped@
 
 Errores de negocio: `{"detalle": "...", "campo": "..."}` con 400, 401, 403, 404, 409 o 410.
 
+Manejo de excepciones (`apps/comun/errores.py`, `EXCEPTION_HANDLER` de DRF):
+
+- Un dato que manda el cliente nunca produce un 500. Los cuerpos se validan con serializers (400 con el campo); las
+  vistas que leen el cuerpo sin serializer (`token`, `token/renovar`, `salir`, `recuperacion`, `recuperacion/{token}`
+  y `bloqueo`) usan `apps.comun.entrada.texto_de`: si el cuerpo no es un objeto JSON o el campo no es texto, se toma
+  como vacío y la regla responde su mensaje de siempre (401, 400 o 404).
+- Una falla no prevista responde `500 {"detalle": "Ocurrió un error inesperado. Intenta de nuevo."}` sin detalles
+  internos. El detalle queda en el log JSON y en la auditoría como `ErrorOperacion` (`exitoso = false`).
+- En el frontend, `leerError()` traduce cada error de la API al mensaje que se muestra y `LimiteDeError` (Error
+  Boundary) evita la pantalla en blanco si una pantalla falla al dibujarse.
+
 ## Usuario (MOD-01)
 
 Tabla `usuario`: `id`, `correo` VARCHAR(254) único, `nombre_completo` VARCHAR(120), `telefono` VARCHAR(20),
@@ -354,7 +365,10 @@ correcto ejecuta, en este orden:
 3. `conciliar_pagos()`
 
 Registra `TareasDiarias` en la auditoría y responde
-`{"reservas_completadas", "reservas_canceladas_sin_resolucion", "pagos_conciliados"}`. Para correrlo a mano:
+`{"reservas_completadas", "reservas_canceladas_sin_resolucion", "pagos_conciliados"}`. Cada tarea va aislada: si una
+falla, las demás corren igual, su valor llega en `null`, la respuesta agrega `"errores": {"<tarea>": "<tipo de error>"}`
+y `TareasDiarias` queda con `exitoso = false`. Dentro de cada tarea, una reserva o un pago que falla se revierte solo,
+queda como `ErrorOperacion` en la auditoría y se reintenta al día siguiente; los demás se procesan. Para correrlo a mano:
 `python manage.py tareas_diarias`. El workflow `.github/workflows/tareas-diarias.yml` lo llama a diario a las 05:10
 UTC (00:10 en Colombia) con los secretos `API_URL` y `TOKEN_TAREAS`. `/api/v1/salud` sigue pública.
 

@@ -13,6 +13,7 @@ from uuid import UUID, uuid4
 from django.db import transaction
 
 from apps.auditoria import services as auditoria
+from apps.comun.errores import auditar_falla
 
 from .models import EstadoPago, Pago, TipoPago
 from .pasarela import AdaptadorSimulado, PasarelaPagos, obtener_pasarela
@@ -78,7 +79,11 @@ def conciliar_pagos() -> int:
     pasarela = obtener_pasarela()
     cambiados = 0
     for pago in Pago.objects.filter(estado=EstadoPago.EN_VERIFICACION):
-        resultado = pasarela.consultar(pago.clave_idempotencia)
+        try:
+            resultado = pasarela.consultar(pago.clave_idempotencia)
+        except Exception as e:  # noqa: BLE001  la pasarela no respondió por este pago: se reintenta mañana
+            auditar_falla(e, entidad="Pago", entidad_id=pago.id, tarea="conciliar_pagos")
+            continue
         if not resultado or resultado.estado == pago.estado:
             continue
         with transaction.atomic():

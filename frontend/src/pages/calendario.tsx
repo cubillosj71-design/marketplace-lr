@@ -38,7 +38,9 @@ export function Calendario() {
 
   useEffect(() => {
     anfitrionApi.mias().then((l) => setMias(l.filter((p) => p.estado !== "BLOQUEADA"))).catch((e) => setError(leerError(e).error));
-    misReservasApi.deMisAlojamientos().then((r) => setReservas(r.data)).catch(() => {});
+    // Sin las reservas el calendario parecería libre: se avisa en vez de callar el error
+    misReservasApi.deMisAlojamientos().then((r) => setReservas(r.data))
+      .catch((e) => setError(`No se pudieron cargar las reservas de tus alojamientos: ${leerError(e).error}`));
   }, []);
 
   const pubId = Number(params.get("pub")) || mias?.[0]?.id;

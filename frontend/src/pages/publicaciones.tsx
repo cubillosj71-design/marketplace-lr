@@ -131,6 +131,7 @@ export function DetallePublicacion() {
   const [negado, setNegado] = useState<string | null>(null);
   const [reservas, setReservas] = useState<ReservaResumen[]>([]);
   const [politicas, setPoliticas] = useState<PoliticaApi[]>([]);
+  const [aviso, setAviso] = useState("");  // datos complementarios que no cargaron
   const [modal, setModal] = useState<null | "pausar" | "reactivar" | { faltan: string[] }>(null);
   const [ocupado, setOcupado] = useState(false);
 
@@ -139,8 +140,9 @@ export function DetallePublicacion() {
     anfitrionApi.publicacion(Number(id)).then((r) => setP(r.data)).catch((e) => setNegado(leerError(e).error));
     misReservasApi.deMisAlojamientos()
       .then((r) => setReservas(r.data.filter((x) => x.publicacion === Number(id) && x.estado === "CONFIRMADA")))
-      .catch(() => {});
-    catalogoApi.politicas().then((r) => setPoliticas(r.data)).catch(() => {});
+      .catch((e) => setAviso(`No se pudieron cargar las reservas de esta publicación: ${leerError(e).error}`));
+    catalogoApi.politicas().then((r) => setPoliticas(r.data))
+      .catch((e) => setAviso(`No se pudo cargar la política de cancelación: ${leerError(e).error}`));
   }, [id]);
 
   if (negado) return <Denegado titulo="No puedes ver esta publicación" texto={negado} />;
@@ -172,6 +174,7 @@ export function DetallePublicacion() {
     <Page req="RF-D-ALO-02.1 · CU-ALO-02 · CU-ALO-05">
       <div>
         <Link to="/publicaciones" className="back"><ArrowLeft /> Mis publicaciones</Link>
+        {aviso && <Alert tipo="warn">{aviso}</Alert>}
         <div className="page-head">
           <div className="row" style={{ gap: 12 }}><h1>{p.titulo || "Sin título"}</h1><Badge estado={p.estado} /></div>
           <div className="row">
@@ -346,7 +349,8 @@ export function FormPublicacion() {
     if (esDueno)
       misReservasApi.deMisAlojamientos()
         .then((r) => setNReservas(r.data.filter((x) => x.publicacion === Number(id) && x.estado === "CONFIRMADA").length))
-        .catch(() => {});
+        // Sin este dato no se mostraría el aviso de reservas confirmadas al editar el precio
+        .catch((e) => setGeneral(`No se pudo comprobar si esta publicación tiene reservas confirmadas: ${leerError(e).error}`));
   }, [id, esDueno]);
 
   const set = <K extends keyof Formulario>(k: K, v: Formulario[K]) => setP((x) => ({ ...x, [k]: v }));

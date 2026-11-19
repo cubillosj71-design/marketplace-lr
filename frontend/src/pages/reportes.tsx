@@ -33,7 +33,8 @@ export function Reportes() {
   const [descargando, setDescargando] = useState(false);
 
   useEffect(() => {
-    Promise.all([catalogoApi.ciudades(), catalogoApi.tipos()]).then(([c, t]) => setCat({ ciudades: c.data, tipos: t.data })).catch(() => {});
+    Promise.all([catalogoApi.ciudades(), catalogoApi.tipos()]).then(([c, t]) => setCat({ ciudades: c.data, tipos: t.data }))
+      .catch((e) => setError(`No se pudieron cargar las ciudades y los tipos para los filtros: ${leerError(e).error}`));
   }, []);
 
   const descargar = async () => {

@@ -5,6 +5,7 @@ from rest_framework.generics import ListAPIView
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.comun.entrada import texto_de
 from apps.comun.permisos import RequierePermiso
 
 from . import services
@@ -208,7 +209,7 @@ class BloqueoAdmin(APIView):
     permission_classes = [RequierePermiso("publicaciones.moderar")]
 
     def post(self, request, pk):
-        return Response(_salida(services.bloquear(request.user, pk, request.data.get("motivo", ""))))
+        return Response(_salida(services.bloquear(request.user, pk, texto_de(request, "motivo"))))
 
     def delete(self, request, pk):
         return Response(_salida(services.desbloquear(request.user, pk)))
