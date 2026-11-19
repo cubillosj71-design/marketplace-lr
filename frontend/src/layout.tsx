@@ -64,7 +64,7 @@ const ALOJAMIENTOS: Item[] = [
 const USUARIOS: Item[] = [
   { to: "/perfil", label: "Mi perfil", icon: UserRound, permiso: "perfil.gestionar" },
   { to: "/perfil/contrasena", label: "Cambiar contraseña", icon: KeyRound, permiso: "perfil.gestionar" },
-  { to: "/roles", label: "Roles y permisos", icon: ShieldCheck, permiso: null },
+  { to: "/roles", label: "Roles y permisos", icon: ShieldCheck, permiso: "usuarios.ver" },
   { to: "/admin/usuarios", label: "Usuarios", icon: FileBarChart2, permiso: "usuarios.ver" },
 ];
 
@@ -97,7 +97,7 @@ function useNav(): { titulo: string; items: Item[] }[] {
 /** Primera pantalla del menú que el usuario puede abrir: ahí llega al entrar. */
 export function usePrimeraPantalla(): string {
   const { tiene } = useStore();
-  return [...ALOJAMIENTOS, ...USUARIOS].find((it) => it.permiso !== null && tiene(it.permiso))?.to ?? "/roles";
+  return [...ALOJAMIENTOS, ...USUARIOS].find((it) => it.permiso !== null && tiene(it.permiso))?.to ?? "/perfil";
 }
 
 const MIGAS: [RegExp, string][] = [

@@ -165,9 +165,10 @@ class Permisos(APIView):
 
 class Roles(APIView):
     """GET /identidad/roles (RF-D-USU-02.1): la matriz completa de apps.comun.rbac, para la pantalla "Roles y
-    permisos". Es pública: no revela datos de nadie, solo qué puede hacer cada rol."""
+    permisos". Solo la ve el Administrador (usuarios.ver): describe cómo está protegida la plataforma, y eso no
+    es información para huéspedes, anfitriones ni visitantes. Cada quien ve sus propios permisos en /permisos."""
 
-    permission_classes = [AllowAny]
+    permission_classes = [RequierePermiso("usuarios.ver")]
 
     def get(self, request):
         orden = [rbac.VISITANTE, "HUESPED", "ANFITRION", "ADMINISTRADOR"]

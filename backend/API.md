@@ -87,7 +87,7 @@ Registro, sesión (`usuario`) y perfil devuelven:
 | Identidad | `GET y PATCH /identidad/perfil` | Huésped, Anfitrión, Administrador | RF-D-USU-01.4 |
 | Identidad | `POST /identidad/perfil/desactivar` | Huésped, Anfitrión | RF-D-USU-01.4 |
 | Identidad | `GET /identidad/permisos` | Todos (sin sesión, los del Visitante) | RF-D-USU-02.1 |
-| Identidad | `GET /identidad/roles` (la matriz completa) | Todos (pública) | RF-D-USU-02.1 |
+| Identidad | `GET /identidad/roles` (la matriz completa) | Administrador (`usuarios.ver`) | RF-D-USU-02.1 |
 | Identidad | `POST y DELETE /admin/usuarios/{id}/restriccion` | Administrador | RF-D-ADM-02.1 |
 | Catálogo | `POST /catalogo/publicaciones` · `GET /catalogo/mis-publicaciones` | Anfitrión | RF-D-ALO-01.1, 02.1 |
 | Catálogo | `GET y PATCH /catalogo/publicaciones/{id}` · `POST .../pausar` · `POST .../reactivar` | Anfitrión dueño, Administrador | RF-D-ALO-02.1, ADM-01.1 |
@@ -139,9 +139,10 @@ permisos basta tener uno.
   un anfitrión con `publicaciones.gestionar_propias` recibe 403 sobre una publicación ajena.
 - `GET /identidad/permisos` devuelve `{"rol", "permisos"}` de quien llama; sin sesión, los del Visitante.
 - `GET /identidad/roles` devuelve la matriz completa `{"roles": [{"rol", "permisos"}]}` (Visitante, Huésped,
-  Anfitrión, Administrador). La pantalla "Roles y permisos" se arma con ella.
+  Anfitrión, Administrador) solo al Administrador (`usuarios.ver`); los demás reciben 401 o 403. La pantalla
+  "Roles y permisos" se arma con ella y solo aparece en el menú del Administrador.
 - Rutas sin `RequierePermiso` (lista blanca, verificada por `apps/comun/tests/test_rbac.py`): `salud`, `token`,
-  `token/renovar`, `salir`, `recuperacion`, `recuperacion/{token}`, `permisos`, `roles` y `interno/tareas/diarias` (su propio
+  `token/renovar`, `salir`, `recuperacion`, `recuperacion/{token}`, `permisos` e `interno/tareas/diarias` (su propio
   token). El sitio `/admin/` de Django queda fuera de la API.
 
 | Permiso | Roles | Rutas | RF |
