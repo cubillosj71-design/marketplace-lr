@@ -333,6 +333,8 @@ export interface TableroApi {
   desde: string; hasta: string; usuarios_por_rol: Record<string, number>; publicaciones_activas: number;
   reservas_por_estado: Record<string, number>; reservas_total: number; ingresos: { bruto: string; plataforma: string };
   top_ciudades: { ciudad: string; reservas: number; monto_bruto: string }[];
+  /** Solo los días con reservas (fecha de creación, hora de Colombia). */
+  serie_diaria: { fecha: string; reservas: number; monto_bruto: string; ingreso_plataforma: string }[];
 }
 
 type Pagina<T> = { count: number; next: string | null; previous: string | null; results: T[] };

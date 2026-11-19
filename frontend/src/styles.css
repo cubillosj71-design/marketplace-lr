@@ -185,6 +185,7 @@ button { font: inherit; }
 .stat .ico svg { width: 22px; height: 22px; }
 .stat b { font-family: var(--font-display); font-size: 26px; line-height: 1; display: block; }
 .stat span { color: var(--muted); font-size: 13.5px; }
+.kpis .stat b { font-size: clamp(19px, 1.55vw, 26px); }  /* tablero: 5 cifras en una fila sin cortar los montos */
 
 /* ---------- tablas ---------- */
 .table-wrap { overflow-x: auto; }
