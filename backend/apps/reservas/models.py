@@ -41,22 +41,32 @@ class PeriodoCalendario(models.Model):
         ordering = ["fecha_inicio"]
         constraints = [models.CheckConstraint(condition=Q(fecha_fin__gt=F("fecha_inicio")), name="periodo_rango_valido")]
 
-    def contiene(self, fecha) -> bool:
+    def es_fecha_del_periodo(self, fecha) -> bool:
         return self.fecha_inicio <= fecha < self.fecha_fin
 
 
 class TarifaServicio(models.Model):
-    """Historial del porcentaje que cobra la plataforma (0 % a 30 %)."""
+    """Historial del porcentaje que cobra la plataforma (0 % a 30 %, RF-D-ADM-03.1).
+
+    Cada tarifa rige en [vigente_desde, vigente_hasta). vigente_hasta NULL es la tarifa vigente hoy: solo puede haber
+    una abierta, y al crear una nueva la anterior se cierra en la misma transacción con vigente_hasta = vigente_desde
+    de la nueva."""
 
     administrador = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
     porcentaje = models.DecimalField(max_digits=5, decimal_places=2)
     vigente_desde = models.DateTimeField()
+    vigente_hasta = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         db_table = "tarifa_servicio"
         ordering = ["-vigente_desde"]
         constraints = [
             models.CheckConstraint(condition=Q(porcentaje__gte=0, porcentaje__lte=30), name="tarifa_porcentaje_0_30"),
+            models.CheckConstraint(condition=Q(vigente_hasta__isnull=True) | Q(vigente_hasta__gt=models.F("vigente_desde")),
+                                   name="tarifa_hasta_mayor_que_desde"),
+            # Una sola tarifa abierta: índice único parcial sobre las filas con vigente_hasta NULL
+            models.UniqueConstraint(fields=["vigente_hasta"], condition=Q(vigente_hasta__isnull=True),
+                                    nulls_distinct=False, name="tarifa_una_sola_vigente"),
         ]
 
 
@@ -150,34 +160,34 @@ class Reserva(models.Model):
         self.estado = estado
         self.save(update_fields=["estado", "actualizada"])
 
-    def confirmar(self) -> None:
+    def confirmar_reserva(self) -> None:
         self._pasar_a(EstadoReserva.CONFIRMADA)
 
-    def cancelar(self, motivo: str, *, porcentaje: Decimal, cancelada_por_id: int | None = None) -> "Cancelacion":
-        """cancelar(motivo): Cancelacion del diagrama. El porcentaje sale de la política guardada en la reserva
+    def cancelar_reserva(self, motivo: str, *, porcentaje: Decimal, cancelada_por_id: int | None = None) -> "Cancelacion":
+        """cancelar_reserva(motivo): Cancelacion del diagrama. El porcentaje sale de la política guardada en la reserva
         (lo calcula reservas.services); cancelada_por_id NULL = cancelación automática."""
         self._pasar_a(EstadoReserva.CANCELADA)
         return Cancelacion.registrar(self, motivo, porcentaje, cancelada_por_id)
 
-    def completar(self) -> None:
+    def completar_reserva(self) -> None:
         """RF-D-RES-02.3: CONFIRMADA cuya fecha de salida ya pasó."""
         self._pasar_a(EstadoReserva.COMPLETADA)
 
     def pasar_a_revision(self) -> None:
         self._pasar_a(EstadoReserva.EN_REVISION)
 
-    def resolver(self, mantener: bool, *, motivo: str | None = None, administrador_id: int | None = None) -> "Cancelacion | None":
+    def resolver_revision(self, mantener: bool, *, motivo: str | None = None, administrador_id: int | None = None) -> "Cancelacion | None":
         """EN_REVISION -> CONFIRMADA si se mantiene (CA-20.2); si no, CANCELADA con devolución del 100 % y la
         Cancelacion a nombre del administrador (CA-20.3)."""
         if mantener:
-            self.confirmar()
+            self.confirmar_reserva()
             return None
-        return self.cancelar(motivo, porcentaje=Decimal("100"), cancelada_por_id=administrador_id)
+        return self.cancelar_reserva(motivo, porcentaje=Decimal("100"), cancelada_por_id=administrador_id)
 
     def cancelar_sin_resolucion(self) -> "Cancelacion":
         """cancelarSinResolucion(): Cancelacion del diagrama. EN_REVISION que llegó a su fecha de llegada sin
         resolverse: se cancela sola, con 100 % de devolución (CA-20.5)."""
-        return self.cancelar(MOTIVO_SIN_RESOLUCION, porcentaje=Decimal("100"))
+        return self.cancelar_reserva(MOTIVO_SIN_RESOLUCION, porcentaje=Decimal("100"))
 
 
 class Cancelacion(models.Model):

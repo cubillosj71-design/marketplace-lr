@@ -67,7 +67,7 @@ def auditar_falla(exc: Exception, *, actor_id: int | None = None, ip: str | None
 
     try:
         with transaction.atomic():
-            auditoria.registrar(actor_id, "ErrorOperacion", exitoso=False, ip=ip, entidad=entidad, entidad_id=entidad_id,
+            auditoria.registrar_evento(actor_id, "ErrorOperacion", exitoso=False, ip=ip, entidad=entidad, entidad_id=entidad_id,
                                 detalle={"error": type(exc).__name__, "mensaje": str(exc)[:300], **detalle})
     except Exception:  # noqa: BLE001
         log.exception("No se pudo registrar la falla en la auditoría")

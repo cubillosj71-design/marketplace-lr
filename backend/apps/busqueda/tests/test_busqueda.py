@@ -13,7 +13,7 @@ BUSCAR = "/api/v1/busqueda/publicaciones"
 
 
 def _ids_catalogo():
-    cat = catalogo.catalogos()
+    cat = catalogo.listar_catalogos()
     return ({c["nombre"]: c["id"] for c in cat["ciudades"]}, {t["nombre"]: t["id"] for t in cat["tipos"]},
             {s["nombre"]: s["id"] for s in cat["servicios"]})
 
@@ -158,6 +158,6 @@ def test_la_busqueda_es_publica_y_no_audita(publicar, cliente):
     from apps.auditoria import services as auditoria
 
     publicar("Pública")
-    antes = auditoria.consultar().count()
+    antes = auditoria.consultar_eventos().count()
     assert cliente.get(BUSCAR).status_code == 200
-    assert auditoria.consultar().count() == antes
+    assert auditoria.consultar_eventos().count() == antes

@@ -53,10 +53,10 @@ def test_refresh_nulo_no_crea_un_token_vacio(demo, cliente):
 def test_un_error_de_la_api_responde_500_controlado_sin_detalles_internos(demo, cliente, monkeypatch):
     from apps.catalogo import services
 
-    monkeypatch.setattr(services, "catalogos", lambda: 1 / 0)
+    monkeypatch.setattr(services, "listar_catalogos", lambda: 1 / 0)
     r = cliente.get("/api/v1/catalogo/ciudades")
     assert r.status_code == 500 and r.json() == {"detalle": "Ocurrió un error inesperado. Intenta de nuevo."}
-    falla = auditoria.consultar(accion="ErrorOperacion").get()
+    falla = auditoria.consultar_eventos(accion="ErrorOperacion").get()
     assert falla.exitoso is False and falla.detalle["error"] == "ZeroDivisionError"
 
 
@@ -77,8 +77,8 @@ def test_si_una_tarea_diaria_falla_las_demas_corren(alojamiento_740, reservar, r
     assert resultado["reservas_completadas"] == 1 and resultado["pagos_conciliados"] is None
     assert resultado["errores"] == {"pagos_conciliados": "ConnectionError"}
     assert apps.get_model("reservas", "Reserva").objects.get(pk=r["id"]).estado == "COMPLETADA"
-    assert auditoria.consultar(accion="TareasDiarias").get().exitoso is False
-    assert auditoria.consultar(accion="ErrorOperacion").get().detalle["tarea"] == "pagos_conciliados"
+    assert auditoria.consultar_eventos(accion="TareasDiarias").get().exitoso is False
+    assert auditoria.consultar_eventos(accion="ErrorOperacion").get().detalle["tarea"] == "pagos_conciliados"
 
 
 def test_una_reserva_que_falla_no_detiene_las_demas(alojamiento_740, publicar, reservar, reloj, monkeypatch):
@@ -89,19 +89,19 @@ def test_una_reserva_que_falla_no_detiene_las_demas(alojamiento_740, publicar, r
     reloj("2026-11-01")
     a = reservar(alojamiento_740, "2026-11-05", "2026-11-07")
     b = reservar(otra, "2026-11-05", "2026-11-07", desayuno=False)
-    original = Reserva.completar
+    original = Reserva.completar_reserva
 
     def completar(self):
         if self.id == a["id"]:
             raise RuntimeError("falla en esta reserva")
         original(self)
 
-    monkeypatch.setattr(Reserva, "completar", completar)
+    monkeypatch.setattr(Reserva, "completar_reserva", completar)
     reloj("2026-11-08")
-    assert services.completar_vencidas() == 1
+    assert services.completar_reservas_vencidas() == 1
     assert Reserva.objects.get(pk=a["id"]).estado == "CONFIRMADA"  # se revirtió sola; se reintenta en la próxima
     assert Reserva.objects.get(pk=b["id"]).estado == "COMPLETADA"
-    assert auditoria.consultar(accion="ErrorOperacion").get().entidad_id == a["id"]
+    assert auditoria.consultar_eventos(accion="ErrorOperacion").get().entidad_id == a["id"]
 
 
 def test_un_pago_que_no_se_puede_consultar_no_detiene_la_conciliacion(alojamiento_740, reservar, reloj, monkeypatch):

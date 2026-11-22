@@ -8,11 +8,11 @@ con import-linter en el pipeline, ADR-001).
 from .models import CalificacionPublicacion
 
 
-def calificaciones():
+def consultar_calificaciones():
     """Vista v_calificacion_publicacion (solo lectura) para Búsqueda (CA-11.1)."""
     return CalificacionPublicacion.objects.all()
 
 
-def calificacion(publicacion_id: int) -> dict:
+def consultar_calificacion(publicacion_id: int) -> dict:
     c = CalificacionPublicacion.objects.filter(pk=publicacion_id).first()
     return {"promedio": c.promedio if c else None, "total": c.total if c else 0}

@@ -88,7 +88,7 @@ def eventos():
     hace falta transaction=True (que además no sirve: flush usa TRUNCATE y el trigger lo rechaza)."""
     from apps.auditoria import services
 
-    return lambda **f: list(services.consultar(**f).values_list("accion", flat=True))
+    return lambda **f: list(services.consultar_eventos(**f).values_list("accion", flat=True))
 
 
 @pytest.fixture
@@ -104,7 +104,7 @@ def publicar(demo):
     from apps.catalogo import services as catalogo
 
     Usuario = apps.get_model("identidad", "Usuario")
-    cat = catalogo.catalogos()
+    cat = catalogo.listar_catalogos()
     ciudades = {c["nombre"]: c["id"] for c in cat["ciudades"]}
     tipos = {t["nombre"]: t["id"] for t in cat["tipos"]}
     ids_servicio = {s["nombre"]: s["id"] for s in cat["servicios"]}
@@ -122,9 +122,9 @@ def publicar(demo):
             "reglas": ["No fumar"], "imagenes": [f"https://placehold.co/600x400?text={titulo.replace(' ', '+')}"],
             **({"descuento_porcentaje": Decimal(descuento[0]), "descuento_min_noches": descuento[1]} if descuento else {}),
         }
-        p = catalogo.crear(dueno, datos)
+        p = catalogo.crear_publicacion(dueno, datos)
         catalogo.cambiar_estado(dueno, p.id, "PENDIENTE_REVISION")
-        catalogo.revisar(admin, p.id, "APROBAR", None)
+        catalogo.revisar_publicacion(admin, p.id, "APROBAR", None)
         return p.id
 
     return _publicar

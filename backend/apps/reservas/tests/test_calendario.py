@@ -35,7 +35,7 @@ def test_ca_09_calendario_por_rangos(demo, entrar):
 def test_el_periodo_se_guarda_con_disponible_false(demo):
     Periodo = apps.get_model("reservas", "PeriodoCalendario")
     p = Periodo.objects.get()
-    assert p.disponible is False and p.contiene(p.fecha_inicio) and not p.contiene(p.fecha_fin)
+    assert p.disponible is False and p.es_fecha_del_periodo(p.fecha_inicio) and not p.es_fecha_del_periodo(p.fecha_fin)
 
 
 def test_calendario_solo_del_dueno(demo, entrar):

@@ -5,7 +5,7 @@ Uso: permission_classes = [RequierePermiso("reservas.crear")]. Con varios permis
 - El rol tiene el permiso: pasa. La regla de dueño (CA-05.3) la revisa el service.
 - Sin sesión y el VISITANTE no tiene el permiso: 401.
 - Con sesión y sin el permiso: 403, y el intento queda en la auditoría con exitoso=False, la ruta y el permiso
-  que faltó (CA-05.2). Se registra con auditoria.services.registrar() fuera de cualquier transaction.atomic
+  que faltó (CA-05.2). Se registra con auditoria.services.registrar_evento() fuera de cualquier transaction.atomic
   ("transacción propia"), así queda guardado aunque la petición termine en 403.
 """
 
@@ -20,7 +20,7 @@ def _negar(request, detalle: dict) -> None:
     from apps.auditoria import services as auditoria  # import tardío: comun se carga antes que las apps
 
     usuario = getattr(request, "user", None)
-    auditoria.registrar(
+    auditoria.registrar_evento(
         getattr(usuario, "id", None),
         "AccesoDenegado",
         exitoso=False,

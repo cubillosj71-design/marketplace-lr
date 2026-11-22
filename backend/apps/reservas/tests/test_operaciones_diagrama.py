@@ -36,7 +36,7 @@ def reserva(alojamiento_740, reservar, reloj):
 
 def test_cancelar_devuelve_la_cancelacion(reserva, reloj):
     reloj("2026-11-15")
-    c = reserva.cancelar("Cambio de planes", porcentaje=Decimal("50"), cancelada_por_id=reserva.huesped_id)
+    c = reserva.cancelar_reserva("Cambio de planes", porcentaje=Decimal("50"), cancelada_por_id=reserva.huesped_id)
     assert reserva.estado == "CANCELADA"
     assert (c.pk is not None, c.motivo, c.dias_anticipacion, c.valor_devolucion) == (True, "Cambio de planes", 5, Decimal("370000"))
 
@@ -51,7 +51,7 @@ def test_cancelar_sin_resolucion_devuelve_el_100(reserva, reloj):
 
 def test_resolver_mantener_no_crea_cancelacion(reserva):
     reserva.pasar_a_revision()
-    assert reserva.resolver(True) is None and reserva.estado == "CONFIRMADA"
+    assert reserva.resolver_revision(True) is None and reserva.estado == "CONFIRMADA"
 
 
 def test_la_devolucion_usa_la_pasarela_del_cobro(reserva, entrar, reloj, settings, monkeypatch):
@@ -92,7 +92,7 @@ def test_actualizar_perfil_no_deja_datos_vacios():
 
 def test_desactivar_y_reactivar():
     u = Usuario().registrar("nuevo@correo.com", "Segura2026", "HUESPED", nombre_completo="Nuevo", telefono="300")
-    u.desactivar()
+    u.desactivar_cuenta()
     assert not Usuario().objects.get(pk=u.pk).activa
-    u.reactivar()
+    u.reactivar_cuenta()
     assert Usuario().objects.get(pk=u.pk).activa

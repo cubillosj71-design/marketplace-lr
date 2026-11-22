@@ -18,13 +18,27 @@ class TarifaEntrada(serializers.Serializer):
     porcentaje = serializers.DecimalField(max_digits=5, decimal_places=2)
 
 
+class RangoTarifas(serializers.Serializer):
+    desde = serializers.DateField(required=False)
+    hasta = serializers.DateField(required=False)
+
+    def validate(self, d):
+        if d.get("desde") and d.get("hasta") and d["desde"] > d["hasta"]:
+            raise serializers.ValidationError({"desde": "La fecha inicial no puede ser posterior a la final."})
+        return d
+
+
 class TarifaServicioAdmin(APIView):
-    """GET y PUT /admin/tarifa-servicio (HU-22, CA-22.1)."""
+    """GET /admin/tarifa-servicio?desde&hasta: la vigente y el historial (con rango, solo las tarifas vigentes en él).
+    PUT: nueva tarifa; cierra la anterior en la misma transacción (HU-22, CA-22.1, RF-D-ADM-03.1)."""
 
     permission_classes = [RequierePermiso("tarifa.configurar")]
 
     def get(self, request):
-        return Response({"porcentaje": f"{services.tarifa_vigente():.2f}", "historial": services.historial_tarifa()})
+        f = RangoTarifas(data=request.query_params)
+        f.is_valid(raise_exception=True)
+        historial = services.consultar_historial_tarifa(f.validated_data.get("desde"), f.validated_data.get("hasta"))
+        return Response({"porcentaje": f"{services.consultar_tarifa_vigente():.2f}", "historial": historial})
 
     def put(self, request):
         s = TarifaEntrada(data=request.data)
@@ -56,7 +70,7 @@ class Calendario(APIView):
         s.is_valid(raise_exception=True)
         desde = s.validated_data.get("desde") or timezone.localdate()
         hasta = s.validated_data.get("hasta") or desde + timedelta(days=90)
-        return Response(services.calendario(request.user, pk, desde, hasta))
+        return Response(services.consultar_calendario(request.user, pk, desde, hasta))
 
     def post(self, request, pk):
         s = CalendarioEntrada(data=request.data)
@@ -84,9 +98,9 @@ class Cotizaciones(APIView):
         s = CotizacionEntrada(data=request.data)
         s.is_valid(raise_exception=True)
         d = s.validated_data
-        c = services.cotizar(request.user, d["publicacion"], d["fecha_llegada"], d["fecha_salida"], d["num_huespedes"],
+        c = services.cotizar_estancia(request.user, d["publicacion"], d["fecha_llegada"], d["fecha_salida"], d["num_huespedes"],
                              d["adicionales"], ip=ip_de(request))
-        return Response(services.cotizacion_dict(c), status=status.HTTP_201_CREATED)
+        return Response(services.convertir_cotizacion_a_dict(c), status=status.HTTP_201_CREATED)
 
 
 class CotizacionDetalle(APIView):
@@ -95,7 +109,7 @@ class CotizacionDetalle(APIView):
     permission_classes = [RequierePermiso("reservas.cotizar")]
 
     def get(self, request, pk):
-        return Response(services.cotizacion_dict(services.obtener_cotizacion(request.user, pk)))
+        return Response(services.convertir_cotizacion_a_dict(services.obtener_cotizacion(request.user, pk)))
 
 
 # ---------------------------------------------------------------- HU-13 Reservar y pagar
@@ -116,7 +130,7 @@ class Reservas(APIView):
         s = ReservaEntrada(data=request.data)
         s.is_valid(raise_exception=True)
         d = s.validated_data
-        reserva, creada = services.reservar(request.user, d["cotizacion"], d["clave_idempotencia"], d["medio_pago"], ip=ip_de(request))
+        reserva, creada = services.reservar_alojamiento(request.user, d["cotizacion"], d["clave_idempotencia"], d["medio_pago"], ip=ip_de(request))
         return Response(reserva, status=status.HTTP_201_CREATED if creada else status.HTTP_200_OK)
 
 
@@ -128,7 +142,7 @@ class MisReservas(APIView):
     permission_classes = [RequierePermiso("reservas.ver_propias")]
 
     def get(self, request):
-        return Response(services.mis_reservas(request.user))
+        return Response(services.listar_mis_reservas(request.user))
 
 
 class DeMisAlojamientos(APIView):
@@ -137,7 +151,7 @@ class DeMisAlojamientos(APIView):
     permission_classes = [RequierePermiso("reservas.ver_de_mis_alojamientos")]
 
     def get(self, request):
-        return Response(services.reservas_de_mis_alojamientos(request.user))
+        return Response(services.listar_reservas_de_mis_alojamientos(request.user))
 
 
 class ReservaDetalle(APIView):
@@ -166,7 +180,7 @@ class Cancelar(APIView):
     def post(self, request, pk):
         s = CancelacionEntrada(data=request.data)
         s.is_valid(raise_exception=True)
-        return Response(services.cancelar(request.user, pk, s.validated_data["motivo"], ip=ip_de(request)))
+        return Response(services.cancelar_reserva(request.user, pk, s.validated_data["motivo"], ip=ip_de(request)))
 
 
 # ---------------------------------------------------------------- HU-20 Reservas EN_REVISION (Administrador)
@@ -177,7 +191,7 @@ class ReservasAdmin(APIView):
     permission_classes = [RequierePermiso("reservas.resolver")]
 
     def get(self, request):
-        return Response(services.reservas_admin(request.query_params.get("estado") or None))
+        return Response(services.listar_reservas_admin(request.query_params.get("estado") or None))
 
 
 class ResolucionEntrada(serializers.Serializer):
@@ -194,4 +208,4 @@ class Resolver(APIView):
         s = ResolucionEntrada(data=request.data)
         s.is_valid(raise_exception=True)
         d = s.validated_data
-        return Response(services.resolver(request.user, pk, d["mantener"], d.get("motivo"), ip=ip_de(request)))
+        return Response(services.resolver_reserva(request.user, pk, d["mantener"], d.get("motivo"), ip=ip_de(request)))

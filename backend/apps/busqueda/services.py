@@ -31,7 +31,7 @@ def _calificacion(c: dict) -> dict:
     return {"promedio": _dinero(c["promedio"]) if c["promedio"] is not None else None, "total": c["total"]}
 
 
-def buscar(*, ciudad: int | None = None, llegada: date | None = None, salida: date | None = None, huespedes: int = 1,
+def buscar_publicaciones(*, ciudad: int | None = None, llegada: date | None = None, salida: date | None = None, huespedes: int = 1,
            tipo: int | None = None, precio_min: Decimal | None = None, precio_max: Decimal | None = None,
            servicios: list[int] | None = None) -> list[dict]:
     """HU-10: publicaciones buscables con capacidad >= huéspedes y sin noches no disponibles en
@@ -45,7 +45,7 @@ def buscar(*, ciudad: int | None = None, llegada: date | None = None, salida: da
     if precio_min is not None and precio_max is not None and precio_min > precio_max:
         raise ErrorNegocio("El precio mínimo no puede ser mayor que el máximo.", campo="precio_min")
 
-    qs = catalogo.buscables().filter(capacidad__gte=huespedes)
+    qs = catalogo.listar_publicaciones_buscables().filter(capacidad__gte=huespedes)
     if ciudad:
         qs = qs.filter(ciudad_id=ciudad)
     if tipo:
@@ -57,11 +57,11 @@ def buscar(*, ciudad: int | None = None, llegada: date | None = None, salida: da
     if servicios:
         qs = qs.filter(servicios__contains=sorted(set(servicios)))  # todos los elegidos
     if llegada and salida:
-        ocupada = reservas.noches_no_disponibles().filter(publicacion_id=OuterRef("pk"), fecha__gte=llegada, fecha__lt=salida)
+        ocupada = reservas.consultar_noches_no_disponibles().filter(publicacion_id=OuterRef("pk"), fecha__gte=llegada, fecha__lt=salida)
         qs = qs.exclude(Exists(ocupada))
     lista = list(qs.order_by("precio_noche", "id"))
     cal = {c.publicacion_id: {"promedio": c.promedio, "total": c.total}
-           for c in resenas.calificaciones().filter(publicacion_id__in=[p.id for p in lista])}
+           for c in resenas.consultar_calificaciones().filter(publicacion_id__in=[p.id for p in lista])}
     return [{
         "id": p.id, "titulo": p.titulo, "ciudad_id": p.ciudad_id, "ciudad": p.ciudad,
         "tipo_alojamiento_id": p.tipo_alojamiento_id, "tipo": p.tipo, "capacidad": p.capacidad,
@@ -72,7 +72,7 @@ def buscar(*, ciudad: int | None = None, llegada: date | None = None, salida: da
     } for p in lista]
 
 
-def detalle(publicacion_id: int, desde: date | None = None, hasta: date | None = None) -> dict:
+def consultar_detalle_publicacion(publicacion_id: int, desde: date | None = None, hasta: date | None = None) -> dict:
     """HU-11: todos los datos, política con sus tramos (CA-11.3), noches no disponibles del rango
     (CA-11.2) y calificación. Si la publicación no es buscable responde 404."""
     if not catalogo.es_buscable(publicacion_id):
@@ -81,14 +81,14 @@ def detalle(publicacion_id: int, desde: date | None = None, hasta: date | None =
     hasta = min(hasta or desde + timedelta(days=90), fecha_maxima())
     if hasta <= desde:
         raise ErrorNegocio("La fecha final debe ser posterior a la inicial.", campo="hasta")
-    d = catalogo.detalle_publico(publicacion_id)
+    d = catalogo.obtener_detalle_publico(publicacion_id)
     for campo in ("precio_noche", "tarifa_limpieza", "descuento_porcentaje"):
         d[campo] = _dinero(d[campo])
     d["servicios_adicionales"] = [{**a, "precio": _dinero(a["precio"])} for a in d["servicios_adicionales"]]
     if d["politica"]:
         d["politica"]["tramos"] = [{**t, "porcentaje_devolucion": _dinero(t["porcentaje_devolucion"])} for t in d["politica"]["tramos"]]
-    d["anfitrion_nombre"] = identidad.nombres([d["anfitrion"]]).get(d["anfitrion"])
-    d["calificacion"] = _calificacion(resenas.calificacion(publicacion_id))
+    d["anfitrion_nombre"] = identidad.obtener_nombres_usuarios([d["anfitrion"]]).get(d["anfitrion"])
+    d["calificacion"] = _calificacion(resenas.consultar_calificacion(publicacion_id))
     d["disponibilidad"] = {"desde": desde, "hasta": hasta,
-                           "noches_no_disponibles": reservas.noches_no_disponibles_de(publicacion_id, desde, hasta)}
+                           "noches_no_disponibles": reservas.consultar_noches_no_disponibles_de(publicacion_id, desde, hasta)}
     return d

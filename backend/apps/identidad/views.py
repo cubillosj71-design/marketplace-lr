@@ -42,11 +42,11 @@ class Registro(APIView):
         s = RegistroSerializer(data=request.data)
         s.is_valid(raise_exception=True)
         d = s.validated_data
-        u = services.registrar(
+        u = services.registrar_usuario(
             nombre_completo=d["nombre_completo"], correo=d["correo"], telefono=d["telefono"], password=d["password"],
             rol=d["rol"], acepta_datos=d["acepta_datos"], ciudad=d.get("ciudad"), ip=ip_de(request),
         )
-        return Response(services.a_dict(u), status=status.HTTP_201_CREATED)
+        return Response(services.convertir_usuario_a_dict(u), status=status.HTTP_201_CREATED)
 
 
 COOKIE = settings.IDENTIDAD_COOKIE_RENOVACION
@@ -146,7 +146,7 @@ class RecuperacionToken(APIView):
     throttle_scope = "recuperacion_enlace"
 
     def get(self, request, token):
-        return Response({"estado": services.estado_enlace(token)})
+        return Response({"estado": services.consultar_estado_enlace(token)})
 
     def post(self, request, token):
         services.restablecer_clave(token, texto_de(request, "password"), ip=ip_de(request))
@@ -189,13 +189,13 @@ class Perfil(APIView):
     permission_classes = [RequierePermiso("perfil.gestionar")]
 
     def get(self, request):
-        return Response(services.a_dict(request.user))
+        return Response(services.convertir_usuario_a_dict(request.user))
 
     def patch(self, request):
         s = PerfilSerializer(data=request.data, partial=True)
         s.is_valid(raise_exception=True)
         u = services.actualizar_perfil(request.user, s.validated_data, ip=ip_de(request))
-        return Response(services.a_dict(u))
+        return Response(services.convertir_usuario_a_dict(u))
 
 
 class Desactivar(APIView):
@@ -221,7 +221,7 @@ class RestriccionAdmin(APIView):
     def post(self, request, usuario_id):
         s = RestriccionSerializer(data=request.data)
         s.is_valid(raise_exception=True)
-        r = services.restringir(request.user, usuario_id, s.validated_data["motivo"], s.validated_data.get("fecha_fin"), ip=ip_de(request))
+        r = services.restringir_usuario(request.user, usuario_id, s.validated_data["motivo"], s.validated_data.get("fecha_fin"), ip=ip_de(request))
         return Response(
             {"id": r.id, "usuario": usuario_id, "motivo": r.motivo, "fecha_inicio": r.fecha_inicio, "fecha_fin": r.fecha_fin},
             status=status.HTTP_201_CREATED,
@@ -241,4 +241,4 @@ class UsuariosAdmin(APIView):
         rol = request.query_params.get("rol") or None
         if rol and rol not in ("HUESPED", "ANFITRION", "ADMINISTRADOR"):
             raise ErrorNegocio("El rol debe ser HUESPED, ANFITRION o ADMINISTRADOR.", campo="rol")
-        return Response(services.usuarios_para_admin(rol, request.query_params.get("q")))
+        return Response(services.listar_usuarios_para_admin(rol, request.query_params.get("q")))

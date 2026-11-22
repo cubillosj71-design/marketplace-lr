@@ -69,18 +69,18 @@ AVISOS = {
 SOLO_SI_ADMINISTRADOR = {"PublicacionPausada", "PublicacionReactivada"}
 
 
-def destinatarios(nombre: str, detalle: dict) -> list[int]:
+def obtener_destinatarios(nombre: str, detalle: dict) -> list[int]:
     if nombre not in AVISOS or (nombre in SOLO_SI_ADMINISTRADOR and not detalle.get("por_administrador")):
         return []
     ids = [detalle.get(clave) for clave in AVISOS[nombre][0]]
     return list(dict.fromkeys(i for i in ids if i))
 
 
-def al_evento(sender, nombre, entidad=None, entidad_id=None, detalle=None, **_):
+def recibir_evento_dominio(sender, nombre, entidad=None, entidad_id=None, detalle=None, **_):
     """Receptor de evento_dominio (después de confirmar la transacción)."""
     detalle = detalle or {}
     try:
-        para = destinatarios(nombre, detalle)
+        para = obtener_destinatarios(nombre, detalle)
         if not para:
             return
         mensaje = AVISOS[nombre][1](detalle)[:300]
@@ -94,7 +94,7 @@ def al_evento(sender, nombre, entidad=None, entidad_id=None, detalle=None, **_):
         log.exception("No se pudo crear el aviso", extra={"evento": nombre})
         try:
             with transaction.atomic():  # transacción propia
-                auditoria.registrar(None, "NotificacionFallida", entidad=entidad, entidad_id=entidad_id, exitoso=False,
+                auditoria.registrar_evento(None, "NotificacionFallida", entidad=entidad, entidad_id=entidad_id, exitoso=False,
                                     detalle={"evento": nombre, "error": type(e).__name__, "mensaje": str(e)[:300]})
         except Exception:  # noqa: BLE001
             log.exception("Tampoco se pudo registrar la falla del aviso")
@@ -107,7 +107,7 @@ def _dict(n: Notificacion) -> dict:
             "leida": n.leida, "fecha": n.fecha}
 
 
-def bandeja(usuario, limite: int = 100) -> dict:
+def consultar_bandeja(usuario, limite: int = 100) -> dict:
     """Primero las no leídas y luego por fecha, con el conteo de no leídas."""
     qs = Notificacion.objects.filter(destinatario_id=usuario.id)
     return {"no_leidas": qs.filter(leida=False).count(),

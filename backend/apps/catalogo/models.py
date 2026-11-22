@@ -71,7 +71,7 @@ class PoliticaCancelacion(models.Model):
     def __str__(self) -> str:
         return self.nombre
 
-    def porcentaje_devolucion(self, dias: int) -> Decimal:
+    def calcular_porcentaje_devolucion(self, dias: int) -> Decimal:
         """porcentajeDevolucion(dias) del diagrama: el porcentaje del tramo que contiene los días de
         anticipación (Moderada: 7 o más 100 %, de 2 a 6 50 %, menos de 2 0 %). Sin tramo, 0 %."""
         for t in self.tramos.order_by("-dias_minimos"):

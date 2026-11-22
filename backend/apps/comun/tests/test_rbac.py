@@ -58,7 +58,7 @@ PREFIJOS_FUERA_DE_DRF = ("admin/",)  # sitio de Django: no es parte de la API y 
 def _datos_publicacion(titulo: str) -> dict:
     from apps.catalogo import services as catalogo
 
-    cat = catalogo.catalogos()
+    cat = catalogo.listar_catalogos()
     return {
         "titulo": titulo, "descripcion": "Alojamiento de prueba.", "ciudad": cat["ciudades"][0]["id"],
         "tipo_alojamiento": cat["tipos"][0]["id"],
@@ -72,9 +72,9 @@ def _datos_publicacion(titulo: str) -> dict:
 def _activa(dueno, admin, titulo: str) -> int:
     from apps.catalogo import services as catalogo
 
-    p = catalogo.crear(dueno, _datos_publicacion(titulo))
+    p = catalogo.crear_publicacion(dueno, _datos_publicacion(titulo))
     catalogo.cambiar_estado(dueno, p.id, "PENDIENTE_REVISION")
-    catalogo.revisar(admin, p.id, "APROBAR", None)
+    catalogo.revisar_publicacion(admin, p.id, "APROBAR", None)
     return p.id
 
 
@@ -85,8 +85,8 @@ def _dias(n: int):
 def _reservar(huesped, pid: int, desde: int, hasta: int) -> int:
     from apps.reservas import services as reservas
 
-    cot = reservas.cotizar(huesped, pid, _dias(desde), _dias(hasta), 2)
-    reserva, _ = reservas.reservar(huesped, cot.id, uuid.uuid4(), "simulado")
+    cot = reservas.cotizar_estancia(huesped, pid, _dias(desde), _dias(hasta), 2)
+    reserva, _ = reservas.reservar_alojamiento(huesped, cot.id, uuid.uuid4(), "simulado")
     return reserva["id"]
 
 
@@ -104,7 +104,7 @@ def _preparar() -> dict:
     # Una reserva futura en una publicación que luego se bloquea: queda EN_REVISION (RF-D-ADM-01.2)
     pub_bloqueada = _activa(a, adm, "RBAC para bloquear")
     en_revision = _reservar(h, pub_bloqueada, 60, 62)
-    catalogo.bloquear(adm, pub_bloqueada, "Prueba de RBAC")
+    catalogo.bloquear_publicacion(adm, pub_bloqueada, "Prueba de RBAC")
     assert apps.get_model("reservas", "Reserva").objects.get(pk=en_revision).estado == "EN_REVISION"
 
     por_titulo = {p.titulo: p.id for p in Publicacion.objects.all()}
@@ -113,7 +113,7 @@ def _preparar() -> dict:
         "pub": pub,
         "reserva": reserva,
         "en_revision": en_revision,
-        "borrador": catalogo.crear(a, _datos_publicacion("RBAC borrador completo")).id,
+        "borrador": catalogo.crear_publicacion(a, _datos_publicacion("RBAC borrador completo")).id,
         "pausada": por_titulo["Cabaña El Roble"],
         "pendiente": por_titulo["Habitación cerca al centro"],
         "bloqueada": por_titulo["Loft Chapinero"],
@@ -165,7 +165,7 @@ class Caso:
 def _borrador_nuevo(ctx) -> int:
     from apps.catalogo import services as catalogo
 
-    return catalogo.crear(ctx["usuarios"][A], {"titulo": "Borrador para eliminar"}).id
+    return catalogo.crear_publicacion(ctx["usuarios"][A], {"titulo": "Borrador para eliminar"}).id
 
 
 def _fija(ruta, cuerpo=None):
@@ -175,7 +175,7 @@ def _fija(ruta, cuerpo=None):
 def _cotizacion(ctx, desde, hasta) -> int:
     from apps.reservas import services as reservas
 
-    return reservas.cotizar(ctx["usuarios"][H], ctx["pub"], _dias(desde), _dias(hasta), 2).id
+    return reservas.cotizar_estancia(ctx["usuarios"][H], ctx["pub"], _dias(desde), _dias(hasta), 2).id
 
 
 CASOS = [

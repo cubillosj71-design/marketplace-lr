@@ -26,7 +26,7 @@ def ejecutar_tareas_diarias(origen: str, ip: str | None = None) -> dict:
     Cada tarea va aislada: si una falla (por ejemplo, Stripe no responde en la conciliación), la falla queda en el
     log y en la auditoría y las demás se ejecutan igual. El resumen dice qué tarea falló (valor None y "errores")."""
     tareas = (
-        ("reservas_completadas", reservas.completar_vencidas),
+        ("reservas_completadas", reservas.completar_reservas_vencidas),
         ("reservas_canceladas_sin_resolucion", reservas.cancelar_en_revision_vencidas),
         ("pagos_conciliados", pagos.conciliar_pagos),
     )
@@ -41,7 +41,7 @@ def ejecutar_tareas_diarias(origen: str, ip: str | None = None) -> dict:
             resultado[nombre], errores[nombre] = None, type(e).__name__
     if errores:
         resultado["errores"] = errores
-    auditoria.registrar(None, "TareasDiarias", ip=ip, exitoso=not errores, detalle={"origen": origen, **resultado})
+    auditoria.registrar_evento(None, "TareasDiarias", ip=ip, exitoso=not errores, detalle={"origen": origen, **resultado})
     return resultado
 
 

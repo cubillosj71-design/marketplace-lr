@@ -21,7 +21,7 @@ def test_el_anfitrion_elimina_su_borrador(demo, entrar):
     r = entrar(ANFITRION, "Clave1234").delete(f"/api/v1/catalogo/mis-publicaciones/{pid}")
     assert r.status_code == 204
     assert not Publicacion().objects.filter(pk=pid).exists()
-    evento = auditoria.consultar(accion="PublicacionEliminada").get()
+    evento = auditoria.consultar_eventos(accion="PublicacionEliminada").get()
     assert evento.entidad_id == pid and evento.detalle["titulo"] == "Borrador de prueba"
 
 

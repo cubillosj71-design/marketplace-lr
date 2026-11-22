@@ -36,7 +36,7 @@ class Tablero(APIView):
     def get(self, request):
         p = Periodo(data=request.query_params)
         p.is_valid(raise_exception=True)
-        return Response(services.tablero(p.validated_data["desde"], p.validated_data["hasta"]))
+        return Response(services.consultar_tablero(p.validated_data["desde"], p.validated_data["hasta"]))
 
 
 class ReporteArchivo(APIView):
@@ -49,7 +49,7 @@ class ReporteArchivo(APIView):
         p.is_valid(raise_exception=True)
         d = p.validated_data
         filtros = {k: d[k] for k in ("rol", "estado", "ciudad", "tipo") if k in d}
-        contenido, nombre, mime = services.generar(request.user, tipo, d.get("formato", "pdf"), d["desde"], d["hasta"], filtros, ip=ip_de(request))
+        contenido, nombre, mime = services.generar_reporte(request.user, tipo, d.get("formato", "pdf"), d["desde"], d["hasta"], filtros, ip=ip_de(request))
         respuesta = HttpResponse(contenido, content_type=mime)
         respuesta["Content-Disposition"] = f'attachment; filename="{nombre}"'
         respuesta["Access-Control-Expose-Headers"] = "Content-Disposition"

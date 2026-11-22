@@ -14,4 +14,4 @@ class NotificacionesConfig(AppConfig):
         from . import services
 
         # C4 nivel 3: "Entrega las notificaciones a [señal, después de confirmar]"
-        evento_dominio.connect(services.al_evento, dispatch_uid="notificaciones_al_evento")
+        evento_dominio.connect(services.recibir_evento_dominio, dispatch_uid="notificaciones_recibir_evento_dominio")

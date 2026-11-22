@@ -73,7 +73,7 @@ class PublicacionSalida(serializers.ModelSerializer):
                  "administrador_nombre": r.administrador.nombre_completo} for r in p.revisiones.select_related("administrador")]
 
     def get_faltantes(self, p):
-        return services.faltantes(p) if p.estado == EstadoPublicacion.BORRADOR else []
+        return services.calcular_faltantes(p) if p.estado == EstadoPublicacion.BORRADOR else []
 
 
 class PublicacionLista(serializers.ModelSerializer):
@@ -110,7 +110,7 @@ class Publicaciones(APIView):
     def post(self, request):
         s = PublicacionEntrada(data=request.data)
         s.is_valid(raise_exception=True)
-        return Response(_salida(services.crear(request.user, s.validated_data)), status=status.HTTP_201_CREATED)
+        return Response(_salida(services.crear_publicacion(request.user, s.validated_data)), status=status.HTTP_201_CREATED)
 
 
 class MisPublicaciones(ListAPIView):
@@ -120,7 +120,7 @@ class MisPublicaciones(ListAPIView):
     serializer_class = PublicacionLista
 
     def get_queryset(self):
-        return services.mis_publicaciones(self.request.user, self.request.query_params.get("estado"))
+        return services.listar_mis_publicaciones(self.request.user, self.request.query_params.get("estado"))
 
 
 class MiPublicacion(APIView):
@@ -140,12 +140,12 @@ class PublicacionDetalle(APIView):
     permission_classes = [RequierePermiso("publicaciones.gestionar_propias", "publicaciones.moderar")]
 
     def get(self, request, pk):
-        return Response(_salida(services.obtener(request.user, pk)))
+        return Response(_salida(services.obtener_publicacion(request.user, pk)))
 
     def patch(self, request, pk):
         s = PublicacionEntrada(data=request.data, partial=True)
         s.is_valid(raise_exception=True)
-        return Response(_salida(services.actualizar(request.user, pk, s.validated_data)))
+        return Response(_salida(services.actualizar_publicacion(request.user, pk, s.validated_data)))
 
 
 class _CambioEstado(APIView):
@@ -182,7 +182,7 @@ class Catalogos(APIView):
     clave = ""
 
     def get(self, request):
-        return Response(services.catalogos()[self.clave])
+        return Response(services.listar_catalogos()[self.clave])
 
 
 # ---------------------------------------------------------------- Administrador
@@ -194,7 +194,7 @@ class PublicacionesAdmin(ListAPIView):
     serializer_class = PublicacionLista
 
     def get_queryset(self):
-        return services.listar_admin(self.request.query_params.get("estado"))
+        return services.listar_publicaciones_admin(self.request.query_params.get("estado"))
 
 
 class RevisionEntrada(serializers.Serializer):
@@ -210,7 +210,7 @@ class RevisionAdmin(APIView):
     def post(self, request, pk):
         s = RevisionEntrada(data=request.data)
         s.is_valid(raise_exception=True)
-        p = services.revisar(request.user, pk, s.validated_data["accion"], s.validated_data.get("observacion"))
+        p = services.revisar_publicacion(request.user, pk, s.validated_data["accion"], s.validated_data.get("observacion"))
         return Response(_salida(p))
 
 
@@ -220,7 +220,7 @@ class BloqueoAdmin(APIView):
     permission_classes = [RequierePermiso("publicaciones.moderar")]
 
     def post(self, request, pk):
-        return Response(_salida(services.bloquear(request.user, pk, texto_de(request, "motivo"))))
+        return Response(_salida(services.bloquear_publicacion(request.user, pk, texto_de(request, "motivo"))))
 
     def delete(self, request, pk):
-        return Response(_salida(services.desbloquear(request.user, pk)))
+        return Response(_salida(services.desbloquear_publicacion(request.user, pk)))

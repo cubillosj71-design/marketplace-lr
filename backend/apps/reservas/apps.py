@@ -15,4 +15,4 @@ class ReservasConfig(AppConfig):
         from . import services
 
         # C4 nivel 3: "Entrega PublicacionBloqueada a [señal, misma transacción]" (CA-20.1)
-        evento_dominio_en_transaccion.connect(services.al_bloquear_publicacion, dispatch_uid="reservas_al_bloquear_publicacion")
+        evento_dominio_en_transaccion.connect(services.atender_bloqueo_publicacion, dispatch_uid="reservas_atender_bloqueo_publicacion")
