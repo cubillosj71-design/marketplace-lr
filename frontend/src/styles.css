@@ -383,8 +383,6 @@ table.table { width: 100%; border-collapse: collapse; font-size: 14px; }
   .grid-3 { grid-template-columns: 1fr; }
 }
 @media (max-width: 640px) {
-  .gallery { grid-template-columns: 1fr !important; grid-template-rows: 200px !important; }
-  .gallery > :not(:first-child) { display: none; }
   .content { padding: 18px 16px; }
   .topbar { padding: 0 16px; }
   .topbar .crumbs { display: none; }
@@ -438,4 +436,29 @@ ol.reglas { margin: 0; padding-left: 20px; display: grid; gap: 4px; }
   .matriz-roles th, .matriz-roles td { padding: 10px 6px; font-size: 13px; }
   .matriz-roles th:first-child, .matriz-roles td:first-child { padding-left: 12px; }
   .matriz-roles th { letter-spacing: 0; font-size: 10.5px; }
+}
+
+/* Galería del detalle (HU-11): foto grande y miniaturas para cambiarla */
+.galeria { display: grid; gap: 10px; outline: none; }
+.galeria:focus-visible .galeria-principal { box-shadow: 0 0 0 3px var(--accent-soft); }
+.galeria-principal { position: relative; height: 420px; }
+.galeria-principal > .img-ph { height: 100%; }
+.galeria-flecha { position: absolute; top: 50%; transform: translateY(-50%); width: 38px; height: 38px; border-radius: 50%; border: 0;
+  background: rgba(255, 255, 255, 0.92); color: var(--text); display: grid; place-items: center; cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18); }
+.galeria-flecha.izq { left: 10px; }
+.galeria-flecha.der { right: 10px; }
+.galeria-flecha svg { width: 20px; height: 20px; }
+.galeria-contador { position: absolute; right: 10px; bottom: 10px; background: rgba(11, 47, 45, 0.75); color: #fff; font-size: 12.5px;
+  font-weight: 600; padding: 3px 10px; border-radius: 999px; }
+.galeria-miniaturas { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scroll-snap-type: x proximity; }
+.galeria-miniaturas button { flex: 0 0 104px; height: 72px; padding: 0; border: 2px solid transparent; border-radius: 10px; background: none;
+  cursor: pointer; opacity: 0.72; scroll-snap-align: start; }
+.galeria-miniaturas button .img-ph { width: 100%; height: 100%; border-radius: 8px; }
+.galeria-miniaturas button.on { border-color: var(--accent); opacity: 1; }
+.galeria-miniaturas button:hover { opacity: 1; }
+@media (max-width: 640px) {
+  .galeria-principal { height: 240px; }
+  .galeria-miniaturas button { flex-basis: 76px; height: 56px; }
+  .galeria-flecha { width: 34px; height: 34px; }
 }

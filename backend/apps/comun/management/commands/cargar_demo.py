@@ -53,39 +53,39 @@ PUBLICACIONES = [
         "Apartamento con vista a Monserrate", "Apartamento", "Bogotá", "La Candelaria, a 3 cuadras del Chorro de Quevedo",
         "Apartamento luminoso de dos habitaciones con vista a los cerros, cocina equipada y balcón.", 4, 220000, 50000,
         ["Wi-Fi", "Parqueadero", "Cocina", "Agua caliente"], ["No fumar", "Sin fiestas", "Silencio después de las 10 p. m."],
-        ["monserrate-sala", "monserrate-habitacion", "monserrate-vista"], descuento_porcentaje=Decimal(10), descuento_min_noches=7,
+        ["monserrate-sala", "monserrate-vista", "monserrate-habitacion", "monserrate-cocina", "monserrate-bano"], descuento_porcentaje=Decimal(10), descuento_min_noches=7,
         servicios_adicionales=[{"nombre": "Desayuno", "precio": Decimal(25000)}, {"nombre": "Traslado al aeropuerto", "precio": Decimal(70000)}],
     ), None),
     ("anfitrion@correo.com", "2026-05-18", "PAUSADA", pub(
         "Cabaña El Roble", "Cabaña", "Guatavita", "Vereda El Roble, km 4", "Cabaña de madera junto al embalse, con chimenea y zona de fogata.",
-        5, 310000, 60000, ["Wi-Fi", "Parqueadero", "Cocina"], ["Mascotas pequeñas permitidas"], ["roble-fachada", "roble-chimenea"]), None),
+        5, 310000, 60000, ["Wi-Fi", "Parqueadero", "Cocina"], ["Mascotas pequeñas permitidas"], ["roble-fachada", "roble-chimenea", "roble-habitacion", "roble-cocina", "roble-fogata"]), None),
     ("anfitrion@correo.com", "2026-06-30", "PENDIENTE_REVISION", pub(
         "Habitación cerca al centro", "Habitación", "Bogotá", "Calle 19 con carrera 4",
         "Habitación privada con baño, a 10 minutos del centro histórico. Incluye Wi-Fi y agua caliente.", 2, 95000, 20000,
-        ["Wi-Fi", "Agua caliente"], ["Llegada desde las 3:00 p. m."], ["centro-habitacion", "centro-bano", "centro-escritorio", "centro-edificio"]), None),
+        ["Wi-Fi", "Agua caliente"], ["Llegada desde las 3:00 p. m."], ["centro-edificio", "centro-habitacion", "centro-bano", "centro-escritorio", "centro-calle"]), None),
     ("anfitrion@correo.com", "2026-08-12", "BORRADOR", pub(
         "Casa familiar en Villa de Leyva", "Casa", "Villa de Leyva", "Vereda El Roble, a 5 min de la plaza",
         "Casa de dos pisos a 5 minutos de la plaza principal, con patio y zona BBQ.", 6, 280000, 60000,
-        ["Wi-Fi", "Parqueadero", "Cocina"], ["No fumar", "Mascotas pequeñas permitidas"], ["leyva-fachada"]),
+        ["Wi-Fi", "Parqueadero", "Cocina"], ["No fumar", "Mascotas pequeñas permitidas"], ["leyva-fachada", "leyva-sala", "leyva-habitacion", "leyva-cocina", "leyva-patio"]),
         ("DEVOLVER", "Las fotos no corresponden al alojamiento. Sube fotos reales de la casa.")),
     ("anfitrion@correo.com", "2026-10-05", "BLOQUEADA", pub(
         "Loft Chapinero", "Apartamento", "Bogotá", "Chapinero Alto", "Loft moderno con terraza.", 2, 180000, 40000,
-        ["Wi-Fi", "TV"], ["No fumar"], ["chapinero-loft"]), ("BLOQUEAR", "La dirección publicada no coincide con la del alojamiento.")),
+        ["Wi-Fi", "TV"], ["No fumar"], ["chapinero-sala", "chapinero-loft", "chapinero-cocina", "chapinero-bano", "chapinero-terraza"]), ("BLOQUEAR", "La dirección publicada no coincide con la del alojamiento.")),
     ("pedro@correo.com", "2026-08-01", "PENDIENTE_REVISION", pub(
         "Estudio Usaquén", "Apartamento", "Bogotá", "Usaquén, cerca del parque", "Estudio para dos con cocineta.", 2, 150000, 30000,
-        ["Wi-Fi", "Cocina"], ["No fumar"], ["usaquen-estudio", "usaquen-cocineta"]), None),
+        ["Wi-Fi", "Cocina"], ["No fumar"], ["usaquen-estudio", "usaquen-cocineta", "usaquen-bano", "usaquen-plaza", "usaquen-parque"]), None),
     ("sofia@correo.com", "2026-09-15", "ACTIVA", pub(
         "Cabaña del Lago", "Cabaña", "Guatapé", "Orilla del embalse, sector La Piedra", "Cabaña con muelle propio y kayak.", 5, 280000, 60000,
-        ["Wi-Fi", "Parqueadero", "Cocina"], ["Sin fiestas"], ["lago-muelle", "lago-sala"]), None),
+        ["Wi-Fi", "Parqueadero", "Cocina"], ["Sin fiestas"], ["lago-sala", "lago-muelle", "lago-exterior", "lago-habitacion", "lago-kayak"]), None),
     ("sofia@correo.com", "2026-10-01", "ACTIVA", pub(
         "Casa campestre La Ceja", "Casa", "La Ceja", "Vía La Ceja - La Unión, km 2", "Casa campestre con jardín amplio y BBQ.", 8, 390000, 80000,
-        ["Wi-Fi", "Parqueadero", "Cocina", "Piscina"], ["No fumar"], ["ceja-jardin", "ceja-piscina"]), None),
+        ["Wi-Fi", "Parqueadero", "Cocina", "Piscina"], ["No fumar"], ["ceja-fachada", "ceja-sala", "ceja-habitacion", "ceja-piscina", "ceja-jardin"]), None),
     ("sofia@correo.com", "2026-11-03", "ACTIVA", pub(
         "Habitación Laureles", "Habitación", "Medellín", "Laureles, circular 1", "Habitación privada en casa familiar.", 2, 110000, 20000,
-        ["Wi-Fi", "Agua caliente"], ["Silencio después de las 10 p. m."], ["laureles-habitacion"]), None),
+        ["Wi-Fi", "Agua caliente"], ["Silencio después de las 10 p. m."], ["laureles-sala", "laureles-habitacion", "laureles-cocina", "laureles-bano", "laureles-barrio"]), None),
     ("restringido@correo.com", "2026-10-28", "ACTIVA", pub(
         "Apartamento El Poblado", "Apartamento", "Medellín", "El Poblado",
-        "No aparece en búsquedas porque la cuenta del anfitrión está restringida.", 3, 240000, 40000, ["Wi-Fi"], ["No fumar"], ["poblado-sala"]), None),
+        "No aparece en búsquedas porque la cuenta del anfitrión está restringida.", 3, 240000, 40000, ["Wi-Fi"], ["No fumar"], ["poblado-sala", "poblado-habitacion", "poblado-cocina", "poblado-bano", "poblado-vista"]), None),
 ]
 # Reservas por el flujo real (cotizar y reservar con el pago simulado). El reloj de la aplicación fija la fecha de
 # creación, que es la que usan el tablero y los reportes (RF-D-ADM-05). Octubre y noviembre de 2026 muestran todos
