@@ -1,0 +1,341 @@
+<mxfile host="app.diagrams.net" pages="5">
+  <diagram name="CU USU" id="HQxkV5kRpOTzQFSGSdvA">
+    <mxGraphModel dx="1013" dy="515" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1010" pageHeight="664" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="u0_t" parent="1" style="text;html=1;align=center;verticalAlign=middle;fontSize=16;fontColor=#333333;" value="Diagrama de casos de uso · Módulo USU: Usuarios y acceso" vertex="1">
+          <mxGeometry height="30" width="1010" y="14" as="geometry" />
+        </mxCell>
+        <mxCell id="u0_b" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;verticalAlign=top;align=left;spacingLeft=8;spacingTop=4;fontStyle=1;fontSize=11;" value="Marketplace de Alojamientos&lt;br&gt;Módulo USU: Usuarios y acceso" vertex="1">
+          <mxGeometry height="534" width="620" x="330" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="u0_USU01" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=12;" value="Registrarse&lt;br&gt;&lt;font style=&quot;font-size:10px&quot; color=&quot;#777777&quot;&gt;CU-USU-01&lt;/font&gt;" vertex="1">
+          <mxGeometry height="58" width="240" x="350" y="121" as="geometry" />
+        </mxCell>
+        <mxCell id="u0_USU02" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=12;" value="Iniciar sesión&lt;br&gt;&lt;font style=&quot;font-size: 10px;&quot; color=&quot;#777777&quot;&gt;CU-USU-02&lt;/font&gt;" vertex="1">
+          <mxGeometry height="69" width="240" x="350" y="224" as="geometry" />
+        </mxCell>
+        <mxCell id="u0_USU03" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=12;" value="Recuperar contraseña&lt;br&gt;&lt;font style=&quot;font-size:10px&quot; color=&quot;#777777&quot;&gt;CU-USU-03&lt;/font&gt;" vertex="1">
+          <mxGeometry height="58" width="240" x="350" y="308" as="geometry" />
+        </mxCell>
+        <mxCell id="u0_USU04" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=12;" value="Actualizar perfil&lt;br&gt;&lt;font style=&quot;font-size:10px&quot; color=&quot;#777777&quot;&gt;CU-USU-04&lt;/font&gt;" vertex="1">
+          <mxGeometry height="58" width="240" x="350" y="409" as="geometry" />
+        </mxCell>
+        <mxCell id="u0_USU05" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=12;" value="Desactivar cuenta&lt;br&gt;&lt;font style=&quot;font-size:10px&quot; color=&quot;#777777&quot;&gt;CU-USU-05&lt;/font&gt;" vertex="1">
+          <mxGeometry height="58" width="240" x="350" y="521" as="geometry" />
+        </mxCell>
+        <mxCell id="u0_vis" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fontSize=12;" value="Visitante" vertex="1">
+          <mxGeometry height="69" width="30" x="145" y="107" as="geometry" />
+        </mxCell>
+        <mxCell id="Tz9vI-8BFC9tBPM7oYSR-1" edge="1" parent="1" source="u0_usr" style="edgeStyle=none;curved=1;rounded=0;curveGeometry=1;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontSize=12;defaultLabelBackgroundColor=page;labelPadding=0 4;startSize=8;endSize=8;endArrow=none;endFill=0;" target="u0_USU03">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="u0_usr" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fontSize=12;" value="Usuario registrado" vertex="1">
+          <mxGeometry height="69" width="30" x="145" y="227" as="geometry" />
+        </mxCell>
+        <mxCell id="u0_adm" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fontSize=12;" value="Administrador" vertex="1">
+          <mxGeometry height="69" width="30" x="50" y="395" as="geometry" />
+        </mxCell>
+        <mxCell id="u0_hue" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fontSize=12;" value="Huésped" vertex="1">
+          <mxGeometry height="69" width="30" x="240" y="395" as="geometry" />
+        </mxCell>
+        <mxCell id="u0_anf" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fontSize=12;" value="Anfitrión" vertex="1">
+          <mxGeometry height="69" width="30" x="240" y="507" as="geometry" />
+        </mxCell>
+        <mxCell id="u0_a1" edge="1" parent="1" source="u0_vis" style="endArrow=none;html=1;rounded=0;entryX=0;entryY=0.5;exitX=1;exitY=0.35;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" target="u0_USU01">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="u0_a2" edge="1" parent="1" source="u0_usr" style="endArrow=none;html=1;rounded=0;entryX=0;entryY=0.5;exitX=1;exitY=0.35;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" target="u0_USU02">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="u0_a3" edge="1" parent="1" source="u0_hue" style="endArrow=none;html=1;rounded=0;entryX=0;entryY=0.5;exitX=1;exitY=0.35;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" target="u0_USU04">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="u0_a4" edge="1" parent="1" source="u0_hue" style="endArrow=none;html=1;rounded=0;entryX=0;entryY=0.5;exitX=1;exitY=0.35;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" target="u0_USU05">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="u0_a5" edge="1" parent="1" source="u0_anf" style="endArrow=none;html=1;rounded=0;entryX=0;entryY=0.5;exitX=1;exitY=0.35;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" target="u0_USU04">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="u0_a6" edge="1" parent="1" source="u0_anf" style="endArrow=none;html=1;rounded=0;entryX=0;entryY=0.5;exitX=1;exitY=0.35;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" target="u0_USU05">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="u0_g7" edge="1" parent="1" source="u0_adm" style="endArrow=block;endFill=0;endSize=14;html=1;rounded=0;exitX=0.5;exitY=0;exitDx=0;exitDy=0;">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="65" y="362" />
+              <mxPoint x="160" y="362" />
+            </Array>
+            <mxPoint x="160" y="320" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="u0_g8" edge="1" parent="1" source="u0_hue" style="endArrow=block;endFill=0;endSize=14;html=1;rounded=0;exitX=0.5;exitY=0;exitDx=0;exitDy=0;">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="255" y="362" />
+              <mxPoint x="160" y="362" />
+            </Array>
+            <mxPoint x="160" y="320" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="u0_g9" edge="1" parent="1" source="u0_anf" style="endArrow=block;endFill=0;endSize=14;html=1;rounded=0;exitX=0;exitY=0.4;exitDx=0;exitDy=0;">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="160" y="535" />
+            </Array>
+            <mxPoint x="160" y="320" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="CU ALO" id="CSceMWJMQwmNMUDuQon9">
+    <mxGraphModel grid="1" page="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" pageScale="1" pageWidth="750" pageHeight="664" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="u1_t" parent="1" style="text;html=1;align=center;verticalAlign=middle;fontSize=16;fontColor=#333333;" value="Diagrama de casos de uso · Módulo ALO: Alojamientos y disponibilidad" vertex="1">
+          <mxGeometry height="30" width="750" y="14" as="geometry" />
+        </mxCell>
+        <mxCell id="u1_b" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;verticalAlign=top;align=left;spacingLeft=8;spacingTop=4;fontStyle=1;fontSize=11;" value="Marketplace de Alojamientos&lt;br&gt;Módulo ALO: Alojamientos y disponibilidad" vertex="1">
+          <mxGeometry height="534" width="360" x="330" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="u1_ALO01" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=12;" value="Crear publicación&lt;br&gt;&lt;font style=&quot;font-size:10px&quot; color=&quot;#777777&quot;&gt;CU-ALO-01&lt;/font&gt;" vertex="1">
+          <mxGeometry height="58" width="240" x="350" y="121" as="geometry" />
+        </mxCell>
+        <mxCell id="u1_ALO02" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=12;" value="Enviar publicación&lt;br&gt;a revisión&lt;br&gt;&lt;font style=&quot;font-size:10px&quot; color=&quot;#777777&quot;&gt;CU-ALO-02&lt;/font&gt;" vertex="1">
+          <mxGeometry height="58" width="240" x="350" y="201" as="geometry" />
+        </mxCell>
+        <mxCell id="u1_ALO03" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=12;" value="Consultar mis&lt;br&gt;publicaciones&lt;br&gt;&lt;font style=&quot;font-size:10px&quot; color=&quot;#777777&quot;&gt;CU-ALO-03&lt;/font&gt;" vertex="1">
+          <mxGeometry height="58" width="240" x="350" y="281" as="geometry" />
+        </mxCell>
+        <mxCell id="u1_ALO06" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=12;" value="Bloquear o liberar fechas&lt;br&gt;del calendario&lt;br&gt;&lt;font style=&quot;font-size:10px&quot; color=&quot;#777777&quot;&gt;CU-ALO-06&lt;/font&gt;" vertex="1">
+          <mxGeometry height="58" width="240" x="350" y="361" as="geometry" />
+        </mxCell>
+        <mxCell id="u1_ALO04" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=12;" value="Editar publicación&lt;br&gt;&lt;font style=&quot;font-size:10px&quot; color=&quot;#777777&quot;&gt;CU-ALO-04&lt;/font&gt;" vertex="1">
+          <mxGeometry height="58" width="240" x="350" y="441" as="geometry" />
+        </mxCell>
+        <mxCell id="u1_ALO05" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=12;" value="Pausar o reactivar&lt;br&gt;publicación&lt;br&gt;&lt;font style=&quot;font-size:10px&quot; color=&quot;#777777&quot;&gt;CU-ALO-05&lt;/font&gt;" vertex="1">
+          <mxGeometry height="58" width="240" x="350" y="521" as="geometry" />
+        </mxCell>
+        <mxCell id="u1_anf" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fontSize=12;" value="Anfitrión" vertex="1">
+          <mxGeometry height="69" width="30" x="135" y="267" as="geometry" />
+        </mxCell>
+        <mxCell id="u1_adm" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fontSize=12;" value="Administrador" vertex="1">
+          <mxGeometry height="69" width="30" x="135" y="475" as="geometry" />
+        </mxCell>
+        <mxCell id="u1_a1" edge="1" parent="1" source="u1_anf" style="endArrow=none;html=1;rounded=0;entryX=0;entryY=0.5;exitX=1;exitY=0.35;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" target="u1_ALO01">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="u1_a2" edge="1" parent="1" source="u1_anf" style="endArrow=none;html=1;rounded=0;entryX=0;entryY=0.5;exitX=1;exitY=0.35;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" target="u1_ALO02">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="u1_a3" edge="1" parent="1" source="u1_anf" style="endArrow=none;html=1;rounded=0;entryX=0;entryY=0.5;exitX=1;exitY=0.35;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" target="u1_ALO03">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="u1_a4" edge="1" parent="1" source="u1_anf" style="endArrow=none;html=1;rounded=0;entryX=0;entryY=0.5;exitX=1;exitY=0.35;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" target="u1_ALO06">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="u1_a5" edge="1" parent="1" source="u1_anf" style="endArrow=none;html=1;rounded=0;entryX=0;entryY=0.5;exitX=1;exitY=0.35;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" target="u1_ALO04">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="u1_a6" edge="1" parent="1" source="u1_anf" style="endArrow=none;html=1;rounded=0;entryX=0;entryY=0.5;exitX=1;exitY=0.35;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" target="u1_ALO05">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="u1_a7" edge="1" parent="1" source="u1_adm" style="endArrow=none;html=1;rounded=0;entryX=0;entryY=0.5;exitX=1;exitY=0.35;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" target="u1_ALO04">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="u1_a8" edge="1" parent="1" source="u1_adm" style="endArrow=none;html=1;rounded=0;entryX=0;entryY=0.5;exitX=1;exitY=0.35;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" target="u1_ALO05">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="CU RES" id="_pOAQ8Bsm0lwrjwapr36">
+    <mxGraphModel grid="1" page="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" pageScale="1" pageWidth="940" pageHeight="744" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="u2_t" parent="1" style="text;html=1;align=center;verticalAlign=middle;fontSize=16;fontColor=#333333;" value="Diagrama de casos de uso · Módulo RES: Reservas" vertex="1">
+          <mxGeometry height="30" width="940" y="14" as="geometry" />
+        </mxCell>
+        <mxCell id="u2_b" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;verticalAlign=top;align=left;spacingLeft=8;spacingTop=4;fontStyle=1;fontSize=11;" value="Marketplace de Alojamientos&lt;br&gt;Módulo RES: Reservas" vertex="1">
+          <mxGeometry height="614" width="360" x="330" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="u2_RES01" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=12;" value="Buscar alojamientos&lt;br&gt;&lt;font style=&quot;font-size:10px&quot; color=&quot;#777777&quot;&gt;CU-RES-01&lt;/font&gt;" vertex="1">
+          <mxGeometry height="58" width="240" x="350" y="121" as="geometry" />
+        </mxCell>
+        <mxCell id="u2_RES02" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=12;" value="Ver detalle de&lt;br&gt;un alojamiento&lt;br&gt;&lt;font style=&quot;font-size:10px&quot; color=&quot;#777777&quot;&gt;CU-RES-02&lt;/font&gt;" vertex="1">
+          <mxGeometry height="58" width="240" x="350" y="201" as="geometry" />
+        </mxCell>
+        <mxCell id="u2_RES03" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=12;" value="Cotizar estancia&lt;br&gt;&lt;font style=&quot;font-size:10px&quot; color=&quot;#777777&quot;&gt;CU-RES-03&lt;/font&gt;" vertex="1">
+          <mxGeometry height="58" width="240" x="350" y="281" as="geometry" />
+        </mxCell>
+        <mxCell id="u2_RES04" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=12;" value="Reservar alojamiento&lt;br&gt;&lt;font style=&quot;font-size:10px&quot; color=&quot;#777777&quot;&gt;CU-RES-04&lt;/font&gt;" vertex="1">
+          <mxGeometry height="58" width="240" x="350" y="361" as="geometry" />
+        </mxCell>
+        <mxCell id="u2_RES05" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=12;" value="Consultar reservas&lt;br&gt;&lt;font style=&quot;font-size:10px&quot; color=&quot;#777777&quot;&gt;CU-RES-05&lt;/font&gt;" vertex="1">
+          <mxGeometry height="58" width="240" x="350" y="441" as="geometry" />
+        </mxCell>
+        <mxCell id="u2_RES06" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=12;" value="Cancelar reserva&lt;br&gt;&lt;font style=&quot;font-size:10px&quot; color=&quot;#777777&quot;&gt;CU-RES-06&lt;/font&gt;" vertex="1">
+          <mxGeometry height="58" width="240" x="350" y="521" as="geometry" />
+        </mxCell>
+        <mxCell id="u2_RES07" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=12;" value="Consultar notificaciones&lt;br&gt;y marcarlas como leídas&lt;br&gt;&lt;font style=&quot;font-size:10px&quot; color=&quot;#777777&quot;&gt;CU-RES-07&lt;/font&gt;" vertex="1">
+          <mxGeometry height="58" width="240" x="350" y="601" as="geometry" />
+        </mxCell>
+        <mxCell id="u2_vis" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fontSize=12;" value="Visitante" vertex="1">
+          <mxGeometry height="69" width="30" x="135" y="147" as="geometry" />
+        </mxCell>
+        <mxCell id="u2_hue" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fontSize=12;" value="Huésped" vertex="1">
+          <mxGeometry height="69" width="30" x="135" y="347" as="geometry" />
+        </mxCell>
+        <mxCell id="u2_anf" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fontSize=12;" value="Anfitrión" vertex="1">
+          <mxGeometry height="69" width="30" x="135" y="547" as="geometry" />
+        </mxCell>
+        <mxCell id="u2_pas" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fontSize=12;" value="«system»&lt;br&gt;Pasarela de pagos&lt;br&gt;(Stripe, modo prueba)&lt;br&gt;actor secundario" vertex="1">
+          <mxGeometry height="69" width="30" x="795" y="347" as="geometry" />
+        </mxCell>
+        <mxCell id="u2_a1" edge="1" parent="1" source="u2_vis" style="endArrow=none;html=1;rounded=0;entryX=0;entryY=0.5;exitX=1;exitY=0.35;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" target="u2_RES01">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="u2_a2" edge="1" parent="1" source="u2_vis" style="endArrow=none;html=1;rounded=0;entryX=0;entryY=0.5;exitX=1;exitY=0.35;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" target="u2_RES02">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="u2_a3" edge="1" parent="1" source="u2_hue" style="endArrow=none;html=1;rounded=0;entryX=0;entryY=0.5;exitX=1;exitY=0.35;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" target="u2_RES01">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="u2_a4" edge="1" parent="1" source="u2_hue" style="endArrow=none;html=1;rounded=0;entryX=0;entryY=0.5;exitX=1;exitY=0.35;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" target="u2_RES02">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="u2_a5" edge="1" parent="1" source="u2_hue" style="endArrow=none;html=1;rounded=0;entryX=0;entryY=0.5;exitX=1;exitY=0.35;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" target="u2_RES03">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="u2_a6" edge="1" parent="1" source="u2_hue" style="endArrow=none;html=1;rounded=0;entryX=0;entryY=0.5;exitX=1;exitY=0.35;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" target="u2_RES04">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="u2_a7" edge="1" parent="1" source="u2_hue" style="endArrow=none;html=1;rounded=0;entryX=0;entryY=0.5;exitX=1;exitY=0.35;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" target="u2_RES05">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="u2_a8" edge="1" parent="1" source="u2_hue" style="endArrow=none;html=1;rounded=0;entryX=0;entryY=0.5;exitX=1;exitY=0.35;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" target="u2_RES06">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="u2_a9" edge="1" parent="1" source="u2_hue" style="endArrow=none;html=1;rounded=0;entryX=0;entryY=0.5;exitX=1;exitY=0.35;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" target="u2_RES07">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="u2_a10" edge="1" parent="1" source="u2_anf" style="endArrow=none;html=1;rounded=0;entryX=0;entryY=0.5;exitX=1;exitY=0.35;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" target="u2_RES05">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="u2_a11" edge="1" parent="1" source="u2_anf" style="endArrow=none;html=1;rounded=0;entryX=0;entryY=0.5;exitX=1;exitY=0.35;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" target="u2_RES07">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="u2_a12" edge="1" parent="1" source="u2_pas" style="endArrow=none;html=1;rounded=0;entryX=1;entryY=0.5;exitX=0;exitY=0.35;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" target="u2_RES04">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="CU RSE" id="N50FDDYVFZVj6Tju81K4">
+    <mxGraphModel grid="1" page="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" pageScale="1" pageWidth="750" pageHeight="392" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="u3_t" parent="1" style="text;html=1;align=center;verticalAlign=middle;fontSize=16;fontColor=#333333;" value="Diagrama de casos de uso · Módulo RSE: Reseñas y calificaciones" vertex="1">
+          <mxGeometry height="30" width="750" y="14" as="geometry" />
+        </mxCell>
+        <mxCell id="u3_b" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;verticalAlign=top;align=left;spacingLeft=8;spacingTop=4;fontStyle=1;fontSize=11;" value="Marketplace de Alojamientos&lt;br&gt;Módulo RSE: Reseñas y calificaciones" vertex="1">
+          <mxGeometry height="262" width="360" x="330" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="u3_RSE01" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=12;" value="Calificar y reseñar&lt;br&gt;una estancia&lt;br&gt;&lt;font style=&quot;font-size:10px&quot; color=&quot;#777777&quot;&gt;CU-RSE-01&lt;/font&gt;" vertex="1">
+          <mxGeometry height="58" width="240" x="350" y="121" as="geometry" />
+        </mxCell>
+        <mxCell id="u3_RSE02" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=12;" value="Ocultar reseña&lt;br&gt;&lt;font style=&quot;font-size:10px&quot; color=&quot;#777777&quot;&gt;CU-RSE-02&lt;/font&gt;" vertex="1">
+          <mxGeometry height="58" width="240" x="350" y="249" as="geometry" />
+        </mxCell>
+        <mxCell id="u3_hue" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fontSize=12;" value="Huésped" vertex="1">
+          <mxGeometry height="69" width="30" x="135" y="107" as="geometry" />
+        </mxCell>
+        <mxCell id="u3_adm" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fontSize=12;" value="Administrador" vertex="1">
+          <mxGeometry height="69" width="30" x="135" y="235" as="geometry" />
+        </mxCell>
+        <mxCell id="u3_a1" edge="1" parent="1" source="u3_hue" style="endArrow=none;html=1;rounded=0;entryX=0;entryY=0.5;exitX=1;exitY=0.35;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" target="u3_RSE01">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="u3_a2" edge="1" parent="1" source="u3_adm" style="endArrow=none;html=1;rounded=0;entryX=0;entryY=0.5;exitX=1;exitY=0.35;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" target="u3_RSE02">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="CU ADM" id="KSx4bTjCaAPdG1mHXt7u">
+    <mxGraphModel grid="1" page="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" pageScale="1" pageWidth="750" pageHeight="904" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="u4_t" parent="1" style="text;html=1;align=center;verticalAlign=middle;fontSize=16;fontColor=#333333;" value="Diagrama de casos de uso · Módulo ADM: Administración y reportes" vertex="1">
+          <mxGeometry height="30" width="750" y="14" as="geometry" />
+        </mxCell>
+        <mxCell id="u4_b" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;verticalAlign=top;align=left;spacingLeft=8;spacingTop=4;fontStyle=1;fontSize=11;" value="Marketplace de Alojamientos&lt;br&gt;Módulo ADM: Administración y reportes" vertex="1">
+          <mxGeometry height="774" width="360" x="330" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="u4_ADM01" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=12;" value="Aprobar o devolver&lt;br&gt;publicación&lt;br&gt;&lt;font style=&quot;font-size:10px&quot; color=&quot;#777777&quot;&gt;CU-ADM-01&lt;/font&gt;" vertex="1">
+          <mxGeometry height="58" width="240" x="350" y="121" as="geometry" />
+        </mxCell>
+        <mxCell id="u4_ADM02" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=12;" value="Bloquear publicación&lt;br&gt;&lt;font style=&quot;font-size:10px&quot; color=&quot;#777777&quot;&gt;CU-ADM-02&lt;/font&gt;" vertex="1">
+          <mxGeometry height="58" width="240" x="350" y="201" as="geometry" />
+        </mxCell>
+        <mxCell id="u4_ADM03" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=12;" value="Desbloquear publicación&lt;br&gt;&lt;font style=&quot;font-size:10px&quot; color=&quot;#777777&quot;&gt;CU-ADM-03&lt;/font&gt;" vertex="1">
+          <mxGeometry height="58" width="240" x="350" y="281" as="geometry" />
+        </mxCell>
+        <mxCell id="u4_ADM04" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=12;" value="Resolver reserva en revisión&lt;br&gt;&lt;font style=&quot;font-size:10px&quot; color=&quot;#777777&quot;&gt;CU-ADM-04&lt;/font&gt;" vertex="1">
+          <mxGeometry height="58" width="240" x="350" y="361" as="geometry" />
+        </mxCell>
+        <mxCell id="u4_ADM05" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=12;" value="Restringir o habilitar&lt;br&gt;cuenta&lt;br&gt;&lt;font style=&quot;font-size:10px&quot; color=&quot;#777777&quot;&gt;CU-ADM-05&lt;/font&gt;" vertex="1">
+          <mxGeometry height="58" width="240" x="350" y="441" as="geometry" />
+        </mxCell>
+        <mxCell id="u4_ADM06" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=12;" value="Configurar tarifa&lt;br&gt;de servicio&lt;br&gt;&lt;font style=&quot;font-size:10px&quot; color=&quot;#777777&quot;&gt;CU-ADM-06&lt;/font&gt;" vertex="1">
+          <mxGeometry height="58" width="240" x="350" y="521" as="geometry" />
+        </mxCell>
+        <mxCell id="u4_ADM07" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=12;" value="Consultar registro&lt;br&gt;de acciones&lt;br&gt;&lt;font style=&quot;font-size:10px&quot; color=&quot;#777777&quot;&gt;CU-ADM-07&lt;/font&gt;" vertex="1">
+          <mxGeometry height="58" width="240" x="350" y="601" as="geometry" />
+        </mxCell>
+        <mxCell id="u4_ADM08" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=12;" value="Ver tablero de gestión&lt;br&gt;&lt;font style=&quot;font-size:10px&quot; color=&quot;#777777&quot;&gt;CU-ADM-08&lt;/font&gt;" vertex="1">
+          <mxGeometry height="58" width="240" x="350" y="681" as="geometry" />
+        </mxCell>
+        <mxCell id="u4_ADM09" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=12;" value="Descargar reporte&lt;br&gt;&lt;font style=&quot;font-size:10px&quot; color=&quot;#777777&quot;&gt;CU-ADM-09&lt;/font&gt;" vertex="1">
+          <mxGeometry height="58" width="240" x="350" y="761" as="geometry" />
+        </mxCell>
+        <mxCell id="u4_adm" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fontSize=12;" value="Administrador" vertex="1">
+          <mxGeometry height="69" width="30" x="135" y="427" as="geometry" />
+        </mxCell>
+        <mxCell id="u4_a1" edge="1" parent="1" source="u4_adm" style="endArrow=none;html=1;rounded=0;entryX=0;entryY=0.5;exitX=1;exitY=0.35;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" target="u4_ADM01">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="u4_a2" edge="1" parent="1" source="u4_adm" style="endArrow=none;html=1;rounded=0;entryX=0;entryY=0.5;exitX=1;exitY=0.35;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" target="u4_ADM02">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="u4_a3" edge="1" parent="1" source="u4_adm" style="endArrow=none;html=1;rounded=0;entryX=0;entryY=0.5;exitX=1;exitY=0.35;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" target="u4_ADM03">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="u4_a4" edge="1" parent="1" source="u4_adm" style="endArrow=none;html=1;rounded=0;entryX=0;entryY=0.5;exitX=1;exitY=0.35;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" target="u4_ADM04">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="u4_a5" edge="1" parent="1" source="u4_adm" style="endArrow=none;html=1;rounded=0;entryX=0;entryY=0.5;exitX=1;exitY=0.35;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" target="u4_ADM05">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="u4_a6" edge="1" parent="1" source="u4_adm" style="endArrow=none;html=1;rounded=0;entryX=0;entryY=0.5;exitX=1;exitY=0.35;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" target="u4_ADM06">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="u4_a7" edge="1" parent="1" source="u4_adm" style="endArrow=none;html=1;rounded=0;entryX=0;entryY=0.5;exitX=1;exitY=0.35;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" target="u4_ADM07">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="u4_a8" edge="1" parent="1" source="u4_adm" style="endArrow=none;html=1;rounded=0;entryX=0;entryY=0.5;exitX=1;exitY=0.35;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" target="u4_ADM08">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="u4_a9" edge="1" parent="1" source="u4_adm" style="endArrow=none;html=1;rounded=0;entryX=0;entryY=0.5;exitX=1;exitY=0.35;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" target="u4_ADM09">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
