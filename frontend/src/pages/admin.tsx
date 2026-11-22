@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   adminApi, leerError,
-  type EventoAuditoriaApi, type PublicacionAdmin, type PublicacionCompleta, type RevisionApi, type TableroApi, type UsuarioAdmin,
+  type EventoAuditoriaApi, type PublicacionAdmin, type PublicacionCompleta, type RevisionApi, type TarifaApi, type TableroApi, type UsuarioAdmin,
 } from "../api";
 import { ESTADO_TXT, RESERVA_TXT, ROL_TXT, cop, fechaLarga, type AccionModeracion, type EstadoPub, type Rol } from "../data";
 import { Page } from "../layout";
@@ -438,14 +438,29 @@ export function HistorialRevisiones({ revisiones }: { revisiones: RevisionApi[] 
 /* ---------------- HU-22 Tarifa de servicio ---------------- */
 export function TarifaServicioPage() {
   const toast = useToast();
-  const [datos, setDatos] = useState<{ porcentaje: string; historial: { porcentaje: string; vigente_desde: string; administrador: number }[] } | null>(null);
+  const [datos, setDatos] = useState<{ porcentaje: string; historial: TarifaApi[] } | null>(null);
   const [nuevo, setNuevo] = useState("");
   const [error, setError] = useState("");
+  const [rango, setRango] = useState({ desde: "", hasta: "" });
+  const [errorRango, setErrorRango] = useState("");
   const nombres = useNombres();
   const cargar = useCallback(() => {
-    adminApi.tarifa().then((r) => { setDatos(r.data); setNuevo(String(Number(r.data.porcentaje))); }).catch((e) => setError(leerError(e).error));
+    // El porcentaje vigente solo llena el campo si está vacío: una respuesta que llega tarde no pisa lo que se escribió
+    adminApi.tarifa().then((r) => { setDatos(r.data); setNuevo((v) => (v === "" ? String(Number(r.data.porcentaje)) : v)); })
+      .catch((e) => setError(leerError(e).error));
   }, []);
   useEffect(cargar, [cargar]);
+  // Historial filtrado por rango (RF-D-ADM-03.1): tarifas vigentes en algún momento entre desde y hasta
+  const [historial, setHistorial] = useState<TarifaApi[] | null>(null);
+  useEffect(() => {
+    let vigente = true;
+    setErrorRango("");
+    if (rango.desde && rango.hasta && rango.desde > rango.hasta) { setErrorRango("La fecha inicial no puede ser posterior a la final."); return; }
+    adminApi.tarifa(rango.desde, rango.hasta)
+      .then((r) => { if (vigente) setHistorial(r.data.historial); })
+      .catch((e) => { if (vigente) setErrorRango(leerError(e).error); });
+    return () => { vigente = false; };
+  }, [rango, datos]);
 
   const guardar = async () => {
     setError("");
@@ -467,13 +482,30 @@ export function TarifaServicioPage() {
         </section>
         <section className="card stack">
           <h3 className="row" style={{ gap: 8 }}><History size={18} /> Historial</h3>
+          <div className="grid-2">
+            <Field label="Vigentes desde" error={errorRango}>
+              <input className="input" type="date" aria-label="Desde" value={rango.desde} onChange={(e) => setRango({ ...rango, desde: e.target.value })} />
+            </Field>
+            <Field label="Hasta">
+              <input className="input" type="date" aria-label="Hasta" value={rango.hasta} onChange={(e) => setRango({ ...rango, hasta: e.target.value })} />
+            </Field>
+          </div>
+          {(rango.desde || rango.hasta) && (
+            <button className="link-btn" style={{ alignSelf: "flex-start" }} onClick={() => setRango({ desde: "", hasta: "" })}>Ver todo el historial</button>
+          )}
           <div className="table-wrap">
             <table className="table">
-              <thead><tr><th>Porcentaje</th><th>Vigente desde</th><th>Administrador</th></tr></thead>
+              <thead><tr><th>Porcentaje</th><th>Desde</th><th>Hasta</th><th>Administrador</th></tr></thead>
               <tbody>
-                {(datos?.historial ?? []).map((t) => (
-                  <tr key={t.vigente_desde}><td><b>{Number(t.porcentaje)} %</b></td><td>{fechaHora(t.vigente_desde)}</td><td>{nombres[t.administrador] ?? `#${t.administrador}`}</td></tr>
+                {(historial ?? []).map((t) => (
+                  <tr key={t.id}>
+                    <td><b>{Number(t.porcentaje)} %</b></td>
+                    <td>{fechaHora(t.vigente_desde)}</td>
+                    <td>{t.vigente_hasta ? fechaHora(t.vigente_hasta) : <span className="badge badge-ACTIVA">Vigente</span>}</td>
+                    <td>{nombres[t.administrador] ?? `#${t.administrador}`}</td>
+                  </tr>
                 ))}
+                {historial && historial.length === 0 && <tr><td colSpan={4} className="muted">Ninguna tarifa estuvo vigente en ese rango.</td></tr>}
               </tbody>
             </table>
           </div>

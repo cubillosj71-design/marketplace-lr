@@ -129,7 +129,7 @@ class Command(BaseCommand):
         Usuario = apps.get_model("identidad", "Usuario")
         Publicacion = apps.get_model("catalogo", "Publicacion")
         Revision = apps.get_model("catalogo", "RevisionPublicacion")
-        cat = catalogo.catalogos()
+        cat = catalogo.listar_catalogos()
         ciudad = {c["nombre"]: c["id"] for c in cat["ciudades"]}
         tipo = {t["nombre"]: t["id"] for t in cat["tipos"]}
         servicio = {s["nombre"]: s["id"] for s in cat["servicios"]}
@@ -144,7 +144,7 @@ class Command(BaseCommand):
         cuentas = {"admin@inversioneslr.com": admin}
         fechas = {"admin@inversioneslr.com": "2026-01-10"}
         for correo, nombre, tel, rol, ciu, registro in USUARIOS:
-            datos = identidad.registrar(nombre_completo=nombre, correo=correo, telefono=tel, password=CLAVE, rol=rol,
+            datos = identidad.registrar_usuario(nombre_completo=nombre, correo=correo, telefono=tel, password=CLAVE, rol=rol,
                                         acepta_datos=True, ciudad=ciu)
             cuentas[correo] = Usuario.objects.get(pk=datos.id)
             fechas[correo] = registro
@@ -157,17 +157,17 @@ class Command(BaseCommand):
             entrada = {**{k: v for k, v in d.items() if k not in ("tipo", "ciudad", "servicios")},
                        "ciudad": ciudad[d["ciudad"]], "tipo_alojamiento": tipo[d["tipo"]], "politica": politica,
                        "servicios": [servicio[s] for s in d["servicios"]]}
-            p = catalogo.crear(cuentas[dueno], entrada)
+            p = catalogo.crear_publicacion(cuentas[dueno], entrada)
             momento = timezone.make_aware(datetime.fromisoformat(creada + "T09:00:00"))
             creadas.append(p.id)
             if estado != "BORRADOR" or moderacion:
                 catalogo.cambiar_estado(cuentas[dueno], p.id, "PENDIENTE_REVISION")
             if estado in ("ACTIVA", "PAUSADA", "BLOQUEADA"):
-                catalogo.revisar(admin, p.id, "APROBAR", None)
+                catalogo.revisar_publicacion(admin, p.id, "APROBAR", None)
             if estado == "PAUSADA":
                 catalogo.cambiar_estado(cuentas[dueno], p.id, "PAUSADA")
             if moderacion and moderacion[0] == "DEVOLVER":
-                catalogo.revisar(admin, p.id, "DEVOLVER", moderacion[1])
+                catalogo.revisar_publicacion(admin, p.id, "DEVOLVER", moderacion[1])
             if moderacion and moderacion[0] == "BLOQUEAR":  # se bloquea después de reservar (queda EN_REVISION)
                 por_bloquear.append((p.id, moderacion[1]))
             Publicacion.objects.filter(pk=p.id).update(creada=momento)
@@ -184,19 +184,19 @@ class Command(BaseCommand):
             simulado.enable()
             for i, llegada, salida, huespedes, creada, cancelacion in RESERVAS:
                 reloj.fijar(timezone.make_aware(datetime.fromisoformat(creada + "T10:00:00")))
-                cot = reservas.cotizar(huesped, creadas[i], date.fromisoformat(llegada), date.fromisoformat(salida), huespedes)
-                r, _ = reservas.reservar(huesped, cot.id, uuid.uuid4(), "simulado")
+                cot = reservas.cotizar_estancia(huesped, creadas[i], date.fromisoformat(llegada), date.fromisoformat(salida), huespedes)
+                r, _ = reservas.reservar_alojamiento(huesped, cot.id, uuid.uuid4(), "simulado")
                 if cancelacion:
                     reloj.fijar(timezone.make_aware(datetime.fromisoformat(cancelacion[0] + "T10:00:00")))
-                    reservas.cancelar(huesped, r["id"], cancelacion[1])
+                    reservas.cancelar_reserva(huesped, r["id"], cancelacion[1])
         finally:
             simulado.disable()
             reloj.fijar(reloj_anterior)
         # Con la fecha real: bloquear (sus reservas futuras pasan a EN_REVISION) y completar las que ya terminaron
         for pid, motivo in por_bloquear:
-            catalogo.bloquear(admin, pid, motivo)
-        reservas.completar_vencidas()
+            catalogo.bloquear_publicacion(admin, pid, motivo)
+        reservas.completar_reservas_vencidas()
 
-        identidad.restringir(admin, cuentas["restringido@correo.com"].id,
+        identidad.restringir_usuario(admin, cuentas["restringido@correo.com"].id,
                              "Reportes de huéspedes por cobros por fuera de la plataforma.",
                              timezone.make_aware(datetime(2026, 12, 31, 23, 59)))

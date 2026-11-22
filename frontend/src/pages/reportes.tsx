@@ -16,7 +16,7 @@ const REPORTES = [
   { tipo: "publicaciones", nombre: "Publicaciones", descripcion: "Creadas en el periodo, con sus reservas e ingresos." },
   { tipo: "reservas", nombre: "Reservas", descripcion: "Creadas en el periodo, con su estado, devolución, monto bruto e ingreso." },
   { tipo: "ingresos", nombre: "Ingresos estimados", descripcion: "Monto bruto e ingreso de la plataforma por mes." },
-  { tipo: "demanda", nombre: "Demanda", descripcion: "Reservas y monto bruto por ciudad y por tipo de alojamiento." },
+  { tipo: "demanda", nombre: "Demanda", descripcion: "Reservas y monto bruto por día, ciudad y tipo de alojamiento." },
 ] as const;
 type TipoReporte = (typeof REPORTES)[number]["tipo"];
 

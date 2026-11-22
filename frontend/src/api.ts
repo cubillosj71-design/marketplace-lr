@@ -349,6 +349,9 @@ async function todas<T>(ruta: string, params: Record<string, unknown>): Promise<
   }
 }
 
+/** Una tarifa rige en [vigente_desde, vigente_hasta); vigente_hasta null es la vigente hoy. */
+export interface TarifaApi { id: number; porcentaje: string; vigente_desde: string; vigente_hasta: string | null; administrador: number }
+
 export const adminApi = {
   publicaciones: (estado?: string) => todas<PublicacionAdmin>("/admin/publicaciones", estado ? { estado } : {}),
   publicacion: (id: number) => api.get<PublicacionCompleta>(`/catalogo/publicaciones/${id}`),
@@ -362,8 +365,10 @@ export const adminApi = {
   restringir: (id: number, motivo: string, fecha_fin?: string | null) =>
     api.post(`/admin/usuarios/${id}/restriccion`, { motivo, ...(fecha_fin ? { fecha_fin } : {}) }),
   quitarRestriccion: (id: number) => api.delete(`/admin/usuarios/${id}/restriccion`),
-  tarifa: () => api.get<{ porcentaje: string; historial: { porcentaje: string; vigente_desde: string; administrador: number }[] }>("/admin/tarifa-servicio"),
-  cambiarTarifa: (porcentaje: string) => api.put<{ porcentaje: string; vigente_desde: string }>("/admin/tarifa-servicio", { porcentaje }),
+  /** RF-D-ADM-03.1: con desde y hasta, el historial trae solo las tarifas vigentes en ese rango. */
+  tarifa: (desde?: string, hasta?: string) =>
+    api.get<{ porcentaje: string; historial: TarifaApi[] }>("/admin/tarifa-servicio", { params: { desde: desde || undefined, hasta: hasta || undefined } }),
+  cambiarTarifa: (porcentaje: string) => api.put<TarifaApi>("/admin/tarifa-servicio", { porcentaje }),
   auditoria: (f: { usuario?: number; tipo?: string; desde?: string; hasta?: string; page?: number }) =>
     api.get<Pagina<EventoAuditoriaApi> & { tipos: { clave: string; nombre: string }[] }>("/admin/auditoria", { params: f }),
   tablero: (desde: string, hasta: string) => api.get<TableroApi>("/admin/tablero", { params: { desde, hasta } }),

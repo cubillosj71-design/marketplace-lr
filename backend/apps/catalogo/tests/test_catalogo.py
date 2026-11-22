@@ -93,7 +93,7 @@ def test_ca_08_pausar_y_reactivar_sin_tocar_reservas(demo, entrar):
     c = entrar("anfitrion@correo.com")
     assert c.post(f"{BASE}/publicaciones/{pid}/pausar").json()["estado"] == "PAUSADA"
     # CA-08.4: pausar no toca las reservas (Monserrate tiene 2 CONFIRMADAS y Loft Chapinero 1 EN_REVISION en la demo)
-    assert len(reservas.reservas_pendientes(c.usuario["id"], True)) == 3
+    assert len(reservas.listar_reservas_pendientes(c.usuario["id"], True)) == 3
     assert c.post(f"{BASE}/publicaciones/{pid}/reactivar").json()["estado"] == "ACTIVA"
     assert c.post(f"{BASE}/publicaciones/{_id('Habitación cerca al centro')}/pausar").status_code == 409
 
@@ -128,7 +128,7 @@ def test_bloquear_pasa_reservas_futuras_a_en_revision(demo, entrar, eventos, dja
     # PublicacionBloqueada es un evento de dominio: sale con on_commit y lo recibe Reservas
     with django_capture_on_commit_callbacks(execute=True):
         assert admin.post(f"/api/v1/admin/publicaciones/{pid}/bloqueo", {"motivo": "Fraude"}, format="json").json()["estado"] == "BLOQUEADA"
-    estados = {r["estado"] for r in reservas.reservas_para_reporte(publicaciones_ids=[pid]) if r["fecha_llegada"] >= date.today()}
+    estados = {r["estado"] for r in reservas.listar_reservas_para_reporte(publicaciones_ids=[pid]) if r["fecha_llegada"] >= date.today()}
     assert estados == {"EN_REVISION"}
     assert "ReservaEnRevision" in eventos()
     assert admin.delete(f"/api/v1/admin/publicaciones/{pid}/bloqueo").json()["estado"] == "PAUSADA"

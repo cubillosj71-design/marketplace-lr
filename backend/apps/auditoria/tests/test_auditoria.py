@@ -32,7 +32,7 @@ def test_ca_23_1_tres_inicios_fallidos_se_ven_filtrando_por_usuario_y_accion(dem
 ])
 def test_ca_23_2_update_delete_y_truncate_fallan(demo, entrar, sql):
     entrar("admin@inversioneslr.com")
-    antes = services.consultar().count()
+    antes = services.consultar_eventos().count()
     assert antes > 0
     with connection.cursor() as c:
         # La prueba corre dentro de una transacción con revisiones de FK diferidas pendientes; PostgreSQL
@@ -40,13 +40,13 @@ def test_ca_23_2_update_delete_y_truncate_fallan(demo, entrar, sql):
         c.execute("SET CONSTRAINTS ALL IMMEDIATE")
     with pytest.raises(DatabaseError, match="solo inserción"), transaction.atomic(), connection.cursor() as c:
         c.execute(sql)
-    assert services.consultar().count() == antes
+    assert services.consultar_eventos().count() == antes
 
 
 def test_ca_05_2_huesped_en_la_revision_de_publicaciones_queda_registrado(demo, entrar):
     huesped = entrar("huesped@correo.com")
     assert huesped.get("/api/v1/admin/publicaciones", {"estado": "PENDIENTE_REVISION"}).status_code == 403
-    evento = services.consultar(actor_id=huesped.usuario["id"], accion="AccesoDenegado").get()
+    evento = services.consultar_eventos(actor_id=huesped.usuario["id"], accion="AccesoDenegado").get()
     assert evento.exitoso is False and evento.detalle["ruta"] == "/api/v1/admin/publicaciones"
 
 
@@ -56,17 +56,17 @@ def test_falla_no_controlada_queda_registrada_con_exitoso_false(rf):
     request = rf.get("/api/v1/algo")
     respuesta = manejar_excepcion(RuntimeError("se cayó"), {"request": request, "view": None})
     assert respuesta.status_code == 500
-    evento = services.consultar(accion="ErrorOperacion").get()
+    evento = services.consultar_eventos(accion="ErrorOperacion").get()
     assert evento.exitoso is False and evento.detalle["error"] == "RuntimeError"
 
 
 def test_registrar_escribe_en_la_misma_transaccion_del_cambio(demo):
     """Si la transacción del cambio se revierte, el evento tampoco queda (C4 nivel 3, vista b)."""
-    antes = services.consultar().count()
+    antes = services.consultar_eventos().count()
     with pytest.raises(RuntimeError), transaction.atomic():
         services.registrar(None, "CambioQueSeRevierte")
         raise RuntimeError
-    assert services.consultar().count() == antes
+    assert services.consultar_eventos().count() == antes
 
 
 def test_auditoria_no_escucha_eventos_de_dominio():

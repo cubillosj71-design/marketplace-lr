@@ -42,7 +42,7 @@ class Publicaciones(APIView):
             datos["servicios"] = request.query_params.getlist("servicios")
         f = FiltrosBusqueda(data=datos)
         f.is_valid(raise_exception=True)
-        return Response(services.buscar(**f.validated_data))
+        return Response(services.buscar_publicaciones(**f.validated_data))
 
 
 class RangoDetalle(serializers.Serializer):
@@ -58,4 +58,4 @@ class PublicacionDetalle(APIView):
     def get(self, request, pk):
         f = RangoDetalle(data=request.query_params)
         f.is_valid(raise_exception=True)
-        return Response(services.detalle(pk, f.validated_data.get("desde"), f.validated_data.get("hasta")))
+        return Response(services.consultar_detalle_publicacion(pk, f.validated_data.get("desde"), f.validated_data.get("hasta")))

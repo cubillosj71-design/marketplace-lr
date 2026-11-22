@@ -44,12 +44,12 @@ class AuditoriaAdmin(ListAPIView):
         f = FiltrosSerializer(data=self.request.query_params)
         f.is_valid(raise_exception=True)
         d = f.validated_data
-        return services.consultar(
+        return services.consultar_eventos(
             actor_id=d.get("usuario"), tipo=d.get("tipo"), accion=d.get("accion"), exitoso=d.get("exitoso"),
             desde=d.get("desde"), hasta=d.get("hasta"),
         )
 
     def list(self, request, *args, **kwargs):
         respuesta = super().list(request, *args, **kwargs)
-        respuesta.data["tipos"] = services.tipos_accion()
+        respuesta.data["tipos"] = services.listar_tipos_accion()
         return respuesta

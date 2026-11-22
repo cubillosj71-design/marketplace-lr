@@ -41,22 +41,32 @@ class PeriodoCalendario(models.Model):
         ordering = ["fecha_inicio"]
         constraints = [models.CheckConstraint(condition=Q(fecha_fin__gt=F("fecha_inicio")), name="periodo_rango_valido")]
 
-    def contiene(self, fecha) -> bool:
+    def es_fecha_del_periodo(self, fecha) -> bool:
         return self.fecha_inicio <= fecha < self.fecha_fin
 
 
 class TarifaServicio(models.Model):
-    """Historial del porcentaje que cobra la plataforma (0 % a 30 %)."""
+    """Historial del porcentaje que cobra la plataforma (0 % a 30 %, RF-D-ADM-03.1).
+
+    Cada tarifa rige en [vigente_desde, vigente_hasta). vigente_hasta NULL es la tarifa vigente hoy: solo puede haber
+    una abierta, y al crear una nueva la anterior se cierra en la misma transacción con vigente_hasta = vigente_desde
+    de la nueva."""
 
     administrador = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
     porcentaje = models.DecimalField(max_digits=5, decimal_places=2)
     vigente_desde = models.DateTimeField()
+    vigente_hasta = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         db_table = "tarifa_servicio"
         ordering = ["-vigente_desde"]
         constraints = [
             models.CheckConstraint(condition=Q(porcentaje__gte=0, porcentaje__lte=30), name="tarifa_porcentaje_0_30"),
+            models.CheckConstraint(condition=Q(vigente_hasta__isnull=True) | Q(vigente_hasta__gt=models.F("vigente_desde")),
+                                   name="tarifa_hasta_mayor_que_desde"),
+            # Una sola tarifa abierta: índice único parcial sobre las filas con vigente_hasta NULL
+            models.UniqueConstraint(fields=["vigente_hasta"], condition=Q(vigente_hasta__isnull=True),
+                                    nulls_distinct=False, name="tarifa_una_sola_vigente"),
         ]
 
 

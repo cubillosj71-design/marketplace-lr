@@ -84,8 +84,8 @@ def test_ca_03_1_el_enlace_se_muestra_en_pantalla_tambien_en_produccion(demo, cl
 def test_pedir_un_enlace_nuevo_anula_el_anterior(demo):
     primero = services.solicitar_recuperacion("huesped@correo.com")
     segundo = services.solicitar_recuperacion("huesped@correo.com")
-    assert services.estado_enlace(primero) == "vencido"
-    assert services.estado_enlace(segundo) == "valido"
+    assert services.consultar_estado_enlace(primero) == "vencido"
+    assert services.consultar_estado_enlace(segundo) == "valido"
 
 
 def test_abrir_y_usar_el_enlace_no_choca_con_el_limite_de_solicitudes(demo, cliente):
@@ -115,9 +115,9 @@ def test_el_perfil_devuelve_los_campos_del_modelo_relacional(demo, entrar):
 def test_ca_04_3_un_anfitrion_desactivado_sale_de_las_cuentas_visibles(demo, entrar):
     c = entrar("pedro@correo.com")
     pedro = c.usuario["id"]
-    assert services.cuentas_activas([pedro]) == {pedro}
+    assert services.listar_cuentas_activas([pedro]) == {pedro}
     assert c.post("/api/v1/identidad/perfil/desactivar").status_code == 200
-    assert services.cuentas_activas([pedro]) == set()  # Búsqueda oculta sus publicaciones
+    assert services.listar_cuentas_activas([pedro]) == set()  # Búsqueda oculta sus publicaciones
 
 
 def test_ip_toma_el_valor_que_agrega_el_proxy():

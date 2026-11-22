@@ -129,7 +129,7 @@ def test_un_aviso_fallido_no_rompe_la_reserva(alojamiento_740, reservar, reloj, 
     with django_capture_on_commit_callbacks(execute=True):
         r = reservar(alojamiento_740, "2026-11-20", "2026-11-23")  # responde 201
     assert apps.get_model("reservas", "Reserva").objects.get(pk=r["id"]).estado == "CONFIRMADA"
-    falla = auditoria.consultar(accion="NotificacionFallida").get()
+    falla = auditoria.consultar_eventos(accion="NotificacionFallida").get()
     assert falla.exitoso is False and falla.detalle["evento"] == "ReservaConfirmada"
 
 

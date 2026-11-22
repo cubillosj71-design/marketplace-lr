@@ -31,12 +31,12 @@ ROLES_REGISTRO = (RolUsuario.HUESPED, RolUsuario.ANFITRION)
 
 # ---------------------------------------------------------------- consultas para otros servicios
 
-def datos_usuario(usuario_id: int) -> dict | None:
+def obtener_datos_usuario(usuario_id: int) -> dict | None:
     u = Usuario.objects.filter(pk=usuario_id).first()
     return _dict(u) if u else None
 
 
-def nombres(ids) -> dict[int, str]:
+def obtener_nombres_usuarios(ids) -> dict[int, str]:
     return dict(Usuario.objects.filter(pk__in=set(ids)).values_list("id", "nombre_completo"))
 
 
@@ -46,14 +46,14 @@ def _vigentes(ahora=None):
     return RestriccionUsuario.objects.filter(fecha_inicio__lte=ahora).filter(Q(fecha_fin__isnull=True) | Q(fecha_fin__gt=ahora))
 
 
-def cuentas_activas(ids) -> set[int]:
+def listar_cuentas_activas(ids) -> set[int]:
     """Usuarios con la cuenta activa y sin restricción vigente (sus publicaciones son visibles, CA-04.3)."""
     ids = set(ids)
     restringidos = set(_vigentes().filter(usuario_id__in=ids).values_list("usuario_id", flat=True))
     return set(Usuario.objects.filter(pk__in=ids - restringidos, activa=True).values_list("id", flat=True))
 
 
-def usuarios_registrados(desde=None, hasta=None, rol=None, activa=None, restringida=None) -> list[dict]:
+def listar_usuarios_registrados(desde=None, hasta=None, rol=None, activa=None, restringida=None) -> list[dict]:
     """Para el reporte de usuarios (RF-D-ADM-05.2)."""
     qs = Usuario.objects.all().order_by("-fecha_registro")
     if desde:
@@ -69,7 +69,7 @@ def usuarios_registrados(desde=None, hasta=None, rol=None, activa=None, restring
     return [u for u in lista if restringida is None or u["restringida"] == restringida]
 
 
-def conteo_por_rol(hasta=None) -> dict[str, int]:
+def contar_usuarios_por_rol(hasta=None) -> dict[str, int]:
     qs = Usuario.objects.all()
     if hasta:
         qs = qs.filter(fecha_registro__date__lte=hasta)
@@ -78,12 +78,12 @@ def conteo_por_rol(hasta=None) -> dict[str, int]:
     return base
 
 
-def restriccion_vigente(usuario_id: int) -> RestriccionUsuario | None:
+def obtener_restriccion_vigente(usuario_id: int) -> RestriccionUsuario | None:
     """La cuenta está restringida mientras exista una restricción vigente (no hay columna de estado)."""
     return _vigentes().filter(usuario_id=usuario_id).first()
 
 
-def usuarios_para_admin(rol: str | None = None, q: str | None = None) -> list[dict]:
+def listar_usuarios_para_admin(rol: str | None = None, q: str | None = None) -> list[dict]:
     """HU-21: cuentas para el administrador, con activa, restringida y el motivo de la restricción vigente."""
     qs = Usuario.objects.all().order_by("nombre_completo", "id")
     if rol:
@@ -100,7 +100,7 @@ def usuarios_para_admin(rol: str | None = None, q: str | None = None) -> list[di
 
 # ---------------------------------------------------------------- CU-USU-01 Registrarse
 
-def registrar(*, nombre_completo, correo, telefono, password, rol, acepta_datos, ciudad=None, ip=None) -> Usuario:
+def registrar_usuario(*, nombre_completo, correo, telefono, password, rol, acepta_datos, ciudad=None, ip=None) -> Usuario:
     if not acepta_datos:
         raise ErrorNegocio("La autorización de tratamiento de datos es obligatoria.", campo="acepta_datos")
     if rol not in ROLES_REGISTRO:
@@ -128,7 +128,7 @@ def iniciar_sesion(correo: str, password: str, ip=None) -> dict:
         auditoria.registrar(u.id if u else None, "InicioSesion", entidad="Usuario", entidad_id=u.id if u else None,
                             exitoso=False, detalle={"motivo": "Credenciales incorrectas", "correo": (correo or "")[:254]}, ip=ip)
         raise ErrorNegocio("Correo o contraseña incorrectos. Revisa los datos e inténtalo de nuevo.", codigo=401)
-    vigente = restriccion_vigente(u.id)
+    vigente = obtener_restriccion_vigente(u.id)
     if vigente:  # CA-02.3, CA-21.1
         auditoria.registrar(u.id, "InicioSesion", entidad="Usuario", entidad_id=u.id, exitoso=False,
                             detalle={"motivo": "Cuenta restringida"}, ip=ip)
@@ -212,7 +212,7 @@ def solicitar_recuperacion(correo: str, ip=None) -> str | None:
     return token
 
 
-def estado_enlace(token: str) -> str:
+def consultar_estado_enlace(token: str) -> str:
     t = TokenRecuperacion.objects.filter(token_hash=_hash(token)).first()
     if not t:
         return "inexistente"
@@ -270,7 +270,7 @@ def desactivar_cuenta(u: Usuario, ip=None) -> None:
     if u.rol == RolUsuario.ADMINISTRADOR:
         auditoria.registrar(u.id, "AccesoDenegado", exitoso=False, detalle={"motivo": "Desactivar cuenta de administrador"}, ip=ip)
         raise SinPermiso("Las cuentas de administrador no se desactivan desde el perfil.")
-    pendientes = reservas.reservas_pendientes(u.id, es_anfitrion=u.rol == RolUsuario.ANFITRION)
+    pendientes = reservas.listar_reservas_pendientes(u.id, es_anfitrion=u.rol == RolUsuario.ANFITRION)
     if pendientes:  # CA-04.2, CA-04.5
         raise Conflicto(
             "No puedes desactivar tu cuenta: tienes reservas confirmadas o en revisión pendientes.", extra={"reservas": pendientes}
@@ -283,7 +283,7 @@ def desactivar_cuenta(u: Usuario, ip=None) -> None:
 
 # ---------------------------------------------------------------- RF-D-ADM-02.1 Restringir
 
-def restringir(admin: Usuario, usuario_id: int, motivo: str, fecha_fin=None, ip=None) -> RestriccionUsuario:
+def restringir_usuario(admin: Usuario, usuario_id: int, motivo: str, fecha_fin=None, ip=None) -> RestriccionUsuario:
     u = Usuario.objects.filter(pk=usuario_id).first()
     if not u:
         raise NoEncontrado("El usuario no existe.")
@@ -293,7 +293,7 @@ def restringir(admin: Usuario, usuario_id: int, motivo: str, fecha_fin=None, ip=
         raise ErrorNegocio("Escribe el motivo de la restricción.", campo="motivo")
     if fecha_fin and fecha_fin <= timezone.now():
         raise ErrorNegocio("La fecha de fin debe ser futura.", campo="fecha_fin")
-    if restriccion_vigente(u.id):
+    if obtener_restriccion_vigente(u.id):
         raise Conflicto("La cuenta ya tiene una restricción vigente.")
     # RF-D-ADM-02.1: restringir NO modifica la cuenta ni sus reservas; solo crea la restricción.
     # El acceso se corta porque is_active la tiene en cuenta desde la siguiente petición (ADR-005).
@@ -305,7 +305,7 @@ def restringir(admin: Usuario, usuario_id: int, motivo: str, fecha_fin=None, ip=
 
 
 def levantar_restriccion(admin: Usuario, usuario_id: int, ip=None) -> None:
-    r = restriccion_vigente(usuario_id)
+    r = obtener_restriccion_vigente(usuario_id)
     if not r:
         raise NoEncontrado("La cuenta no tiene una restricción vigente.")
     with transaction.atomic():  # levantarla pone fecha_fin = ahora
@@ -343,5 +343,5 @@ def _dict(u: Usuario, restringida: bool | None = None) -> dict:
     }
 
 
-def a_dict(u: Usuario) -> dict:
+def convertir_usuario_a_dict(u: Usuario) -> dict:
     return _dict(u)

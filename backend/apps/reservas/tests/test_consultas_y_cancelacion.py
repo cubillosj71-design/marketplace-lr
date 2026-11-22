@@ -106,7 +106,7 @@ def test_motivo_obligatorio_y_solo_el_huesped_dueno(reserva_740, entrar, cliente
     assert r.status_code == 400 and r.json()["campo"] == "motivo"
     cliente.post("/api/v1/identidad/registro", NUEVO, format="json")
     assert _cancelar(entrar, reserva_740["id"], correo="ana@correo.com", clave="Segura2026").status_code == 403
-    assert auditoria.consultar(accion="AccesoDenegado", exitoso=False).filter(entidad="Reserva").exists()
+    assert auditoria.consultar_eventos(accion="AccesoDenegado", exitoso=False).filter(entidad="Reserva").exists()
 
 
 def test_cancelar_dos_veces_responde_409(reserva_740, entrar, reloj):

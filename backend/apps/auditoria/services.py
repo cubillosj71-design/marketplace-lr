@@ -59,11 +59,11 @@ TIPOS_ACCION: dict[str, dict] = {
 }
 
 
-def tipos_accion() -> list[dict]:
+def listar_tipos_accion() -> list[dict]:
     return [{"clave": k, "nombre": v["nombre"]} for k, v in TIPOS_ACCION.items()]
 
 
-def consultar(*, actor_id=None, accion=None, tipo=None, desde=None, hasta=None, exitoso=None):
+def consultar_eventos(*, actor_id=None, accion=None, tipo=None, desde=None, hasta=None, exitoso=None):
     """Consulta para el administrador (RF-D-ADM-04.1, CA-23.1): filtra por usuario (actor), tipo de acción, acción
     y periodo. Trae el nombre del actor por la llave foránea de la propia tabla (sin importar Identidad)."""
     qs = EventoAuditoria.objects.select_related("actor")

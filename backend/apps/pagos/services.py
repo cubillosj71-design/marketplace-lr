@@ -23,7 +23,7 @@ class ServicioPagos:
     def __init__(self, pasarela: PasarelaPagos | None = None):
         self.pasarela = pasarela or obtener_pasarela()
 
-    def cobrar(self, cotizacion, clave: UUID, medio: str, *, reserva_id: int | None = None,
+    def cobrar_cotizacion(self, cotizacion, clave: UUID, medio: str, *, reserva_id: int | None = None,
                actor_id: int | None = None, ip: str | None = None) -> Pago:
         """Cobra el total de la cotización y guarda el pago con su estado.
 
@@ -46,7 +46,7 @@ class ServicioPagos:
         )
         return pago
 
-    def devolver(self, *, cotizacion_id: int, reserva_id: int, monto: Decimal, actor_id: int | None = None,
+    def devolver_pago(self, *, cotizacion_id: int, reserva_id: int, monto: Decimal, actor_id: int | None = None,
                  ip: str | None = None) -> Pago | None:
         """Devolución de una cancelación (RF-D-RES-03.1): pide a la pasarela devolver(referencia, monto) sobre el
         cobro aprobado de la cotización y guarda el pago DEVOLUCION con el estado que responda.
@@ -96,7 +96,7 @@ def conciliar_pagos() -> int:
     return cambiados
 
 
-def pagos_de_reserva(reserva_id: int) -> list[dict]:
+def listar_pagos_de_reserva(reserva_id: int) -> list[dict]:
     return [{"id": p.id, "tipo": p.tipo, "monto": f"{p.monto:.2f}", "estado": p.estado,
              "referencia_externa": p.referencia_externa, "fecha": p.fecha}
             for p in Pago.objects.filter(reserva_id=reserva_id).order_by("fecha")]
