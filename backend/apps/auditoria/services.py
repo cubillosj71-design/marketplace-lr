@@ -19,7 +19,7 @@ from typing import Any
 from .models import EventoAuditoria
 
 
-def registrar(
+def registrar_evento(
     actor_id: int | None,
     accion: str,
     *,

@@ -160,34 +160,34 @@ class Reserva(models.Model):
         self.estado = estado
         self.save(update_fields=["estado", "actualizada"])
 
-    def confirmar(self) -> None:
+    def confirmar_reserva(self) -> None:
         self._pasar_a(EstadoReserva.CONFIRMADA)
 
-    def cancelar(self, motivo: str, *, porcentaje: Decimal, cancelada_por_id: int | None = None) -> "Cancelacion":
-        """cancelar(motivo): Cancelacion del diagrama. El porcentaje sale de la política guardada en la reserva
+    def cancelar_reserva(self, motivo: str, *, porcentaje: Decimal, cancelada_por_id: int | None = None) -> "Cancelacion":
+        """cancelar_reserva(motivo): Cancelacion del diagrama. El porcentaje sale de la política guardada en la reserva
         (lo calcula reservas.services); cancelada_por_id NULL = cancelación automática."""
         self._pasar_a(EstadoReserva.CANCELADA)
         return Cancelacion.registrar(self, motivo, porcentaje, cancelada_por_id)
 
-    def completar(self) -> None:
+    def completar_reserva(self) -> None:
         """RF-D-RES-02.3: CONFIRMADA cuya fecha de salida ya pasó."""
         self._pasar_a(EstadoReserva.COMPLETADA)
 
     def pasar_a_revision(self) -> None:
         self._pasar_a(EstadoReserva.EN_REVISION)
 
-    def resolver(self, mantener: bool, *, motivo: str | None = None, administrador_id: int | None = None) -> "Cancelacion | None":
+    def resolver_revision(self, mantener: bool, *, motivo: str | None = None, administrador_id: int | None = None) -> "Cancelacion | None":
         """EN_REVISION -> CONFIRMADA si se mantiene (CA-20.2); si no, CANCELADA con devolución del 100 % y la
         Cancelacion a nombre del administrador (CA-20.3)."""
         if mantener:
-            self.confirmar()
+            self.confirmar_reserva()
             return None
-        return self.cancelar(motivo, porcentaje=Decimal("100"), cancelada_por_id=administrador_id)
+        return self.cancelar_reserva(motivo, porcentaje=Decimal("100"), cancelada_por_id=administrador_id)
 
     def cancelar_sin_resolucion(self) -> "Cancelacion":
         """cancelarSinResolucion(): Cancelacion del diagrama. EN_REVISION que llegó a su fecha de llegada sin
         resolverse: se cancela sola, con 100 % de devolución (CA-20.5)."""
-        return self.cancelar(MOTIVO_SIN_RESOLUCION, porcentaje=Decimal("100"))
+        return self.cancelar_reserva(MOTIVO_SIN_RESOLUCION, porcentaje=Decimal("100"))
 
 
 class Cancelacion(models.Model):

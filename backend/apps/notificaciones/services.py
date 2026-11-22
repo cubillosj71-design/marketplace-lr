@@ -94,7 +94,7 @@ def recibir_evento_dominio(sender, nombre, entidad=None, entidad_id=None, detall
         log.exception("No se pudo crear el aviso", extra={"evento": nombre})
         try:
             with transaction.atomic():  # transacción propia
-                auditoria.registrar(None, "NotificacionFallida", entidad=entidad, entidad_id=entidad_id, exitoso=False,
+                auditoria.registrar_evento(None, "NotificacionFallida", entidad=entidad, entidad_id=entidad_id, exitoso=False,
                                     detalle={"evento": nombre, "error": type(e).__name__, "mensaje": str(e)[:300]})
         except Exception:  # noqa: BLE001
             log.exception("Tampoco se pudo registrar la falla del aviso")

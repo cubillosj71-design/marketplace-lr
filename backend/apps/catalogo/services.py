@@ -238,7 +238,7 @@ def obtener_publicacion(usuario, publicacion_id: int) -> Publicacion:
 
 def _negar(usuario, p: Publicacion, motivo: str) -> None:
     """Acceso negado (CA-05.2): se registra fuera de transaction.atomic para que quede aunque la petición falle."""
-    auditoria.registrar(usuario.id, "AccesoDenegado", entidad="Publicacion", entidad_id=p.id, exitoso=False, detalle={"motivo": motivo})
+    auditoria.registrar_evento(usuario.id, "AccesoDenegado", entidad="Publicacion", entidad_id=p.id, exitoso=False, detalle={"motivo": motivo})
 
 
 def _validar_datos(d: dict) -> None:
@@ -305,7 +305,7 @@ def crear_publicacion(anfitrion, d: dict) -> Publicacion:
     with transaction.atomic():
         p = Publicacion(anfitrion=anfitrion, estado=E.BORRADOR)
         _aplicar(p, d)
-        auditoria.registrar(anfitrion.id, "PublicacionCreada", entidad="Publicacion", entidad_id=p.id)
+        auditoria.registrar_evento(anfitrion.id, "PublicacionCreada", entidad="Publicacion", entidad_id=p.id)
     return p
 
 
@@ -321,7 +321,7 @@ def actualizar_publicacion(usuario, publicacion_id: int, d: dict) -> Publicacion
         # La publicación conserva su estado (sigue ACTIVA sin volver a revisión). Fuera de BORRADOR debe seguir completa.
         if p.estado != E.BORRADOR and (f := calcular_faltantes(p)):
             raise ErrorNegocio("Falta: " + ", ".join(f) + ".", extra={"faltantes": f})
-        auditoria.registrar(usuario.id, "PublicacionEditada", entidad="Publicacion", entidad_id=p.id)
+        auditoria.registrar_evento(usuario.id, "PublicacionEditada", entidad="Publicacion", entidad_id=p.id)
     return p
 
 
@@ -351,7 +351,7 @@ def cambiar_estado(usuario, publicacion_id: int, nuevo: str, observacion: str | 
             E.PENDIENTE_REVISION: "PublicacionEnviadaARevision", E.PAUSADA: "PublicacionPausada", E.ACTIVA: "PublicacionReactivada",
         }[nuevo]
         detalle = {"de": anterior, "a": nuevo, **({"observacion": observacion} if observacion else {})}
-        auditoria.registrar(usuario.id, nombre, entidad="Publicacion", entidad_id=p.id, detalle=detalle)
+        auditoria.registrar_evento(usuario.id, nombre, entidad="Publicacion", entidad_id=p.id, detalle=detalle)
         if nombre in EVENTOS_DE_DOMINIO:  # los reciben Reservas y Notificaciones
             publicar(nombre, usuario_id=usuario.id, entidad="Publicacion", entidad_id=p.id,
                      detalle={**detalle, "titulo": p.titulo, "anfitrion": p.anfitrion_id,
@@ -377,7 +377,7 @@ def eliminar_borrador(anfitrion, publicacion_id: int) -> None:
             p.delete()
         except ProtectedError as e:  # defensa: una cotización o reserva la protege (on_delete=PROTECT)
             raise Conflicto("Esta publicación tiene cotizaciones o reservas y no se puede eliminar.") from e
-        auditoria.registrar(anfitrion.id, "PublicacionEliminada", entidad="Publicacion", entidad_id=publicacion_id,
+        auditoria.registrar_evento(anfitrion.id, "PublicacionEliminada", entidad="Publicacion", entidad_id=publicacion_id,
                             detalle={"titulo": titulo})
 
 

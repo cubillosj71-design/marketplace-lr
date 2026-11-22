@@ -134,11 +134,11 @@ def _reporte_usuarios(desde, hasta, f) -> archivos.Reporte:
         titulo="Reporte de usuarios",
         resumen=[("Usuarios registrados en el periodo", len(lista))]
         + [(plural, cuenta(lambda u, r=r: u.rol == r)) for r, plural in (("HUESPED", "Huéspedes"), ("ANFITRION", "Anfitriones"), ("ADMINISTRADOR", "Administradores"))]
-        + [(f"Cuentas {t.lower()}s", cuenta(lambda u, e=e: u.estado_cuenta == e)) for e, t in ESTADO_CUENTA_TXT.items()],
+        + [(f"Cuentas {t.lower()}s", cuenta(lambda u, e=e: u.obtener_estado_cuenta() == e)) for e, t in ESTADO_CUENTA_TXT.items()],
         columnas=["Código", "Nombre", "Correo", "Rol", "Ciudad", "Teléfono", "Estado", "Motivo de restricción", "Fecha de registro",
                   "Autorizó datos"],
         orden="fecha de registro, ascendente; luego por código",
-        filas=[[u.id, u.nombre_completo, u.correo, ROL_TXT[u.rol], u.ciudad or "", u.telefono, ESTADO_CUENTA_TXT[u.estado_cuenta],
+        filas=[[u.id, u.nombre_completo, u.correo, ROL_TXT[u.rol], u.ciudad or "", u.telefono, ESTADO_CUENTA_TXT[u.obtener_estado_cuenta()],
                 u.motivo_restriccion or "", timezone.localtime(u.fecha_registro).date().isoformat(),
                 timezone.localtime(u.autorizacion_datos).strftime("%Y-%m-%d %H:%M")] for u in lista],
     )
@@ -247,7 +247,7 @@ def generar_reporte(admin, tipo: str, formato: str, desde: date, hasta: date, fi
     r.generado_por = f"{admin.nombre_completo} ({admin.correo})"
     contenido = archivos.pdf(r) if formato == "pdf" else archivos.xlsx(r)
     nombre = f"reporte-{tipo}_{desde.isoformat()}_{hasta.isoformat()}.{formato}"
-    auditoria.registrar(admin.id, "ReporteDescargado", entidad="Reporte", ip=ip,
+    auditoria.registrar_evento(admin.id, "ReporteDescargado", entidad="Reporte", ip=ip,
                         detalle={"tipo": tipo, "formato": formato, "desde": desde.isoformat(), "hasta": hasta.isoformat(),
                                  "registros": len(r.filas), "archivo": nombre, "administrador": admin.nombre_completo})
     mime = "application/pdf" if formato == "pdf" else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"

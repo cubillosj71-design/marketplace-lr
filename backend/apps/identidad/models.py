@@ -87,7 +87,7 @@ class Usuario(AbstractBaseUser):
         return self.rol == RolUsuario.ADMINISTRADOR
 
     @property
-    def restringida(self) -> bool:
+    def esta_restringida(self) -> bool:
         """Derivada: hay una RestriccionUsuario vigente."""
         return any(r.esta_vigente() for r in RestriccionUsuario.objects.filter(usuario_id=self.pk))
 
@@ -95,7 +95,7 @@ class Usuario(AbstractBaseUser):
     def is_active(self) -> bool:  # type: ignore[override]
         """SimpleJWT la revisa en cada petición: una cuenta desactivada o restringida pierde el
         acceso en la siguiente petición (ADR-005)."""
-        return self.activa and not self.restringida
+        return self.activa and not self.esta_restringida
 
     # ---- operaciones del diagrama de clases (MOD-01). Cambian el estado de la cuenta; los permisos, los
     # mensajes, la auditoría y los tokens los orquesta identidad.services en la misma transacción.
@@ -126,13 +126,13 @@ class Usuario(AbstractBaseUser):
             cambiados.append("telefono")
         return cambiados
 
-    def desactivar(self) -> None:
+    def desactivar_cuenta(self) -> None:
         """desactivar() del diagrama: la cuenta queda inactiva (CA-04.2). Las reglas previas (no ser administrador,
         no tener reservas pendientes) las revisa identidad.services.desactivar_cuenta."""
         self.activa = False
         self.save(update_fields=["activa"])
 
-    def reactivar(self) -> None:
+    def reactivar_cuenta(self) -> None:
         """reactivar() del diagrama: la cuenta desactivada vuelve a estar activa al ingresar de nuevo (CA-04.4)."""
         self.activa = True
         self.save(update_fields=["activa"])

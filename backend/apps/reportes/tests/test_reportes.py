@@ -208,7 +208,7 @@ def test_ca_25_2_si_no_se_puede_registrar_no_se_entrega_el_archivo(admin, monkey
     def fallar(*a, **kw):
         raise RuntimeError("auditoría no disponible")
 
-    monkeypatch.setattr(services.auditoria, "registrar", fallar)
+    monkeypatch.setattr(services.auditoria, "registrar_evento", fallar)
     r = admin.get("/api/v1/admin/reportes/usuarios", {**OCTUBRE, "formato": "pdf"})
     assert r.status_code == 500 and not r.content.startswith(b"%PDF")
 

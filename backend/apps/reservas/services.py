@@ -179,7 +179,7 @@ def cambiar_tarifa(admin, porcentaje: Decimal, ip=None) -> dict:
             abierta.vigente_hasta = ahora
             abierta.save(update_fields=["vigente_hasta"])
         t = TarifaServicio.objects.create(administrador=admin, porcentaje=porcentaje, vigente_desde=ahora)
-        auditoria.registrar(admin.id, "TarifaActualizada", entidad="TarifaServicio", entidad_id=t.id, ip=ip, detalle={
+        auditoria.registrar_evento(admin.id, "TarifaActualizada", entidad="TarifaServicio", entidad_id=t.id, ip=ip, detalle={
             "anterior": str(abierta.porcentaje) if abierta else None, "nuevo": str(porcentaje),
             "tarifa_anterior": abierta.id if abierta else None, "vigente_desde": ahora.isoformat(),
         })
@@ -231,7 +231,7 @@ def _publicacion_del_anfitrion(usuario, publicacion_id: int) -> dict:
         raise NoEncontrado("La publicación no existe.")
     if p["anfitrion"] != usuario.id:
         # Acceso negado (CA-05.3): fuera de transaction.atomic, queda aunque la petición falle
-        auditoria.registrar(usuario.id, "AccesoDenegado", entidad="Publicacion", entidad_id=publicacion_id, exitoso=False,
+        auditoria.registrar_evento(usuario.id, "AccesoDenegado", entidad="Publicacion", entidad_id=publicacion_id, exitoso=False,
                             detalle={"motivo": "Calendario de una publicación ajena"})
         raise SinPermiso("Solo el anfitrión dueño administra el calendario.")
     return p
@@ -268,7 +268,7 @@ def modificar_calendario(usuario, publicacion_id: int, inicio: date, fin: date, 
         PeriodoCalendario.objects.bulk_create(
             [PeriodoCalendario(publicacion_id=publicacion_id, fecha_inicio=a, fecha_fin=b, disponible=False) for a, b in _rangos(resultado)]
         )
-        auditoria.registrar(usuario.id, "CalendarioActualizado", entidad="Publicacion", entidad_id=publicacion_id,
+        auditoria.registrar_evento(usuario.id, "CalendarioActualizado", entidad="Publicacion", entidad_id=publicacion_id,
                             detalle={"tipo": tipo, "desde": inicio.isoformat(), "hasta": fin.isoformat()})
     return consultar_calendario(usuario, publicacion_id, inicio, fin)
 
@@ -331,7 +331,7 @@ def cotizar_estancia(huesped, publicacion_id: int, llegada: date, salida: date, 
     tarifa = _tarifa_o_error(creada)
     with transaction.atomic():
         cot = _crear_cotizacion(huesped.id, pub, llegada, salida, num_huespedes, elegidos, tarifa, creada)
-        auditoria.registrar(huesped.id, "CotizacionCreada", entidad="Cotizacion", entidad_id=cot.id, ip=ip,
+        auditoria.registrar_evento(huesped.id, "CotizacionCreada", entidad="Cotizacion", entidad_id=cot.id, ip=ip,
                             detalle={"publicacion": publicacion_id, "total": str(cot.total)})
     return cot
 
@@ -461,11 +461,11 @@ def reservar_alojamiento(huesped, cotizacion_id: int, clave: uuid.UUID, medio: s
             # 5. Auditoría y evento de dominio
             detalle = {"publicacion": r.publicacion_id, "llegada": r.fecha_llegada.isoformat(),
                        "salida": r.fecha_salida.isoformat(), "total": str(r.total), "pago": pago.id}
-            auditoria.registrar(huesped.id, "ReservaConfirmada", entidad="Reserva", entidad_id=r.id, detalle=detalle, ip=ip)
+            auditoria.registrar_evento(huesped.id, "ReservaConfirmada", entidad="Reserva", entidad_id=r.id, detalle=detalle, ip=ip)
             _evento_reserva("ReservaConfirmada", r, huesped.id, total=str(r.total))
     except _PagoNoAprobado as e:
         # CA-13.3: no queda la reserva; el intento se registra fuera de la transacción que se revirtió
-        auditoria.registrar(huesped.id, "ReservaRechazada", entidad="Cotizacion", entidad_id=cot.id, exitoso=False, ip=ip,
+        auditoria.registrar_evento(huesped.id, "ReservaRechazada", entidad="Cotizacion", entidad_id=cot.id, exitoso=False, ip=ip,
                             detalle={"estado_pago": e.estado, "motivo": e.motivo, "total": str(cot.total), "clave": str(clave)})
         mensaje = ("El pago quedó en verificación y no se pudo confirmar la reserva. Intenta con otro medio de pago."
                    if e.estado == "EN_VERIFICACION" else f"El pago fue rechazado: {e.motivo or 'sin motivo informado'}")
@@ -499,7 +499,7 @@ def atender_bloqueo_publicacion(sender, nombre, entidad_id=None, usuario_id=None
     hoy = reloj.hoy()
     for r in Reserva.objects.select_for_update().filter(publicacion_id=entidad_id, estado=EstadoReserva.CONFIRMADA, fecha_llegada__gte=hoy):
         r.pasar_a_revision()
-        auditoria.registrar(usuario_id, "ReservaEnRevision", entidad="Reserva", entidad_id=r.id, detalle={"publicacion": entidad_id})
+        auditoria.registrar_evento(usuario_id, "ReservaEnRevision", entidad="Reserva", entidad_id=r.id, detalle={"publicacion": entidad_id})
         _evento_reserva("ReservaEnRevision", r, usuario_id)
 
 
@@ -515,8 +515,8 @@ def completar_reservas_vencidas() -> int:
                 r = Reserva.objects.select_for_update().get(pk=rid)
                 if r.estado != EstadoReserva.CONFIRMADA:
                     continue
-                r.completar()
-                auditoria.registrar(None, "ReservaCompletada", entidad="Reserva", entidad_id=r.id,
+                r.completar_reserva()
+                auditoria.registrar_evento(None, "ReservaCompletada", entidad="Reserva", entidad_id=r.id,
                                     detalle={"salida": r.fecha_salida.isoformat()})
         except Exception as e:  # noqa: BLE001  una reserva que falla se revierte sola y no detiene las demás
             auditar_falla(e, entidad="Reserva", entidad_id=rid, tarea="completar_reservas_vencidas")
@@ -554,7 +554,7 @@ def listar_reservas_admin(estado: str | None = None) -> list[dict]:
 
 def _negar(usuario, reserva_id: int, motivo: str):
     # Acceso negado: fuera de transaction.atomic, queda aunque la petición falle (CA-05.2)
-    auditoria.registrar(usuario.id, "AccesoDenegado", entidad="Reserva", entidad_id=reserva_id, exitoso=False, detalle={"motivo": motivo})
+    auditoria.registrar_evento(usuario.id, "AccesoDenegado", entidad="Reserva", entidad_id=reserva_id, exitoso=False, detalle={"motivo": motivo})
     raise SinPermiso("No tienes acceso a esta reserva.")
 
 
@@ -580,7 +580,7 @@ def _tras_cancelar(r: Reserva, c: Cancelacion, ip=None) -> None:
     pago = pagos.ServicioPagos().devolver_pago(cotizacion_id=r.cotizacion_id, reserva_id=r.id, monto=c.valor_devolucion,
                                           actor_id=c.cancelada_por_id, ip=ip)
     # CA-15.3: el registro de acciones muestra quién canceló (actor), cuándo (fecha), el motivo y el valor devuelto
-    auditoria.registrar(c.cancelada_por_id, "ReservaCancelada", entidad="Reserva", entidad_id=r.id, ip=ip, detalle={
+    auditoria.registrar_evento(c.cancelada_por_id, "ReservaCancelada", entidad="Reserva", entidad_id=r.id, ip=ip, detalle={
         "motivo": c.motivo, "valor_devolucion": f"{c.valor_devolucion:.2f}",
         "porcentaje_devolucion": f"{Decimal(c.porcentaje_devolucion):.2f}", "dias_anticipacion": c.dias_anticipacion,
         "automatica": c.cancelada_por_id is None, "pago_devolucion": pago.id if pago else None,
@@ -607,7 +607,7 @@ def cancelar_reserva(huesped, reserva_id: int, motivo: str, ip=None) -> dict:
         dias = (r.fecha_llegada - reloj.hoy()).days  # días calendario en hora de Colombia
         if dias < 1:  # CA-15.5
             raise Conflicto("La fecha de llegada ya llegó: la reserva ya no se puede cancelar.")
-        c = r.cancelar(motivo, porcentaje=catalogo.calcular_porcentaje_devolucion(r.politica_id, dias), cancelada_por_id=huesped.id)
+        c = r.cancelar_reserva(motivo, porcentaje=catalogo.calcular_porcentaje_devolucion(r.politica_id, dias), cancelada_por_id=huesped.id)
         _tras_cancelar(r, c, ip=ip)
     return convertir_reserva_a_dict(Reserva.objects.select_related("cancelacion").get(pk=reserva_id))
 
@@ -641,13 +641,13 @@ def resolver_reserva(admin, reserva_id: int, mantener: bool, motivo: str | None 
         if r.estado != EstadoReserva.EN_REVISION:
             raise Conflicto(f"Solo se resuelven reservas en revisión; esta está {EstadoReserva(r.estado).label.lower()}.")
         if mantener:
-            r.resolver(True)
-            auditoria.registrar(admin.id, "ReservaResuelta", entidad="Reserva", entidad_id=r.id, ip=ip, detalle={"mantener": True})
+            r.resolver_revision(True)
+            auditoria.registrar_evento(admin.id, "ReservaResuelta", entidad="Reserva", entidad_id=r.id, ip=ip, detalle={"mantener": True})
             _evento_reserva("ReservaResuelta", r, admin.id, mantener=True)
         else:
-            auditoria.registrar(admin.id, "ReservaResuelta", entidad="Reserva", entidad_id=r.id, ip=ip, detalle={"mantener": False, "motivo": motivo})
+            auditoria.registrar_evento(admin.id, "ReservaResuelta", entidad="Reserva", entidad_id=r.id, ip=ip, detalle={"mantener": False, "motivo": motivo})
             _evento_reserva("ReservaResuelta", r, admin.id, mantener=False, motivo=motivo)
-            _tras_cancelar(r, r.resolver(False, motivo=motivo, administrador_id=admin.id), ip=ip)
+            _tras_cancelar(r, r.resolver_revision(False, motivo=motivo, administrador_id=admin.id), ip=ip)
     return convertir_reserva_a_dict(Reserva.objects.select_related("cancelacion").get(pk=reserva_id))
 
 

@@ -35,7 +35,7 @@ def test_restringir_no_cambia_la_cuenta_ni_el_estado_de_sus_reservas(demo, entra
     despues = {r["id"]: r["estado"] for r in reservas.listar_reservas_para_reporte() if r["huesped"] == uid}
     assert despues == antes
     cuenta = apps.get_model("identidad", "Usuario").objects.get(pk=uid)
-    assert cuenta.activa is True and cuenta.restringida is True and cuenta.is_active is False
+    assert cuenta.activa is True and cuenta.esta_restringida is True and cuenta.is_active is False
 
 
 def test_ca_21_3_al_levantar_la_restriccion_vuelve_a_entrar(demo, entrar, cliente):

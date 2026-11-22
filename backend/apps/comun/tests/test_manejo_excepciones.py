@@ -89,14 +89,14 @@ def test_una_reserva_que_falla_no_detiene_las_demas(alojamiento_740, publicar, r
     reloj("2026-11-01")
     a = reservar(alojamiento_740, "2026-11-05", "2026-11-07")
     b = reservar(otra, "2026-11-05", "2026-11-07", desayuno=False)
-    original = Reserva.completar
+    original = Reserva.completar_reserva
 
     def completar(self):
         if self.id == a["id"]:
             raise RuntimeError("falla en esta reserva")
         original(self)
 
-    monkeypatch.setattr(Reserva, "completar", completar)
+    monkeypatch.setattr(Reserva, "completar_reserva", completar)
     reloj("2026-11-08")
     assert services.completar_reservas_vencidas() == 1
     assert Reserva.objects.get(pk=a["id"]).estado == "CONFIRMADA"  # se revirtió sola; se reintenta en la próxima

@@ -1,6 +1,6 @@
 """SRV-08 Auditoría (MOD-08): HU-23 y el registro de accesos negados (CA-05.2) y fallas (RNF-O-OPE-01).
 
-Cada módulo llama a auditoria.services.registrar() en la misma transacción de su cambio; los
+Cada módulo llama a auditoria.services.registrar_evento() en la misma transacción de su cambio; los
 inicios fallidos, los accesos negados y las fallas se registran aunque la petición falle.
 """
 
@@ -64,7 +64,7 @@ def test_registrar_escribe_en_la_misma_transaccion_del_cambio(demo):
     """Si la transacción del cambio se revierte, el evento tampoco queda (C4 nivel 3, vista b)."""
     antes = services.consultar_eventos().count()
     with pytest.raises(RuntimeError), transaction.atomic():
-        services.registrar(None, "CambioQueSeRevierte")
+        services.registrar_evento(None, "CambioQueSeRevierte")
         raise RuntimeError
     assert services.consultar_eventos().count() == antes
 

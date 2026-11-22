@@ -114,7 +114,7 @@ def registrar_usuario(*, nombre_completo, correo, telefono, password, rol, acept
     with transaction.atomic():
         u = Usuario.registrar(correo, password, rol, nombre_completo=nombre_completo.strip(), telefono=telefono,
                               ciudad=ciudad)
-        auditoria.registrar(u.id, "UsuarioRegistrado", entidad="Usuario", entidad_id=u.id, detalle={"rol": rol}, ip=ip)
+        auditoria.registrar_evento(u.id, "UsuarioRegistrado", entidad="Usuario", entidad_id=u.id, detalle={"rol": rol}, ip=ip)
     return u
 
 
@@ -125,12 +125,12 @@ def iniciar_sesion(correo: str, password: str, ip=None) -> dict:
     # Los intentos fallidos se registran fuera de transaction.atomic ("transacción propia"):
     # quedan en la auditoría aunque la petición termine en error.
     if not u or not u.iniciar_sesion(correo, password):
-        auditoria.registrar(u.id if u else None, "InicioSesion", entidad="Usuario", entidad_id=u.id if u else None,
+        auditoria.registrar_evento(u.id if u else None, "InicioSesion", entidad="Usuario", entidad_id=u.id if u else None,
                             exitoso=False, detalle={"motivo": "Credenciales incorrectas", "correo": (correo or "")[:254]}, ip=ip)
         raise ErrorNegocio("Correo o contraseña incorrectos. Revisa los datos e inténtalo de nuevo.", codigo=401)
     vigente = obtener_restriccion_vigente(u.id)
     if vigente:  # CA-02.3, CA-21.1
-        auditoria.registrar(u.id, "InicioSesion", entidad="Usuario", entidad_id=u.id, exitoso=False,
+        auditoria.registrar_evento(u.id, "InicioSesion", entidad="Usuario", entidad_id=u.id, exitoso=False,
                             detalle={"motivo": "Cuenta restringida"}, ip=ip)
         hasta = f" hasta el {timezone.localtime(vigente.fecha_fin):%d/%m/%Y}" if vigente.fecha_fin else ""
         raise ErrorNegocio(
@@ -140,10 +140,10 @@ def iniciar_sesion(correo: str, password: str, ip=None) -> dict:
     reactivada = not u.activa
     with transaction.atomic():
         if reactivada:  # CA-04.4: la cuenta se reactiva al volver a ingresar
-            u.reactivar()
+            u.reactivar_cuenta()
         u.last_login = timezone.now()
         u.save(update_fields=["last_login"])
-        auditoria.registrar(u.id, "InicioSesion", entidad="Usuario", entidad_id=u.id, detalle={"reactivada": reactivada}, ip=ip)
+        auditoria.registrar_evento(u.id, "InicioSesion", entidad="Usuario", entidad_id=u.id, detalle={"reactivada": reactivada}, ip=ip)
     refresh = RefreshToken.for_user(u)
     return {"access": str(refresh.access_token), "refresh": str(refresh), "usuario": _dict(u),
             **({"aviso": "Tu cuenta se reactivó. ¡Bienvenido de nuevo!"} if reactivada else {})}
@@ -177,7 +177,7 @@ def cerrar_sesion(refresh: str, ip=None) -> None:
     usuario_id = int(token["user_id"])
     with transaction.atomic():
         token.blacklist()
-        auditoria.registrar(usuario_id, "CierreSesion", entidad="Usuario", entidad_id=usuario_id, ip=ip)
+        auditoria.registrar_evento(usuario_id, "CierreSesion", entidad="Usuario", entidad_id=usuario_id, ip=ip)
 
 
 def _cerrar_todas_las_sesiones(u: Usuario) -> None:
@@ -196,7 +196,7 @@ def solicitar_recuperacion(correo: str, ip=None) -> str | None:
     Si el correo no existe devuelve None."""
     u = Usuario.objects.filter(correo__iexact=(correo or "").strip()).first()
     if not u:
-        auditoria.registrar(None, "RecuperacionSolicitada", exitoso=False, detalle={"motivo": "Correo no registrado"}, ip=ip)
+        auditoria.registrar_evento(None, "RecuperacionSolicitada", exitoso=False, detalle={"motivo": "Correo no registrado"}, ip=ip)
         return None
     token = secrets.token_urlsafe(32)
     ahora = timezone.now()
@@ -206,7 +206,7 @@ def solicitar_recuperacion(correo: str, ip=None) -> str | None:
         TokenRecuperacion.objects.create(
             usuario=u, token_hash=_hash(token), vence=ahora + timedelta(minutes=settings.MINUTOS_ENLACE_RECUPERACION)
         )
-        auditoria.registrar(u.id, "RecuperacionSolicitada", entidad="Usuario", entidad_id=u.id, ip=ip)
+        auditoria.registrar_evento(u.id, "RecuperacionSolicitada", entidad="Usuario", entidad_id=u.id, ip=ip)
     # No se envía correo: la recuperación es simulada y el enlace se muestra en pantalla
     # (AMB-08, AMB-12, CA-03.1). La vista lo devuelve en la respuesta.
     return token
@@ -237,7 +237,7 @@ def restablecer_clave(token: str, password: str, ip=None) -> None:
         t.usado_en = timezone.now()
         t.save(update_fields=["usado_en"])
         _cerrar_todas_las_sesiones(u)
-        auditoria.registrar(u.id, "ContrasenaRestablecida", entidad="Usuario", entidad_id=u.id, ip=ip)
+        auditoria.registrar_evento(u.id, "ContrasenaRestablecida", entidad="Usuario", entidad_id=u.id, ip=ip)
 
 
 # ---------------------------------------------------------------- CU-USU-04 Perfil
@@ -257,7 +257,7 @@ def actualizar_perfil(u: Usuario, datos: dict, ip=None) -> Usuario:
     if campos:
         with transaction.atomic():
             u.save(update_fields=campos)
-            auditoria.registrar(u.id, "PerfilActualizado", entidad="Usuario", entidad_id=u.id, ip=ip,
+            auditoria.registrar_evento(u.id, "PerfilActualizado", entidad="Usuario", entidad_id=u.id, ip=ip,
                                 detalle={"campos": [c for c in campos if c != "password"] + (["contraseña"] if "password" in campos else [])})
     return u
 
@@ -268,7 +268,7 @@ def desactivar_cuenta(u: Usuario, ip=None) -> None:
     from apps.reservas import services as reservas
 
     if u.rol == RolUsuario.ADMINISTRADOR:
-        auditoria.registrar(u.id, "AccesoDenegado", exitoso=False, detalle={"motivo": "Desactivar cuenta de administrador"}, ip=ip)
+        auditoria.registrar_evento(u.id, "AccesoDenegado", exitoso=False, detalle={"motivo": "Desactivar cuenta de administrador"}, ip=ip)
         raise SinPermiso("Las cuentas de administrador no se desactivan desde el perfil.")
     pendientes = reservas.listar_reservas_pendientes(u.id, es_anfitrion=u.rol == RolUsuario.ANFITRION)
     if pendientes:  # CA-04.2, CA-04.5
@@ -276,9 +276,9 @@ def desactivar_cuenta(u: Usuario, ip=None) -> None:
             "No puedes desactivar tu cuenta: tienes reservas confirmadas o en revisión pendientes.", extra={"reservas": pendientes}
         )
     with transaction.atomic():
-        u.desactivar()
+        u.desactivar_cuenta()
         _cerrar_todas_las_sesiones(u)
-        auditoria.registrar(u.id, "CuentaDesactivada", entidad="Usuario", entidad_id=u.id, ip=ip)
+        auditoria.registrar_evento(u.id, "CuentaDesactivada", entidad="Usuario", entidad_id=u.id, ip=ip)
 
 
 # ---------------------------------------------------------------- RF-D-ADM-02.1 Restringir
@@ -299,7 +299,7 @@ def restringir_usuario(admin: Usuario, usuario_id: int, motivo: str, fecha_fin=N
     # El acceso se corta porque is_active la tiene en cuenta desde la siguiente petición (ADR-005).
     with transaction.atomic():
         r = RestriccionUsuario.objects.create(usuario=u, administrador=admin, motivo=motivo.strip(), fecha_fin=fecha_fin)
-        auditoria.registrar(admin.id, "CuentaRestringida", entidad="Usuario", entidad_id=u.id, ip=ip,
+        auditoria.registrar_evento(admin.id, "CuentaRestringida", entidad="Usuario", entidad_id=u.id, ip=ip,
                             detalle={"motivo": r.motivo, "fecha_fin": fecha_fin.isoformat() if fecha_fin else None})
     return r
 
@@ -311,7 +311,7 @@ def levantar_restriccion(admin: Usuario, usuario_id: int, ip=None) -> None:
     with transaction.atomic():  # levantarla pone fecha_fin = ahora
         r.fecha_fin = timezone.now()
         r.save(update_fields=["fecha_fin"])
-        auditoria.registrar(admin.id, "RestriccionLevantada", entidad="Usuario", entidad_id=usuario_id, ip=ip)
+        auditoria.registrar_evento(admin.id, "RestriccionLevantada", entidad="Usuario", entidad_id=usuario_id, ip=ip)
 
 
 # ---------------------------------------------------------------- utilidades
@@ -337,7 +337,7 @@ def _dict(u: Usuario, restringida: bool | None = None) -> dict:
     return {
         "id": u.id, "correo": u.correo, "nombre_completo": u.nombre_completo, "telefono": u.telefono,
         "ciudad": u.ciudad, "rol": u.rol, "activa": u.activa,
-        "restringida": u.restringida if restringida is None else restringida,  # derivado de RestriccionUsuario
+        "restringida": u.esta_restringida if restringida is None else restringida,  # derivado de RestriccionUsuario
         "autorizacion_datos": u.autorizacion_datos.isoformat() if u.autorizacion_datos else None,
         "fecha_registro": u.fecha_registro.isoformat() if u.fecha_registro else None,
     }

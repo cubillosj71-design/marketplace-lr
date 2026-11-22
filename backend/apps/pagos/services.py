@@ -38,7 +38,7 @@ class ServicioPagos:
         )
         pago.motivo = resultado.motivo  # no se guarda: es el mensaje para el huésped
         aprobado = resultado.estado == EstadoPago.APROBADO
-        auditoria.registrar(
+        auditoria.registrar_evento(
             actor_id, "PagoAprobado" if aprobado else "PagoNoAprobado", entidad="Pago", entidad_id=pago.id,
             exitoso=aprobado, ip=ip,
             detalle={"estado": pago.estado, "monto": str(pago.monto), "cotizacion": cotizacion.id, "reserva": reserva_id,
@@ -66,7 +66,7 @@ class ServicioPagos:
             estado=resultado.estado, referencia_externa=resultado.referencia, clave_idempotencia=uuid4(),
         )
         aprobada = resultado.estado == EstadoPago.APROBADO
-        auditoria.registrar(actor_id, "DevolucionRegistrada", entidad="Pago", entidad_id=pago.id, ip=ip, exitoso=aprobada,
+        auditoria.registrar_evento(actor_id, "DevolucionRegistrada", entidad="Pago", entidad_id=pago.id, ip=ip, exitoso=aprobada,
                             detalle={"reserva": reserva_id, "monto": str(monto), "estado": pago.estado,
                                      "referencia": pago.referencia_externa, "cobro": referencia,
                                      **({"motivo": resultado.motivo} if resultado.motivo else {})})
@@ -90,7 +90,7 @@ def conciliar_pagos() -> int:
             anterior = pago.estado
             pago.estado, pago.referencia_externa = resultado.estado, resultado.referencia or pago.referencia_externa
             pago.save(update_fields=["estado", "referencia_externa"])
-            auditoria.registrar(None, "PagoConciliado", entidad="Pago", entidad_id=pago.id,
+            auditoria.registrar_evento(None, "PagoConciliado", entidad="Pago", entidad_id=pago.id,
                                 detalle={"de": anterior, "a": pago.estado, "referencia": pago.referencia_externa})
         cambiados += 1
     return cambiados

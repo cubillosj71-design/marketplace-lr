@@ -41,7 +41,7 @@ def ejecutar_tareas_diarias(origen: str, ip: str | None = None) -> dict:
             resultado[nombre], errores[nombre] = None, type(e).__name__
     if errores:
         resultado["errores"] = errores
-    auditoria.registrar(None, "TareasDiarias", ip=ip, exitoso=not errores, detalle={"origen": origen, **resultado})
+    auditoria.registrar_evento(None, "TareasDiarias", ip=ip, exitoso=not errores, detalle={"origen": origen, **resultado})
     return resultado
 
 

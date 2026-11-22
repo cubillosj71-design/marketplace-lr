@@ -305,7 +305,7 @@ dueño, anfitrión de la publicación o Administrador; los demás reciben 403 y 
 `cancelacion` con `fecha`, `motivo`, `porcentaje_devolucion` y `valor_devolucion`.
 
 **COMPLETADA (RF-D-RES-02.3).** `reservas.services.completar_reservas_vencidas()` pasa a COMPLETADA las CONFIRMADAS cuya
-fecha de salida ya pasó (`Reserva.completar()`). La corre la tarea diaria y también cada consulta, así la respuesta
+fecha de salida ya pasó (`Reserva.completar_reserva()`). La corre la tarea diaria y también cada consulta, así la respuesta
 nunca muestra CONFIRMADA una reserva vencida (CA-14.2).
 
 **Cancelar (RF-D-RES-03.1).** `POST /reservas/{id}/cancelar` con `{"motivo": "..."}`, solo el huésped dueño.
@@ -326,7 +326,7 @@ UPDATE, DELETE y TRUNCATE.
 - Al bloquear una publicación, sus reservas futuras CONFIRMADAS pasan a EN_REVISION en la misma transacción del
   bloqueo y se publica `ReservaEnRevision` por cada una (CA-20.1).
 - `GET /admin/reservas?estado=EN_REVISION` las lista.
-- `POST /admin/reservas/{id}/resolver` (`Reserva.resolver(mantener)`):
+- `POST /admin/reservas/{id}/resolver` (`Reserva.resolver_revision(mantener)`):
   - Con `{"mantener": true}` la reserva vuelve a CONFIRMADA (CA-20.2).
   - Con `{"mantener": false, "motivo": "..."}` queda CANCELADA con devolución del 100 % y `cancelada_por` = el
     administrador (CA-20.3).
