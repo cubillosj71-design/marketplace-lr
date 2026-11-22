@@ -7,6 +7,7 @@ from django.apps import apps
 
 from apps.catalogo import services as catalogo
 from apps.comun.fechas import fecha_maxima
+from apps.comun.management.commands.cargar_demo import PUBLICACIONES
 
 pytestmark = pytest.mark.django_db
 BUSCAR = "/api/v1/busqueda/publicaciones"
@@ -18,9 +19,13 @@ def _ids_catalogo():
             {s["nombre"]: s["id"] for s in cat["servicios"]})
 
 
+# La demo también tiene alojamientos en Cartagena: las pruebas solo miran los que crean ellas mismas
+DEMO = {datos["titulo"] for _, _, _, datos, _ in PUBLICACIONES}
+
+
 def _titulos(r):
     assert r.status_code == 200, r.content
-    return {p["titulo"] for p in r.json()}
+    return {p["titulo"] for p in r.json()} - DEMO
 
 
 def _reservar(entrar, pid, llegada, salida, huespedes=2):

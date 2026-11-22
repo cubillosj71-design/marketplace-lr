@@ -34,6 +34,12 @@ USUARIOS = [
     ("pedro@correo.com", "Pedro Lara", "300 410 7788", "ANFITRION", "Bogotá", "2026-07-21"),
     ("sofia@correo.com", "Sofía Mejía", "320 118 9034", "ANFITRION", "Medellín", "2026-09-08"),
     ("restringido@correo.com", "Andrés Silva", "311 902 3321", "ANFITRION", "Bogotá", "2026-10-27"),
+    # Segunda tanda: anfitriones de la costa y huéspedes que reservan en los alojamientos nuevos
+    ("valentina@correo.com", "Valentina Herrera", "3014567821", "ANFITRION", "Cartagena", "2026-01-20"),
+    ("julian@correo.com", "Julián Ospina", "3157702418", "ANFITRION", "Santa Marta", "2026-01-28"),
+    ("santiago@correo.com", "Santiago Restrepo", "3046613927", "HUESPED", "Medellín", "2026-02-05"),
+    ("mariana@correo.com", "Mariana López", "3208854106", "HUESPED", "Bogotá", "2026-02-12"),
+    ("camila@correo.com", "Camila Rojas", "3172290345", "HUESPED", "Cali", "2026-03-08"),
 ]
 # Fotos de la demo: viven en frontend/public/alojamientos/ (el sitio las sirve en /alojamientos/), así funcionan sin
 # conexión a internet. Son de Wikimedia Commons con licencia libre; el autor y la licencia de cada una están en
@@ -53,44 +59,114 @@ PUBLICACIONES = [
         "Apartamento con vista a Monserrate", "Apartamento", "Bogotá", "La Candelaria, a 3 cuadras del Chorro de Quevedo",
         "Apartamento luminoso de dos habitaciones con vista a los cerros, cocina equipada y balcón.", 4, 220000, 50000,
         ["Wi-Fi", "Parqueadero", "Cocina", "Agua caliente"], ["No fumar", "Sin fiestas", "Silencio después de las 10 p. m."],
-        ["monserrate-sala", "monserrate-habitacion", "monserrate-vista"], descuento_porcentaje=Decimal(10), descuento_min_noches=7,
+        ["monserrate-vista", "monserrate-sala", "monserrate-habitacion", "monserrate-cocina", "monserrate-bano"], descuento_porcentaje=Decimal(10), descuento_min_noches=7,
         servicios_adicionales=[{"nombre": "Desayuno", "precio": Decimal(25000)}, {"nombre": "Traslado al aeropuerto", "precio": Decimal(70000)}],
     ), None),
     ("anfitrion@correo.com", "2026-05-18", "PAUSADA", pub(
         "Cabaña El Roble", "Cabaña", "Guatavita", "Vereda El Roble, km 4", "Cabaña de madera junto al embalse, con chimenea y zona de fogata.",
-        5, 310000, 60000, ["Wi-Fi", "Parqueadero", "Cocina"], ["Mascotas pequeñas permitidas"], ["roble-fachada", "roble-chimenea"]), None),
+        5, 310000, 60000, ["Wi-Fi", "Parqueadero", "Cocina"], ["Mascotas pequeñas permitidas"], ["roble-fachada", "roble-chimenea", "roble-habitacion", "roble-cocina", "roble-fogata"]), None),
     ("anfitrion@correo.com", "2026-06-30", "PENDIENTE_REVISION", pub(
         "Habitación cerca al centro", "Habitación", "Bogotá", "Calle 19 con carrera 4",
         "Habitación privada con baño, a 10 minutos del centro histórico. Incluye Wi-Fi y agua caliente.", 2, 95000, 20000,
-        ["Wi-Fi", "Agua caliente"], ["Llegada desde las 3:00 p. m."], ["centro-habitacion", "centro-bano", "centro-escritorio", "centro-edificio"]), None),
+        ["Wi-Fi", "Agua caliente"], ["Llegada desde las 3:00 p. m."], ["centro-edificio", "centro-habitacion", "centro-bano", "centro-escritorio", "centro-calle"]), None),
     ("anfitrion@correo.com", "2026-08-12", "BORRADOR", pub(
         "Casa familiar en Villa de Leyva", "Casa", "Villa de Leyva", "Vereda El Roble, a 5 min de la plaza",
         "Casa de dos pisos a 5 minutos de la plaza principal, con patio y zona BBQ.", 6, 280000, 60000,
-        ["Wi-Fi", "Parqueadero", "Cocina"], ["No fumar", "Mascotas pequeñas permitidas"], ["leyva-fachada"]),
+        ["Wi-Fi", "Parqueadero", "Cocina"], ["No fumar", "Mascotas pequeñas permitidas"], ["leyva-fachada", "leyva-sala", "leyva-habitacion", "leyva-cocina", "leyva-patio"]),
         ("DEVOLVER", "Las fotos no corresponden al alojamiento. Sube fotos reales de la casa.")),
     ("anfitrion@correo.com", "2026-10-05", "BLOQUEADA", pub(
         "Loft Chapinero", "Apartamento", "Bogotá", "Chapinero Alto", "Loft moderno con terraza.", 2, 180000, 40000,
-        ["Wi-Fi", "TV"], ["No fumar"], ["chapinero-loft"]), ("BLOQUEAR", "La dirección publicada no coincide con la del alojamiento.")),
+        ["Wi-Fi", "TV"], ["No fumar"], ["chapinero-sala", "chapinero-loft", "chapinero-cocina", "chapinero-bano", "chapinero-terraza"]), ("BLOQUEAR", "La dirección publicada no coincide con la del alojamiento.")),
     ("pedro@correo.com", "2026-08-01", "PENDIENTE_REVISION", pub(
         "Estudio Usaquén", "Apartamento", "Bogotá", "Usaquén, cerca del parque", "Estudio para dos con cocineta.", 2, 150000, 30000,
-        ["Wi-Fi", "Cocina"], ["No fumar"], ["usaquen-estudio", "usaquen-cocineta"]), None),
+        ["Wi-Fi", "Cocina"], ["No fumar"], ["usaquen-estudio", "usaquen-cocineta", "usaquen-bano", "usaquen-plaza", "usaquen-parque"]), None),
     ("sofia@correo.com", "2026-09-15", "ACTIVA", pub(
         "Cabaña del Lago", "Cabaña", "Guatapé", "Orilla del embalse, sector La Piedra", "Cabaña con muelle propio y kayak.", 5, 280000, 60000,
-        ["Wi-Fi", "Parqueadero", "Cocina"], ["Sin fiestas"], ["lago-muelle", "lago-sala"]), None),
+        ["Wi-Fi", "Parqueadero", "Cocina"], ["Sin fiestas"], ["lago-sala", "lago-muelle", "lago-exterior", "lago-habitacion", "lago-embalse"]), None),
     ("sofia@correo.com", "2026-10-01", "ACTIVA", pub(
         "Casa campestre La Ceja", "Casa", "La Ceja", "Vía La Ceja - La Unión, km 2", "Casa campestre con jardín amplio y BBQ.", 8, 390000, 80000,
-        ["Wi-Fi", "Parqueadero", "Cocina", "Piscina"], ["No fumar"], ["ceja-jardin", "ceja-piscina"]), None),
+        ["Wi-Fi", "Parqueadero", "Cocina", "Piscina"], ["No fumar"], ["ceja-fachada", "ceja-sala", "ceja-habitacion", "ceja-piscina", "ceja-jardin"]), None),
     ("sofia@correo.com", "2026-11-03", "ACTIVA", pub(
         "Habitación Laureles", "Habitación", "Medellín", "Laureles, circular 1", "Habitación privada en casa familiar.", 2, 110000, 20000,
-        ["Wi-Fi", "Agua caliente"], ["Silencio después de las 10 p. m."], ["laureles-habitacion"]), None),
+        ["Wi-Fi", "Agua caliente"], ["Silencio después de las 10 p. m."], ["laureles-sala", "laureles-habitacion", "laureles-cocina", "laureles-bano", "laureles-barrio"]), None),
     ("restringido@correo.com", "2026-10-28", "ACTIVA", pub(
         "Apartamento El Poblado", "Apartamento", "Medellín", "El Poblado",
-        "No aparece en búsquedas porque la cuenta del anfitrión está restringida.", 3, 240000, 40000, ["Wi-Fi"], ["No fumar"], ["poblado-sala"]), None),
+        "No aparece en búsquedas porque la cuenta del anfitrión está restringida.", 3, 240000, 40000, ["Wi-Fi"], ["No fumar"], ["poblado-sala", "poblado-habitacion", "poblado-cocina", "poblado-bano", "poblado-vista"]), None),
+    # ---- Segunda tanda (índices 10 a 19): costa Caribe, Cali, Guatapé, Medellín y Bogotá
+    ("valentina@correo.com", "2026-02-10", "ACTIVA", pub(
+        "Apartamento frente al mar en Bocagrande", "Apartamento", "Cartagena", "Bocagrande, avenida San Martín con calle 6",
+        "Apartamento en piso alto con balcón frente al mar Caribe, a una cuadra de la playa. Edificio con piscina y portería.",
+        4, 380000, 70000, ["Wi-Fi", "Aire acondicionado", "Piscina", "Cocina", "TV"], ["No fumar", "Sin fiestas", "Llegada desde las 3:00 p. m."],
+        ["bocagrande-exterior", "bocagrande-sala", "bocagrande-habitacion", "bocagrande-bano", "bocagrande-playa"],
+        descuento_porcentaje=Decimal(10), descuento_min_noches=7,
+        servicios_adicionales=[{"nombre": "Kit de playa", "precio": Decimal(40000)}, {"nombre": "Traslado al aeropuerto", "precio": Decimal(60000)}],
+    ), None),
+    ("valentina@correo.com", "2026-02-20", "ACTIVA", pub(
+        "Casa colonial en Getsemaní", "Casa", "Cartagena", "Getsemaní, calle del Guerrero",
+        "Casa colonial restaurada de tres habitaciones, con patio interior y piscina pequeña, a pasos de la plaza de la Trinidad.",
+        6, 650000, 100000, ["Wi-Fi", "Aire acondicionado", "Piscina", "Cocina", "Lavadora"], ["No fumar", "Silencio después de las 11 p. m."],
+        ["getsemani-fachada", "getsemani-sala", "getsemani-habitacion", "getsemani-bano", "getsemani-patio"],
+        servicios_adicionales=[{"nombre": "Desayuno típico", "precio": Decimal(35000)}],
+    ), None),
+    ("sofia@correo.com", "2026-03-05", "ACTIVA", pub(
+        "Habitación en el Centro Histórico de Cartagena", "Habitación", "Cartagena", "Centro amurallado, calle de la Factoría",
+        "Habitación privada con baño en una casa colonial dentro de las murallas, con terraza compartida.",
+        2, 190000, 30000, ["Wi-Fi", "Aire acondicionado", "Agua caliente"], ["No fumar", "No se admiten visitas"],
+        ["murallas-balcon", "murallas-habitacion", "murallas-bano", "murallas-calle", "murallas-vista"],
+    ), None),
+    ("julian@correo.com", "2026-02-15", "ACTIVA", pub(
+        "Cabaña en Minca", "Cabaña", "Santa Marta", "Minca, vía a Pozo Azul",
+        "Cabaña de madera en la Sierra Nevada, rodeada de bosque, con vista a la bahía de Santa Marta y a 15 minutos a pie de las cascadas.",
+        4, 220000, 40000, ["Wi-Fi", "Cocina", "Agua caliente", "Parqueadero"], ["Mascotas pequeñas permitidas", "No hacer fogatas fuera del área señalada"],
+        ["minca-vista", "minca-habitacion", "minca-bano", "minca-cascada", "minca-rio"],
+        servicios_adicionales=[{"nombre": "Desayuno", "precio": Decimal(25000)}],
+    ), None),
+    ("julian@correo.com", "2026-03-15", "ACTIVA", pub(
+        "Apartamento en El Rodadero", "Apartamento", "Santa Marta", "El Rodadero, carrera 1 con calle 9",
+        "Apartamento familiar a media cuadra de la playa de El Rodadero, con piscina en el edificio.",
+        5, 320000, 60000, ["Wi-Fi", "Aire acondicionado", "Piscina", "Cocina", "TV", "Parqueadero"], ["No fumar", "Sin fiestas"],
+        ["rodadero-playa", "rodadero-sala", "rodadero-habitacion", "rodadero-cocina", "rodadero-bahia"],
+        descuento_porcentaje=Decimal(8), descuento_min_noches=5,
+        servicios_adicionales=[{"nombre": "Kit de playa", "precio": Decimal(35000)}, {"nombre": "Traslado al aeropuerto", "precio": Decimal(50000)}],
+    ), None),
+    ("pedro@correo.com", "2026-04-08", "ACTIVA", pub(
+        "Casa en San Antonio", "Casa", "Cali", "Barrio San Antonio, carrera 10 con calle 2",
+        "Casa tradicional de dos pisos en el barrio San Antonio, cerca de la capilla y de los restaurantes del barrio.",
+        6, 300000, 60000, ["Wi-Fi", "Aire acondicionado", "Cocina", "Lavadora"], ["No fumar", "Silencio después de las 10 p. m."],
+        ["sanantonio-fachada", "sanantonio-sala", "sanantonio-habitacion", "sanantonio-cocina", "sanantonio-vista"],
+    ), None),
+    ("pedro@correo.com", "2026-11-12", "PENDIENTE_REVISION", pub(
+        "Habitación en Granada", "Habitación", "Cali", "Barrio Granada, cerca de la avenida Sexta",
+        "Habitación privada con baño propio en un apartamento tranquilo, a dos cuadras de la zona gastronómica.",
+        2, 120000, 25000, ["Wi-Fi", "Aire acondicionado", "Agua caliente"], ["No fumar"],
+        ["granada-habitacion", "granada-bano", "granada-cocina", "granada-calle", "granada-avenida"],
+    ), None),
+    ("sofia@correo.com", "2026-05-20", "PAUSADA", pub(
+        "Cabaña frente al Peñol", "Cabaña", "Guatapé", "Vía Guatapé - El Peñol, km 3",
+        "Cabaña con vista a la Piedra del Peñol y salida directa al embalse.",
+        6, 360000, 70000, ["Wi-Fi", "Parqueadero", "Cocina", "TV"], ["Sin fiestas", "Chalecos salvavidas obligatorios en el muelle"],
+        ["penol-piedra", "penol-sala", "penol-habitacion", "penol-cocina", "penol-pueblo"],
+        servicios_adicionales=[{"nombre": "Paseo en lancha", "precio": Decimal(80000)}],
+    ), None),
+    ("anfitrion@correo.com", "2026-06-03", "ACTIVA", pub(
+        "Apartamento en Provenza", "Apartamento", "Medellín", "El Poblado, sector Provenza, carrera 35",
+        "Apartamento moderno con balcón, a dos cuadras de los cafés y restaurantes de Provenza.",
+        3, 280000, 50000, ["Wi-Fi", "Cocina", "Lavadora", "TV", "Agua caliente"], ["No fumar", "Sin fiestas"],
+        ["provenza-sala", "provenza-habitacion", "provenza-cocina", "provenza-barrio", "provenza-vista"],
+        descuento_porcentaje=Decimal(12), descuento_min_noches=7,
+    ), None),
+    ("anfitrion@correo.com", "2026-06-10", "ACTIVA", pub(
+        "Apartamento en La Macarena", "Apartamento", "Bogotá", "La Macarena, carrera 4A con calle 26",
+        "Apartamento de dos habitaciones en el barrio La Macarena, cerca del Museo Nacional y con vista a los cerros.",
+        4, 240000, 50000, ["Wi-Fi", "Cocina", "Agua caliente", "TV"], ["No fumar", "Silencio después de las 10 p. m."],
+        ["macarena-fachada", "macarena-sala", "macarena-habitacion", "macarena-calle", "macarena-vista"],
+        servicios_adicionales=[{"nombre": "Desayuno", "precio": Decimal(22000)}],
+    ), None),
 ]
 # Reservas por el flujo real (cotizar y reservar con el pago simulado). El reloj de la aplicación fija la fecha de
 # creación, que es la que usan el tablero y los reportes (RF-D-ADM-05). Octubre y noviembre de 2026 muestran todos
 # los estados: COMPLETADA, CONFIRMADA, EN_REVISION y una CANCELADA con devolución parcial.
-RESERVAS = [  # índice de la publicación, llegada, salida, huéspedes, creada, (cancelada el, motivo) o None
+RESERVAS = [  # índice de la publicación, llegada, salida, huéspedes, creada, (cancelada el, motivo) o None[, correo del huésped]
     (6, "2026-10-10", "2026-10-12", 2, "2026-10-01", None),   # Cabaña del Lago: COMPLETADA
     (7, "2026-10-24", "2026-10-26", 4, "2026-10-05", None),   # Casa campestre La Ceja: COMPLETADA
     (4, "2026-12-10", "2026-12-12", 2, "2026-10-20", None),   # Loft Chapinero: EN_REVISION al bloquearlo
@@ -98,6 +174,30 @@ RESERVAS = [  # índice de la publicación, llegada, salida, huéspedes, creada,
     (0, "2026-11-20", "2026-11-23", 2, "2026-11-02", None),   # Monserrate: CONFIRMADA
     (0, "2026-12-05", "2026-12-09", 3, "2026-11-05", None),   # Monserrate: CONFIRMADA
     (8, "2026-11-15", "2026-11-17", 2, "2026-11-04", ("2026-11-10", "Cambio de planes")),  # Laureles: CANCELADA, 5 días: 50 %
+    # ---- Segunda tanda: alojamientos nuevos, creadas de febrero a septiembre de 2026 (octubre y noviembre quedan como
+    # estaban). Las que terminan antes del 18 de noviembre de 2026 quedan COMPLETADA; las de diciembre y enero, CONFIRMADA.
+    # Pedro Lara no tiene reservas pendientes: las pruebas lo usan como el anfitrión que puede desactivar su cuenta.
+    (10, "2026-03-20", "2026-03-24", 2, "2026-03-02", None, "mariana@correo.com"),     # Bocagrande: COMPLETADA
+    (10, "2026-06-14", "2026-06-18", 3, "2026-05-10", None, "santiago@correo.com"),    # Bocagrande: COMPLETADA
+    (10, "2026-12-26", "2027-01-02", 4, "2026-09-10", None, "santiago@correo.com"),    # Bocagrande: CONFIRMADA (7 noches, 10 %)
+    (11, "2026-04-15", "2026-04-19", 5, "2026-04-01", None, "camila@correo.com"),      # Getsemaní: COMPLETADA
+    (11, "2026-07-18", "2026-07-22", 4, "2026-07-01", None, "huesped@correo.com"),     # Getsemaní: COMPLETADA
+    (11, "2026-12-28", "2027-01-03", 6, "2026-09-15", None, "camila@correo.com"),      # Getsemaní: CONFIRMADA
+    (12, "2026-04-02", "2026-04-05", 2, "2026-03-20", None, "mariana@correo.com"),     # Centro Histórico: COMPLETADA
+    (12, "2026-06-10", "2026-06-13", 2, "2026-05-05", ("2026-05-20", "Cambio de fechas del viaje"), "camila@correo.com"),  # 21 días: 100 %
+    (13, "2026-03-12", "2026-03-15", 2, "2026-02-28", None, "santiago@correo.com"),    # Minca: COMPLETADA
+    (13, "2026-08-20", "2026-08-23", 3, "2026-08-05", None, "camila@correo.com"),      # Minca: COMPLETADA
+    (13, "2027-01-08", "2027-01-12", 4, "2026-08-25", None, "mariana@correo.com"),     # Minca: CONFIRMADA
+    (14, "2026-06-26", "2026-07-01", 5, "2026-06-01", None, "huesped@correo.com"),     # El Rodadero: COMPLETADA (5 noches, 8 %)
+    (14, "2026-08-01", "2026-08-05", 4, "2026-07-12", ("2026-07-31", "Se canceló el vuelo"), "mariana@correo.com"),  # 1 día: 0 %
+    (14, "2027-01-15", "2027-01-20", 4, "2026-09-20", None, "huesped@correo.com"),     # El Rodadero: CONFIRMADA
+    (15, "2026-05-29", "2026-06-01", 4, "2026-05-15", None, "camila@correo.com"),      # San Antonio: COMPLETADA
+    (18, "2026-08-07", "2026-08-10", 2, "2026-07-20", None, "santiago@correo.com"),    # Provenza: COMPLETADA
+    (18, "2026-12-04", "2026-12-07", 3, "2026-09-25", None, "mariana@correo.com"),     # Provenza: CONFIRMADA
+    (18, "2026-12-20", "2026-12-24", 3, "2026-09-28", None, "santiago@correo.com"),    # Provenza: CONFIRMADA
+    (19, "2026-07-03", "2026-07-06", 2, "2026-06-20", ("2026-06-29", "Viaje de trabajo aplazado"), "santiago@correo.com"),  # 4 días: 50 %
+    (19, "2026-08-14", "2026-08-17", 3, "2026-08-01", None, "mariana@correo.com"),     # La Macarena: COMPLETADA
+    (19, "2026-09-18", "2026-09-21", 2, "2026-09-03", None, "huesped@correo.com"),     # La Macarena: COMPLETADA
 ]
 
 
@@ -182,13 +282,14 @@ class Command(BaseCommand):
             # La demostración siempre paga con el adaptador simulado, aunque haya STRIPE_SECRET_KEY en el entorno
             simulado = override_settings(STRIPE_SECRET_KEY="")
             simulado.enable()
-            for i, llegada, salida, huespedes, creada, cancelacion in RESERVAS:
+            for i, llegada, salida, huespedes, creada, cancelacion, *quien in RESERVAS:
+                h = cuentas[quien[0]] if quien else huesped
                 reloj.fijar(timezone.make_aware(datetime.fromisoformat(creada + "T10:00:00")))
-                cot = reservas.cotizar_estancia(huesped, creadas[i], date.fromisoformat(llegada), date.fromisoformat(salida), huespedes)
-                r, _ = reservas.reservar_alojamiento(huesped, cot.id, uuid.uuid4(), "simulado")
+                cot = reservas.cotizar_estancia(h, creadas[i], date.fromisoformat(llegada), date.fromisoformat(salida), huespedes)
+                r, _ = reservas.reservar_alojamiento(h, cot.id, uuid.uuid4(), "simulado")
                 if cancelacion:
                     reloj.fijar(timezone.make_aware(datetime.fromisoformat(cancelacion[0] + "T10:00:00")))
-                    reservas.cancelar_reserva(huesped, r["id"], cancelacion[1])
+                    reservas.cancelar_reserva(h, r["id"], cancelacion[1])
         finally:
             simulado.disable()
             reloj.fijar(reloj_anterior)

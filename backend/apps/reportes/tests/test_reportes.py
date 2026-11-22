@@ -122,8 +122,8 @@ def test_en_revision_suma_al_bruto_y_a_la_plataforma(admin, publicar, reservar_e
 
 def test_tablero_usuarios_por_rol_y_publicaciones_activas(admin):
     t = _tablero(admin, {"desde": "2026-01-01", "hasta": "2026-12-31"})
-    assert t["usuarios_por_rol"] == {"HUESPED": 1, "ANFITRION": 4, "ADMINISTRADOR": 1}
-    assert t["publicaciones_activas"] == 5
+    assert t["usuarios_por_rol"] == {"HUESPED": 4, "ANFITRION": 6, "ADMINISTRADOR": 1}
+    assert t["publicaciones_activas"] == 13
 
 
 @pytest.mark.parametrize("periodo,mensaje", [
@@ -239,7 +239,7 @@ def test_reporte_de_usuarios_filtra_por_estado_derivado_de_la_cuenta(admin):
 def test_reporte_de_publicaciones_filtra_por_ciudad_y_estado(admin):
     libro = _excel(admin, "publicaciones", {"desde": "2026-01-01", "hasta": "2026-12-31", "ciudad": "bogotá", "estado": "ACTIVA"})
     titulos = {f[1] for f in libro["Detalle"].iter_rows(min_row=archivos.FILA_CABECERA + 1, values_only=True)}
-    assert titulos == {"Apartamento con vista a Monserrate"}
+    assert titulos == {"Apartamento con vista a Monserrate", "Apartamento en La Macarena"}
 
 
 def test_tipo_invalido(admin):
@@ -251,7 +251,7 @@ def test_la_demo_trae_todos_los_estados_en_octubre_y_noviembre_de_2026(reloj, db
     call_command("cargar_demo", verbosity=0)
     t = _tablero(entrar("admin@inversioneslr.com"), {"desde": "2026-10-01", "hasta": "2026-11-30"})
     assert t["reservas_por_estado"] == {"CONFIRMADA": 3, "EN_REVISION": 1, "COMPLETADA": 2, "CANCELADA": 1}
-    cancelacion = apps.get_model("reservas", "Cancelacion").objects.get()
+    cancelacion = apps.get_model("reservas", "Cancelacion").objects.get(motivo="Cambio de planes")  # la de noviembre (Laureles)
     assert 0 < cancelacion.porcentaje_devolucion < 100  # devolución parcial
     assert t["top_ciudades"][0]["ciudad"] == "Bogotá"
 
