@@ -123,7 +123,7 @@ def test_en_revision_suma_al_bruto_y_a_la_plataforma(admin, publicar, reservar_e
 def test_tablero_usuarios_por_rol_y_publicaciones_activas(admin):
     t = _tablero(admin, {"desde": "2026-01-01", "hasta": "2026-12-31"})
     assert t["usuarios_por_rol"] == {"HUESPED": 4, "ANFITRION": 6, "ADMINISTRADOR": 1}
-    assert t["publicaciones_activas"] == 13
+    assert t["publicaciones_activas"] == 27  # 13 + una en cada ciudad que no tenía activas (MAL-35)
 
 
 @pytest.mark.parametrize("periodo,mensaje", [

@@ -7,6 +7,7 @@ con import-linter en el pipeline, ADR-001).
 
 from __future__ import annotations
 
+import unicodedata
 from decimal import Decimal
 
 from django.db import transaction
@@ -62,9 +63,16 @@ def es_ciudad_registrada(ciudad_id: int) -> bool:
     return Ciudad.objects.filter(pk=ciudad_id).exists()
 
 
+def clave_alfabetica(texto: str) -> str:
+    """Clave para ordenar en español: sin tildes y sin mayúsculas ("Popayán" va entre "Pereira" y "Salento")."""
+    return "".join(c for c in unicodedata.normalize("NFD", texto.casefold()) if unicodedata.category(c) != "Mn")
+
+
 def listar_catalogos() -> dict:
     return {
-        "ciudades": list(Ciudad.objects.values("id", "nombre", "departamento")),
+        # En orden alfabético en español (sin importar tildes ni la intercalación de la base): San Andrés, San Gil,
+        # Santa Fe de Antioquia, Santa Marta
+        "ciudades": sorted(Ciudad.objects.values("id", "nombre", "departamento"), key=lambda c: clave_alfabetica(c["nombre"])),
         "tipos": list(TipoAlojamiento.objects.values("id", "nombre")),
         "servicios": list(Servicio.objects.values("id", "nombre")),
         "politicas": [_politica_dict(p) for p in PoliticaCancelacion.objects.filter(activa=True).prefetch_related("tramos").order_by("id")],

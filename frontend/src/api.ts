@@ -150,7 +150,9 @@ export interface PoliticaApi {
 }
 
 export const catalogoApi = {
-  ciudades: () => api.get<ItemCatalogo[]>("/catalogo/ciudades"),
+  // En orden alfabético en español en todos los selectores (Explorar con y sin sesión, publicación, reportes)
+  ciudades: () => api.get<ItemCatalogo[]>("/catalogo/ciudades")
+    .then((r) => ({ ...r, data: [...r.data].sort((a, b) => a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" })) })),
   tipos: () => api.get<ItemCatalogo[]>("/catalogo/tipos-alojamiento"),
   servicios: () => api.get<ItemCatalogo[]>("/catalogo/servicios"),
   politicas: () => api.get<PoliticaApi[]>("/catalogo/politicas"),

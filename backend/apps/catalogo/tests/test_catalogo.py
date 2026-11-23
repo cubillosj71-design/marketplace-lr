@@ -28,7 +28,7 @@ def completa(cliente):
 
 
 def test_catalogos_son_publicos(cliente):
-    assert len(cliente.get(f"{BASE}/ciudades").json()) == 9
+    assert len(cliente.get(f"{BASE}/ciudades").json()) == 21  # 9 de la migración 0002 y 12 de la 0006 (MAL-35)
     assert {t["nombre"] for t in cliente.get(f"{BASE}/tipos-alojamiento").json()} == {"Apartamento", "Casa", "Habitación", "Cabaña"}
 
 
@@ -83,7 +83,8 @@ def test_editar_activa_no_vuelve_a_revision(demo, entrar):
 def test_mis_publicaciones_solo_las_propias(demo, entrar):
     titulos = {p["titulo"] for p in entrar("sofia@correo.com").get(f"{BASE}/mis-publicaciones").json()["results"]}
     assert titulos == {"Cabaña del Lago", "Casa campestre La Ceja", "Habitación Laureles", "Habitación en el Centro Histórico de Cartagena",
-                       "Cabaña frente al Peñol"}
+                       "Cabaña frente al Peñol", "Casa de balcones en Jardín", "Casa con piscina en Santa Fe de Antioquia",
+                       "Cabaña cafetera en Salento"}
 
 
 # ---------------- HU-08 Pausar y reactivar
@@ -95,7 +96,7 @@ def test_ca_08_pausar_y_reactivar_sin_tocar_reservas(demo, entrar):
     assert c.post(f"{BASE}/publicaciones/{pid}/pausar").json()["estado"] == "PAUSADA"
     # CA-08.4: pausar no toca las reservas (en la demo: Monserrate 2 CONFIRMADAS, Loft Chapinero 1 EN_REVISION y
     # Provenza 2 CONFIRMADAS)
-    assert len(reservas.listar_reservas_pendientes(c.usuario["id"], True)) == 5
+    assert len(reservas.listar_reservas_pendientes(c.usuario["id"], True)) == 6  # 5 + Pereira en diciembre (MAL-35)
     assert c.post(f"{BASE}/publicaciones/{pid}/reactivar").json()["estado"] == "ACTIVA"
     assert c.post(f"{BASE}/publicaciones/{_id('Habitación cerca al centro')}/pausar").status_code == 409
 

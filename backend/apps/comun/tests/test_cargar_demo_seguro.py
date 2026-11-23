@@ -112,4 +112,4 @@ def test_mostrar_base_dice_a_que_base_apunta(demo):
     salida = StringIO()
     call_command("mostrar_base", stdout=salida)
     texto = salida.getvalue()
-    assert "Base: test_" in texto and "publicaciones: 20" in texto and "Primer evento de auditoría" in texto
+    assert "Base: test_" in texto and "publicaciones: 34" in texto and "Primer evento de auditoría" in texto
