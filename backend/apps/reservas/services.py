@@ -343,20 +343,27 @@ def obtener_cotizacion(huesped, cotizacion_id: int) -> Cotizacion:
     return cot
 
 
-def convertir_cotizacion_a_dict(c: Cotizacion) -> dict:
+def convertir_desglose_a_dict(c: Cotizacion) -> dict:
+    """Los valores guardados en la cotización (CA-22.1): no se recalculan con los precios actuales."""
     adicionales = list(c.adicionales.all())
     nombres = catalogo.obtener_nombres_adicionales([a.servicio_adicional_id for a in adicionales])
-    pub = catalogo.obtener_resumen_publicacion(c.publicacion_id) or {}
     dinero = lambda v: f"{v:.2f}"  # noqa: E731  montos como texto, igual que el resto de la API
     return {
-        "id": c.id, "publicacion": c.publicacion_id, "publicacion_titulo": pub.get("titulo"),
-        "fecha_llegada": c.fecha_llegada, "fecha_salida": c.fecha_salida, "num_huespedes": c.num_huespedes,
         "noches": c.noches, "precio_noche": dinero(c.precio_noche), "precio_base": dinero(c.precio_base),
         "descuento": dinero(c.descuento), "tarifa_limpieza": dinero(c.tarifa_limpieza),
         "porcentaje_servicio": dinero(c.tarifa_servicio_ref.porcentaje), "tarifa_servicio": dinero(c.tarifa_servicio),
         "adicionales": [{"id": a.servicio_adicional_id, "nombre": nombres.get(a.servicio_adicional_id),
                          "precio_aplicado": dinero(a.precio_aplicado)} for a in adicionales],
         "total_adicionales": dinero(c.total_adicionales), "total": dinero(c.total),
+    }
+
+
+def convertir_cotizacion_a_dict(c: Cotizacion) -> dict:
+    pub = catalogo.obtener_resumen_publicacion(c.publicacion_id) or {}
+    return {
+        "id": c.id, "publicacion": c.publicacion_id, "publicacion_titulo": pub.get("titulo"),
+        "fecha_llegada": c.fecha_llegada, "fecha_salida": c.fecha_salida, "num_huespedes": c.num_huespedes,
+        **convertir_desglose_a_dict(c),
         "creada": c.creada, "vence": c.vence, "vencida": c.vence <= reloj.ahora(),
         "reserva": Reserva.objects.filter(cotizacion_id=c.id).values_list("id", flat=True).first(),
     }
@@ -376,27 +383,38 @@ class _CotizacionCambio(Exception):
         self.pub, self.elegidos, self.tarifa = pub, elegidos, tarifa
 
 
-def _cancelacion_dict(c: Cancelacion | None) -> dict | None:
+def _quien_cancelo(c: Cancelacion, huesped_id: int) -> str:
+    """HUESPED (CA-15.3), ADMINISTRADOR al resolver una EN_REVISION (CA-20.3) o AUTOMATICA (cancelada_por NULL, CA-20.5)."""
+    if c.cancelada_por_id is None:
+        return "AUTOMATICA"
+    return "HUESPED" if c.cancelada_por_id == huesped_id else "ADMINISTRADOR"
+
+
+def _cancelacion_dict(c: Cancelacion | None, huesped_id: int | None = None) -> dict | None:
     if not c:
         return None
     return {"fecha": c.fecha, "motivo": c.motivo, "cancelada_por": c.cancelada_por_id, "automatica": c.cancelada_por_id is None,
+            "cancelada_por_rol": _quien_cancelo(c, huesped_id),
             "dias_anticipacion": c.dias_anticipacion, "porcentaje_devolucion": f"{c.porcentaje_devolucion:.2f}",
             "valor_devolucion": f"{c.valor_devolucion:.2f}"}
 
 
-def convertir_reserva_a_dict(r: Reserva, publicaciones: dict | None = None, nombres: dict | None = None, con_pagos: bool = True) -> dict:
+def convertir_reserva_a_dict(r: Reserva, publicaciones: dict | None = None, nombres: dict | None = None, con_pagos: bool = True,
+                             portadas: dict | None = None) -> dict:
     pub = (publicaciones or catalogo.obtener_titulos_y_anfitriones([r.publicacion_id])).get(r.publicacion_id, {})
     nombres = nombres if nombres is not None else identidad.obtener_nombres_usuarios([r.huesped_id])
+    foto = (portadas if portadas is not None else catalogo.obtener_portadas_y_ciudades([r.publicacion_id])).get(r.publicacion_id, {})
     hoy = reloj.hoy()
     return {
         "id": r.id, "estado": r.estado, "cotizacion": r.cotizacion_id, "publicacion": r.publicacion_id,
-        "alojamiento": pub.get("titulo"), "anfitrion": pub.get("anfitrion"), "huesped": r.huesped_id,
+        "alojamiento": pub.get("titulo"), "portada": foto.get("portada"), "ciudad": foto.get("ciudad"),
+        "anfitrion": pub.get("anfitrion"), "huesped": r.huesped_id,
         "huesped_nombre": nombres.get(r.huesped_id), "politica": r.politica_id, "fecha_llegada": r.fecha_llegada,
         "fecha_salida": r.fecha_salida, "noches": (r.fecha_salida - r.fecha_llegada).days, "num_huespedes": r.num_huespedes,
         "total": f"{r.total:.2f}", "clave_idempotencia": str(r.clave_idempotencia), "creada": r.creada,
         # El huésped puede cancelar una reserva CONFIRMADA antes del día de llegada (CA-15.5)
         "cancelable": r.estado == EstadoReserva.CONFIRMADA and r.fecha_llegada > hoy,
-        "cancelacion": _cancelacion_dict(getattr(r, "cancelacion", None) if r.estado == EstadoReserva.CANCELADA else None),
+        "cancelacion": _cancelacion_dict(getattr(r, "cancelacion", None) if r.estado == EstadoReserva.CANCELADA else None, r.huesped_id),
         **({"pagos": pagos.listar_pagos_de_reserva(r.id)} if con_pagos else {}),
     }
 
@@ -529,9 +547,11 @@ def completar_reservas_vencidas() -> int:
 
 def _listar(qs) -> list[dict]:
     lista = list(qs.select_related("cancelacion").order_by("-fecha_llegada", "-id"))
-    publicaciones = catalogo.obtener_titulos_y_anfitriones({r.publicacion_id for r in lista})
+    ids = {r.publicacion_id for r in lista}
+    publicaciones = catalogo.obtener_titulos_y_anfitriones(ids)
+    portadas = catalogo.obtener_portadas_y_ciudades(ids)  # una consulta para toda la lista (sin N+1)
     nombres = identidad.obtener_nombres_usuarios({r.huesped_id for r in lista})
-    return [convertir_reserva_a_dict(r, publicaciones, nombres, con_pagos=False) for r in lista]
+    return [convertir_reserva_a_dict(r, publicaciones, nombres, con_pagos=False, portadas=portadas) for r in lista]
 
 
 def listar_mis_reservas(huesped) -> list[dict]:
@@ -568,7 +588,17 @@ def obtener_reserva(usuario, reserva_id: int) -> dict:
     anfitrion = publicaciones.get(r.publicacion_id, {}).get("anfitrion")
     if not (usuario.rol == "ADMINISTRADOR" or r.huesped_id == usuario.id or anfitrion == usuario.id):
         _negar(usuario, reserva_id, "Ver una reserva ajena")
-    return convertir_reserva_a_dict(r, publicaciones)
+    nombres = identidad.obtener_nombres_usuarios({r.huesped_id, anfitrion} - {None})
+    cotizacion = Cotizacion.objects.select_related("tarifa_servicio_ref").get(pk=r.cotizacion_id)
+    return {
+        **convertir_reserva_a_dict(r, publicaciones, nombres),
+        "anfitrion_nombre": nombres.get(anfitrion),
+        # Desglose y política guardados al reservar: no cambian si luego cambia la publicación (CA-22.1)
+        "desglose": convertir_desglose_a_dict(cotizacion),
+        "politica_cancelacion": catalogo.obtener_politica_con_tramos(r.politica_id),
+        # Cancelar es solo del huésped (CA-15.5): el anfitrión y el Administrador no reciben la devolución de hoy
+        "devolucion_hoy": calcular_devolucion_hoy(r) if r.estado == EstadoReserva.CONFIRMADA and r.huesped_id == usuario.id else None,
+    }
 
 
 # ---------------------------------------------------------------- HU-15 Cancelar (RF-D-RES-03.1)
@@ -619,9 +649,15 @@ def simular_cancelacion(usuario, reserva_id: int) -> dict:
         raise NoEncontrado("La reserva no existe.")
     if r.huesped_id != usuario.id:
         _negar(usuario, reserva_id, "Simular la cancelación de una reserva ajena")
+    return {"reserva": r.id, **calcular_devolucion_hoy(r)}
+
+
+def calcular_devolucion_hoy(r: Reserva) -> dict:
+    """Días que faltan para la llegada (hora de Colombia, reloj.hoy()) y lo que se devolvería si el huésped cancela
+    hoy según la política guardada en la reserva. El día de llegada o después ya no se puede cancelar (CA-15.5)."""
     dias = (r.fecha_llegada - reloj.hoy()).days
     pct = catalogo.calcular_porcentaje_devolucion(r.politica_id, dias) if dias >= 1 else Decimal("0")
-    return {"reserva": r.id, "cancelable": r.estado == EstadoReserva.CONFIRMADA and dias >= 1, "dias_anticipacion": dias,
+    return {"cancelable": r.estado == EstadoReserva.CONFIRMADA and dias >= 1, "dias_anticipacion": dias,
             "porcentaje_devolucion": f"{pct:.2f}",
             "valor_devolucion": f"{Cancelacion(reserva=r, porcentaje_devolucion=pct).calcular_devolucion():.2f}"}
 

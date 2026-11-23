@@ -230,24 +230,35 @@ export const reservasApi = {
 
 export interface CancelacionApi {
   fecha: string; motivo: string; cancelada_por: number | null; automatica: boolean;
+  cancelada_por_rol: "HUESPED" | "ADMINISTRADOR" | "AUTOMATICA";
   dias_anticipacion: number; porcentaje_devolucion: string; valor_devolucion: string;
 }
 
 export interface ReservaResumen {
   id: number; estado: "CONFIRMADA" | "CANCELADA" | "COMPLETADA" | "EN_REVISION"; publicacion: number;
-  alojamiento: string | null; anfitrion: number | null; huesped: number; huesped_nombre: string | null;
-  fecha_llegada: string; fecha_salida: string; noches: number; num_huespedes: number; total: string;
-  cancelable: boolean; cancelacion: CancelacionApi | null;
+  alojamiento: string | null; portada: string | null; ciudad: string | null; anfitrion: number | null; huesped: number;
+  huesped_nombre: string | null; fecha_llegada: string; fecha_salida: string; noches: number; num_huespedes: number;
+  total: string; cancelable: boolean; cancelacion: CancelacionApi | null; creada: string;
 }
 
 export interface SimulacionCancelacion {
   reserva: number; cancelable: boolean; dias_anticipacion: number; porcentaje_devolucion: string; valor_devolucion: string;
 }
 
+/** GET /reservas/{id}: el resumen más el desglose y la política guardados al reservar (MAL-34). */
+export interface ReservaDetalleApi extends ReservaResumen {
+  anfitrion_nombre: string | null;
+  desglose: Omit<CotizacionApi, "id" | "publicacion" | "publicacion_titulo" | "fecha_llegada" | "fecha_salida" | "num_huespedes" | "creada" | "vence" | "vencida" | "reserva">;
+  politica_cancelacion: { id: number; nombre: string; descripcion: string | null;
+    tramos: { dias_minimos: number; dias_maximos: number | null; porcentaje_devolucion: string }[] } | null;
+  devolucion_hoy: Omit<SimulacionCancelacion, "reserva"> | null;
+  pagos: ReservaApi["pagos"];
+}
+
 export const misReservasApi = {
   mias: () => api.get<ReservaResumen[]>("/reservas/mias"),
   deMisAlojamientos: () => api.get<ReservaResumen[]>("/reservas/de-mis-alojamientos"),
-  detalle: (id: number) => api.get<ReservaResumen>(`/reservas/${id}`),
+  detalle: (id: number) => api.get<ReservaDetalleApi>(`/reservas/${id}`),
   simularCancelacion: (id: number) => api.get<SimulacionCancelacion>(`/reservas/${id}/cancelar`),
   cancelar: (id: number, motivo: string) => api.post<ReservaResumen>(`/reservas/${id}/cancelar`, { motivo }),
   enRevision: () => api.get<ReservaResumen[]>("/admin/reservas", { params: { estado: "EN_REVISION" } }),

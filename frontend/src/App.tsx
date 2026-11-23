@@ -8,7 +8,7 @@ import { Explorar, ExplorarDetalle, ExplorarPublico, ExplorarPublicoDetalle } fr
 import { DetallePublicacion, FormPublicacionRuta, MisPublicaciones } from "./pages/publicaciones";
 import { Reportes } from "./pages/reportes";
 import { CotizacionPage } from "./pages/reservar";
-import { Avisos, MisReservas, ReservasDeMisAlojamientos, ReservasEnRevision } from "./pages/reservas";
+import { Avisos, DetalleReserva, MisReservas, ReservasDeMisAlojamientos, ReservasEnRevision } from "./pages/reservas";
 import { CambiarContrasena, Perfil, Roles } from "./pages/usuarios";
 import { useStore } from "./store";
 
@@ -25,6 +25,8 @@ export const RUTAS: { path: string; permiso: string | string[] | null; api?: str
   { path: "/explorar/:id", permiso: "busqueda.ver", api: "/busqueda/publicaciones/:id", el: <ExplorarDetalle /> },
   { path: "/cotizacion/:id", permiso: "reservas.cotizar", api: "/reservas/cotizaciones/:id", el: <CotizacionPage /> },
   { path: "/reservas", permiso: "reservas.ver_propias", api: "/reservas/mias", el: <MisReservas /> },
+  // El huésped dueño, el anfitrión de la publicación o el Administrador: mismos permisos que GET /reservas/{id}
+  { path: "/reservas/:id", permiso: ["reservas.ver_propias", "reservas.ver_de_mis_alojamientos", "reservas.resolver"], api: "/reservas/:id", el: <DetalleReserva /> },
 
   { path: "/publicaciones", permiso: "publicaciones.gestionar_propias", api: "/catalogo/mis-publicaciones", el: <MisPublicaciones /> },
   { path: "/publicaciones/nueva", permiso: "publicaciones.gestionar_propias", api: "/catalogo/mis-publicaciones", el: <FormPublicacionRuta /> },
@@ -33,6 +35,8 @@ export const RUTAS: { path: string; permiso: string | string[] | null; api?: str
   { path: "/publicaciones/:id/editar", permiso: ["publicaciones.gestionar_propias", "publicaciones.moderar"], api: "/catalogo/publicaciones/:id", el: <FormPublicacionRuta /> },
   { path: "/calendario", permiso: "calendario.gestionar", api: "/catalogo/publicaciones/0/calendario", el: <Calendario /> },
   { path: "/reservas-alojamientos", permiso: "reservas.ver_de_mis_alojamientos", api: "/reservas/de-mis-alojamientos", el: <ReservasDeMisAlojamientos /> },
+  // El mismo detalle de /reservas/:id, dentro de la sección del anfitrión (menú y miga de pan)
+  { path: "/reservas-alojamientos/:id", permiso: ["reservas.ver_propias", "reservas.ver_de_mis_alojamientos", "reservas.resolver"], api: "/reservas/:id", el: <DetalleReserva /> },
 
   { path: "/admin/tablero", permiso: "tablero.ver", api: "/admin/tablero", el: <Tablero /> },
   { path: "/admin/publicaciones", permiso: "publicaciones.moderar", api: "/admin/publicaciones", el: <AdminPublicaciones /> },

@@ -1,7 +1,11 @@
 """Carga los datos de demostración del prototipo (mismas cuentas y publicaciones del frontend).
 
-Uso: python manage.py cargar_demo [--reiniciar]
+Uso: python manage.py cargar_demo [--reiniciar [--si]]
 Contraseña de todas las cuentas: Clave1234
+
+Sin --reiniciar nunca borra ni cambia datos: si la demostración ya está, no hace nada; si no, la agrega al lado de
+lo que haya. --reiniciar VACÍA TODA LA BASE: solo con DJANGO_DEBUG=1, muestra antes cuántos usuarios, publicaciones y
+reservas que no son de la demostración se van a perder y pide escribir REINICIAR (o --si para no preguntar).
 
 Usa las interfaces públicas de cada servicio. Solo para ajustar las fechas de creación
 (para que los reportes tengan datos repartidos en el año) toca las tablas con apps.get_model.
@@ -16,7 +20,7 @@ from django.apps import apps
 from django.conf import settings
 from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
-from django.db import transaction
+from django.db import connection, transaction
 from django.test import override_settings
 from django.utils import timezone
 
@@ -201,19 +205,44 @@ RESERVAS = [  # índice de la publicación, llegada, salida, huéspedes, creada,
 ]
 
 
+CORREOS_DEMO = {"admin@inversioneslr.com"} | {u[0] for u in USUARIOS}
+
+
+def contar_datos_ajenos() -> dict[str, int]:
+    """Usuarios, publicaciones y reservas que no salen de esta demostración: lo que --reiniciar borraría de más.
+    Una publicación es de la demo si su anfitrión y su título son los de PUBLICACIONES; una reserva, si además coinciden
+    el huésped y las fechas de RESERVAS."""
+    Usuario = apps.get_model("identidad", "Usuario")
+    Publicacion = apps.get_model("catalogo", "Publicacion")
+    Reserva = apps.get_model("reservas", "Reserva")
+    pubs_demo = {(dueno, d["titulo"]) for dueno, _, _, d, _ in PUBLICACIONES}
+    res_demo = {(PUBLICACIONES[i][3]["titulo"], llegada, salida, (quien or ["huesped@correo.com"])[0])
+                for i, llegada, salida, _, _, _, *quien in RESERVAS}
+    ajenas = [pid for pid, dueno, titulo in Publicacion.objects.values_list("id", "anfitrion__correo", "titulo")
+              if (dueno, titulo) not in pubs_demo]
+    reservas_ajenas = sum(
+        1 for titulo, llegada, salida, correo in Reserva.objects.values_list("publicacion__titulo", "fecha_llegada", "fecha_salida", "huesped__correo")
+        if (titulo, llegada.isoformat(), salida.isoformat(), correo) not in res_demo)
+    return {"usuarios": Usuario.objects.exclude(correo__in=CORREOS_DEMO).count(), "publicaciones": len(ajenas),
+            "reservas": reservas_ajenas}
+
+
 class Command(BaseCommand):
     help = "Carga cuentas, publicaciones, revisiones, una restricción y reservas de demostración."
 
     def add_arguments(self, parser):
-        parser.add_argument("--reiniciar", action="store_true", help="Vacía toda la base (solo desarrollo) y vuelve a cargar los datos.")
+        parser.add_argument("--reiniciar", action="store_true",
+                            help="VACÍA TODA LA BASE (solo con DJANGO_DEBUG=1) y vuelve a cargar los datos. Pide escribir REINICIAR.")
+        parser.add_argument("--si", action="store_true", help="Con --reiniciar: no pide la confirmación.")
 
-    def handle(self, *args, reiniciar=False, **_):
+    def handle(self, *args, reiniciar=False, si=False, **_):
         Usuario = apps.get_model("identidad", "Usuario")
         if reiniciar:
             # evento_auditoria, reserva y pago tienen un trigger que rechaza TRUNCATE (RNF-E-CON-01). flush vacía
             # la base con TRUNCATE, así que solo en desarrollo se apagan esos triggers mientras corre.
             if not settings.DEBUG:
                 raise CommandError("--reiniciar solo se permite en desarrollo (DJANGO_DEBUG=1).")
+            self._confirmar_reinicio(si)
             with vaciado_permitido():
                 call_command("flush", interactive=False, verbosity=0)
         # Catálogos fijos (la misma carga de la migración; no duplica datos)
@@ -224,6 +253,28 @@ class Command(BaseCommand):
         with transaction.atomic():
             self._cargar()
         self.stdout.write(self.style.SUCCESS("Datos de demostración cargados. Contraseña de todas las cuentas: Clave1234"))
+
+    def _confirmar_reinicio(self, si: bool) -> None:
+        """Muestra qué base se va a vaciar y cuántos datos que no son de la demostración se pierden; sin --si, exige
+        escribir REINICIAR. Cualquier otra respuesta (o no poder preguntar) cancela sin tocar la base."""
+        ajena = contar_datos_ajenos()
+        b = connection.settings_dict
+        self.stdout.write(self.style.WARNING(
+            f"--reiniciar VACÍA TODA LA BASE {b.get('NAME')} en {b.get('HOST') or 'localhost'}:{b.get('PORT') or 5432}.\n"
+            f"Se borrarán {ajena['usuarios']} usuarios, {ajena['publicaciones']} publicaciones y {ajena['reservas']} reservas "
+            f"que NO son de la demostración (además de todos los datos de la demostración)."))
+        if si:
+            return
+        try:
+            respuesta = self.leer("Escribe REINICIAR para continuar: ")
+        except EOFError:
+            respuesta = ""
+        if respuesta.strip() != "REINICIAR":
+            raise CommandError("Cancelado: la base no se tocó.")
+
+    @staticmethod
+    def leer(pregunta: str) -> str:
+        return input(pregunta)
 
     def _cargar(self):
         Usuario = apps.get_model("identidad", "Usuario")

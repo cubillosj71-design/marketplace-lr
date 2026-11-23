@@ -462,3 +462,20 @@ ol.reglas { margin: 0; padding-left: 20px; display: grid; gap: 4px; }
   .galeria-miniaturas button { flex-basis: 76px; height: 56px; }
   .galeria-flecha { width: 34px; height: 34px; }
 }
+
+/* Mis reservas (MAL-34): tarjeta con portada y detalle de la reserva */
+.tarjeta-reserva { display: grid; grid-template-columns: 180px 1fr; gap: 18px; padding: 16px; cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s; }
+.tarjeta-reserva:hover { border-color: var(--border-strong); }
+.tarjeta-reserva > .portada-reserva { height: 100%; min-height: 130px; }
+.detalle-reserva { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 20px; align-items: start; }
+.portada-reserva.portada-grande { height: 260px; }
+@media (max-width: 860px) {
+  .detalle-reserva { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
+  .tarjeta-reserva { grid-template-columns: 1fr; gap: 12px; padding: 12px; }
+  .tarjeta-reserva > .portada-reserva { min-height: 0; height: 170px; }
+  .portada-reserva.portada-grande { height: 200px; }
+}
+.empty-state .btn svg { width: 18px; height: 18px; color: inherit; }
+.badge-EN_CURSO { background: var(--accent-soft); color: var(--accent-hover); }
