@@ -2,14 +2,12 @@ import { Check, KeyRound, Minus, PowerOff, ShieldCheck, UserRound } from "lucide
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { catalogoApi, identidadApi, leerError, misReservasApi, type ReservaResumen } from "../api";
-import { PERMISO_TXT, RESERVA_TXT, ROL_TXT, TELEFONO_VALIDO, fechaLarga, iniciales, isoDia, soloNumeros } from "../data";
+import { PERMISO_TXT, RESERVA_TXT, ROL_TXT, TELEFONO_VALIDO, esReservaPendiente, fechaLarga, hoyEnColombia, iniciales, soloNumeros } from "../data";
 import { Page } from "../layout";
 import { useStore, useToast } from "../store";
 import { Alert, Field, Modal } from "../ui";
 
 /* ---------------- CU-USU-04 Actualizar perfil · CU-USU-05 Desactivar cuenta ---------------- */
-const PENDIENTES = new Set(["CONFIRMADA", "EN_REVISION"]);
-
 export function Perfil() {
   const { usuario, tiene, actualizarUsuario, olvidarSesion } = useStore();
   const toast = useToast();
@@ -30,13 +28,13 @@ export function Perfil() {
   useEffect(() => {
     catalogoApi.ciudades().then((r) => setCiudades(r.data.map((c) => c.nombre))).catch(() => {});
     // CA-04.2, CA-04.5: reservas CONFIRMADAS o EN_REVISION cuya salida no ha pasado, como huésped o en sus alojamientos
-    const hoy = isoDia(new Date());
+    const hoy = hoyEnColombia();
     const fuentes = [
       ...(comoHuesped ? [misReservasApi.mias()] : []),
       ...(comoAnfitrion ? [misReservasApi.deMisAlojamientos()] : []),
     ];
     Promise.all(fuentes)
-      .then((rs) => setPendientes(rs.flatMap((r) => r.data).filter((x) => PENDIENTES.has(x.estado) && x.fecha_salida >= hoy)))
+      .then((rs) => setPendientes(rs.flatMap((r) => r.data).filter((x) => esReservaPendiente(x, hoy))))
       .catch(() => {});
   }, [comoHuesped, comoAnfitrion]);
 

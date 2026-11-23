@@ -88,8 +88,37 @@ source .venv/bin/activate       # en macOS o Linux
 pip install -r requirements-dev.txt
 copy .env.example .env          # o cp en macOS/Linux, y ajusta los valores
 python manage.py migrate
+python manage.py cargar_demo     # solo la primera vez: agrega la demostración, nunca borra nada
 python manage.py runserver
 ```
+
+#### Qué base usa el backend
+
+El backend usa **solo** la base de `DATABASE_URL` en `backend/.env` (o la variable de entorno del mismo nombre, que
+tiene prioridad sobre el archivo). En este equipo hay dos servidores PostgreSQL posibles:
+
+| Servidor | Puerto | Uso |
+|---|---|---|
+| Docker, contenedor `marketplace-db` (PostgreSQL 16) | **55432** | **El del proyecto.** `DATABASE_URL=postgres://marketplace:…@localhost:55432/marketplace_db` |
+| PostgreSQL instalado en Windows | 5432 / 5433 | No lo usa el proyecto. No lo detengas ni lo borres. |
+
+Antes de levantar el backend, comprueba a cuál apunta:
+
+```
+docker start marketplace-db
+python manage.py mostrar_base
+```
+
+`mostrar_base` muestra el servidor, el puerto, el nombre de la base, cuántos usuarios, publicaciones y reservas tiene, y
+la fecha del primer evento de auditoría. Si esa fecha es de hace un momento, la base se vació en ese momento. Si
+`docker start` falla, el backend no tiene base: no levantes otro PostgreSQL en el puerto 55432, porque el backend se
+conectaría a él sin avisar y lo que crees se guardaría en otra base.
+
+**No vacíes la base al arrancar.** El arranque normal es `docker start marketplace-db`, `python manage.py migrate` (no
+borra datos) y `python manage.py runserver`. `python manage.py cargar_demo --reiniciar` **borra todo** (también lo que
+hayas creado): solo funciona con `DJANGO_DEBUG=1`, muestra antes cuántos usuarios, publicaciones y reservas que no son
+de la demostración se van a perder y pide escribir `REINICIAR`. Para pruebas o capturas usa otra base, por ejemplo
+`marketplace_capturas`, con `DATABASE_URL` en la terminal.
 
 Pruebas y revisión de fronteras:
 

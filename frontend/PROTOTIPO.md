@@ -16,7 +16,9 @@ no hay datos locales ni copias en el navegador.
 ## Cómo correrlo
 
 ```bash
-cd backend && python manage.py migrate && python manage.py cargar_demo --reiniciar && python manage.py runserver
+cd backend && python manage.py migrate && python manage.py runserver
+# Solo la primera vez: python manage.py cargar_demo (agrega la demostración y nunca borra nada).
+# cargar_demo --reiniciar BORRA TODA LA BASE, también lo que hayas creado: no lo pongas en el arranque.
 cd frontend
 npm install
 npm run dev        # http://localhost:5173 ; Vite reenvía /api/* a http://localhost:8000

@@ -18,7 +18,11 @@ pytest -q                               # pruebas automáticas
 lint-imports                            # fronteras entre servicios (ADR-001)
 ```
 
-`python manage.py cargar_demo --reiniciar` vacía la base y vuelve a cargar los datos. Solo para desarrollo.
+`cargar_demo` sin opciones nunca borra ni cambia datos: si la demostración ya está, no hace nada.
+`python manage.py cargar_demo --reiniciar` **vacía toda la base** (también lo que hayan creado los usuarios) y vuelve a
+cargar la demostración: solo con `DJANGO_DEBUG=1`, muestra antes cuántos usuarios, publicaciones y reservas que no son
+de la demostración se borrarán y pide escribir `REINICIAR` (`--si` no pregunta). No es parte del arranque.
+`python manage.py mostrar_base` dice a qué base apunta el backend (ver "Qué base usa el backend" en el README).
 
 Cuentas de ejemplo: `admin@inversioneslr.com`, `anfitrion@correo.com`, `huesped@correo.com`,
 `pedro@correo.com`, `sofia@correo.com` y `restringido@correo.com` (restringida hasta el 31/12/2026).

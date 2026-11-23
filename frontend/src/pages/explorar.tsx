@@ -1,5 +1,5 @@
 import { ArrowLeft, CalendarX, Check, ChevronLeft, ChevronRight, ImageIcon, Lock, MapPin, Search, Star, Users } from "lucide-react";
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   busquedaApi, catalogoApi, leerError, reservasApi,
@@ -115,6 +115,7 @@ function Explorador({ base }: { base: string }) {
   const [lista, setLista] = useState<ResultadoBusqueda[] | null>(null);
   const [error, setError] = useState("");
   const [cargando, setCargando] = useState(false);
+  const ultima = useRef(0);  // solo cuenta la respuesta de la última búsqueda: una anterior más lenta no la pisa
 
   const buscar = async (filtros = f) => {
     setError("");
@@ -127,10 +128,11 @@ function Explorador({ base }: { base: string }) {
       precio_min: filtros.precio_min ? Number(filtros.precio_min) : undefined,
       precio_max: filtros.precio_max ? Number(filtros.precio_max) : undefined, servicios: filtros.servicios,
     };
+    const n = ++ultima.current;
     setCargando(true);
-    try { setLista((await busquedaApi.buscar(consulta)).data); }
-    catch (e) { setError(leerError(e).error); }
-    finally { setCargando(false); }
+    try { const r = await busquedaApi.buscar(consulta); if (n === ultima.current) setLista(r.data); }
+    catch (e) { if (n === ultima.current) setError(leerError(e).error); }
+    finally { if (n === ultima.current) setCargando(false); }
   };
 
   useEffect(() => {

@@ -78,6 +78,15 @@ export function isoDia(d: Date) {
   return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`;
 }
 
+/** Fecha de hoy en Colombia ("2026-11-22"), la misma que usa el backend (reloj.hoy(), America/Bogota). */
+export const hoyEnColombia = () =>
+  new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+
+/** Reserva pendiente: CONFIRMADA o EN_REVISION cuya salida no ha pasado (CA-04.2, CA-04.5). La usan el perfil (no deja
+ *  desactivar la cuenta) y la pestaña Próximas de Mis reservas. */
+export const esReservaPendiente = (r: { estado: string; fecha_salida: string }, hoy = hoyEnColombia()) =>
+  (r.estado === "CONFIRMADA" || r.estado === "EN_REVISION") && r.fecha_salida >= hoy;
+
 /** "2026-12-05" -> "5 dic" */
 export const fechaLarga = (iso: string) =>
   new Date(iso.slice(0, 10) + "T12:00:00").toLocaleDateString("es-CO", { day: "numeric", month: "short" }).replace(".", "");

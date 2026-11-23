@@ -10,7 +10,7 @@ from __future__ import annotations
 from decimal import Decimal
 
 from django.db import transaction
-from django.db.models import Count, ProtectedError
+from django.db.models import Count, OuterRef, ProtectedError, Subquery
 
 from apps.auditoria import services as auditoria
 from apps.comun.errores import Conflicto, ErrorNegocio, NoEncontrado, SinPermiso
@@ -67,13 +67,30 @@ def listar_catalogos() -> dict:
         "ciudades": list(Ciudad.objects.values("id", "nombre", "departamento")),
         "tipos": list(TipoAlojamiento.objects.values("id", "nombre")),
         "servicios": list(Servicio.objects.values("id", "nombre")),
-        "politicas": [
-            {"id": p.id, "nombre": p.nombre, "descripcion": p.descripcion,
-             "tramos": [{"dias_minimos": t.dias_minimos, "dias_maximos": t.dias_maximos,
-                         "porcentaje_devolucion": f"{t.porcentaje_devolucion:.2f}"} for t in p.tramos.order_by("-dias_minimos")]}
-            for p in PoliticaCancelacion.objects.filter(activa=True).prefetch_related("tramos").order_by("id")
-        ],
+        "politicas": [_politica_dict(p) for p in PoliticaCancelacion.objects.filter(activa=True).prefetch_related("tramos").order_by("id")],
     }
+
+
+def _politica_dict(p: PoliticaCancelacion) -> dict:
+    return {"id": p.id, "nombre": p.nombre, "descripcion": p.descripcion,
+            "tramos": [{"dias_minimos": t.dias_minimos, "dias_maximos": t.dias_maximos,
+                        "porcentaje_devolucion": f"{t.porcentaje_devolucion:.2f}"}
+                       for t in sorted(p.tramos.all(), key=lambda t: -t.dias_minimos)]}
+
+
+def obtener_politica_con_tramos(politica_id: int) -> dict | None:
+    """La política de cancelación con sus tramos, de mayor a menor anticipación (detalle de la reserva)."""
+    p = PoliticaCancelacion.objects.prefetch_related("tramos").filter(pk=politica_id).first()
+    return _politica_dict(p) if p else None
+
+
+def obtener_portadas_y_ciudades(ids) -> dict[int, dict]:
+    """{id: {"portada", "ciudad"}} de varias publicaciones en una sola consulta (listado de Mis reservas).
+    La portada es la imagen de menor orden (la 1); None si la publicación no tiene imágenes o ciudad."""
+    portada = ImagenPublicacion.objects.filter(publicacion_id=OuterRef("pk")).order_by("orden", "id").values("ruta")[:1]
+    filas = (Publicacion.objects.filter(pk__in=list(ids)).annotate(portada=Subquery(portada))
+             .values("id", "portada", "ciudad__nombre"))
+    return {f["id"]: {"portada": f["portada"], "ciudad": f["ciudad__nombre"]} for f in filas}
 
 
 def listar_ids_publicaciones_de(anfitrion_id: int) -> list[int]:
