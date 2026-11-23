@@ -166,6 +166,104 @@ PUBLICACIONES = [
         ["macarena-fachada", "macarena-sala", "macarena-habitacion", "macarena-calle", "macarena-vista"],
         servicios_adicionales=[{"nombre": "Desayuno", "precio": Decimal(22000)}],
     ), None),
+    # ---- Tercera tanda (MAL-35, índices 20 a 33): una ACTIVA en cada ciudad que no tenía ninguna, para que ninguna
+    # búsqueda por ciudad salga vacía (las 12 de la migración 0006 más Guatavita y Villa de Leyva)
+    ("valentina@correo.com", "2026-03-05", "ACTIVA", pub(
+        "Apartamento frente al mar en San Andrés", "Apartamento", "San Andrés", "Spratt Bight, avenida Colombia",
+        "Apartamento con terraza frente a la playa de Spratt Bight y al mar de siete colores, a pocos minutos del muelle "
+        "de las lanchas a Johnny Cay.",
+        4, 420000, 70000, ["Wi-Fi", "Aire acondicionado", "Cocina", "TV", "Agua caliente"], ["No fumar", "Sin fiestas", "No se permiten mascotas"],
+        ["sanandres-playa", "sanandres-sala", "sanandres-habitacion", "sanandres-bano", "sanandres-cayo"],
+        descuento_porcentaje=Decimal(10), descuento_min_noches=5,
+        servicios_adicionales=[{"nombre": "Tour a Johnny Cay y el Acuario", "precio": Decimal(90000)}],
+    ), None),
+    ("valentina@correo.com", "2026-01-25", "ACTIVA", pub(
+        "Casa en El Prado", "Casa", "Barranquilla", "El Prado, carrera 54 con calle 64",
+        "Casa republicana de dos pisos en el barrio El Prado, con jardín y terraza, cerca del Museo del Caribe y del "
+        "recorrido del Carnaval.",
+        8, 350000, 60000, ["Wi-Fi", "Aire acondicionado", "Parqueadero", "Cocina", "Lavadora"], ["No fumar", "Silencio después de las 11 p. m."],
+        ["prado-fachada", "prado-sala", "prado-habitacion", "prado-cocina", "prado-barrio"],
+    ), None),
+    ("julian@correo.com", "2026-03-18", "ACTIVA", pub(
+        "Apartamento en Cabecera", "Apartamento", "Bucaramanga", "Cabecera del Llano, carrera 35 con calle 48",
+        "Apartamento de dos habitaciones en Cabecera, a una cuadra de parques y centros comerciales, con portería las 24 horas.",
+        4, 200000, 45000, ["Wi-Fi", "Aire acondicionado", "Cocina", "TV", "Parqueadero"], ["No fumar", "Sin fiestas"],
+        ["cabecera-edificio", "cabecera-sala", "cabecera-habitacion", "cabecera-cocina", "cabecera-parque"],
+        descuento_porcentaje=Decimal(8), descuento_min_noches=7,
+    ), None),
+    ("julian@correo.com", "2026-04-08", "ACTIVA", pub(
+        "Cabaña junto al río Fonce", "Cabaña", "San Gil", "Vereda Ojo de Agua, vía al Páramo",
+        "Cabaña de madera a orillas del río Fonce, a diez minutos del parque El Gallineral y de los planes de rafting.",
+        5, 240000, 50000, ["Wi-Fi", "Parqueadero", "Cocina", "Agua caliente"], ["No fumar", "Fogatas solo en el área marcada"],
+        ["sangil-rio", "sangil-sala", "sangil-habitacion", "sangil-bano", "sangil-vista"],
+        servicios_adicionales=[{"nombre": "Traslado al rafting", "precio": Decimal(40000)}],
+    ), None),
+    ("julian@correo.com", "2026-02-14", "ACTIVA", pub(
+        "Casa colonial en Barichara", "Casa", "Barichara", "Calle 5 con carrera 7, a dos cuadras del parque principal",
+        "Casa de tapia pisada con patio central y vista al cañón del río Suárez, en el centro histórico de Barichara.",
+        6, 420000, 70000, ["Wi-Fi", "Cocina", "Agua caliente", "Lavadora"], ["No fumar", "Silencio después de las 10 p. m."],
+        ["barichara-calle", "barichara-sala", "barichara-habitacion", "barichara-bano", "barichara-vista"],
+        servicios_adicionales=[{"nombre": "Desayuno santandereano", "precio": Decimal(28000)}],
+    ), None),
+    ("sofia@correo.com", "2026-05-02", "ACTIVA", pub(
+        "Casa de balcones en Jardín", "Casa", "Jardín", "Calle 9 con carrera 4, frente al parque principal",
+        "Casa típica antioqueña de balcones de colores, a media cuadra de la basílica y del parque de Jardín.",
+        6, 300000, 60000, ["Wi-Fi", "Cocina", "Agua caliente", "TV"], ["No fumar", "Sin fiestas"],
+        ["jardin-balcones", "jardin-sala", "jardin-habitacion", "jardin-cocina", "jardin-basilica"],
+    ), None),
+    ("sofia@correo.com", "2026-06-12", "ACTIVA", pub(
+        "Casa con piscina en Santa Fe de Antioquia", "Casa", "Santa Fe de Antioquia", "Barrio Jesús, calle de la Amargura",
+        "Casa colonial con piscina y patio de palmas, a pocas cuadras de la plaza mayor y del Puente de Occidente.",
+        8, 480000, 80000, ["Wi-Fi", "Aire acondicionado", "Piscina", "Cocina", "Parqueadero"], ["No fumar", "Sin fiestas", "Niños en la piscina con un adulto"],
+        ["santafe-fachada", "santafe-sala", "santafe-habitacion", "santafe-bano", "santafe-puente"],
+        descuento_porcentaje=Decimal(12), descuento_min_noches=7,
+    ), None),
+    ("sofia@correo.com", "2026-03-22", "ACTIVA", pub(
+        "Cabaña cafetera en Salento", "Cabaña", "Salento", "Vereda Palestina, vía al Valle de Cocora",
+        "Cabaña en una finca cafetera con vista a las montañas del Quindío, a quince minutos del Valle de Cocora.",
+        4, 260000, 50000, ["Wi-Fi", "Parqueadero", "Cocina", "Agua caliente"], ["No fumar", "Sin mascotas"],
+        ["salento-cocora", "salento-sala", "salento-habitacion", "salento-bano", "salento-fachada"],
+        servicios_adicionales=[{"nombre": "Recorrido por la finca cafetera", "precio": Decimal(45000)}],
+    ), None),
+    ("pedro@correo.com", "2026-02-26", "ACTIVA", pub(
+        "Habitación en el centro histórico de Popayán", "Habitación", "Popayán", "Calle 4 con carrera 6, centro histórico",
+        "Habitación privada con baño en una casona blanca del centro histórico, a dos cuadras del parque Caldas.",
+        2, 110000, 20000, ["Wi-Fi", "Agua caliente", "TV"], ["No fumar", "Silencio después de las 10 p. m."],
+        ["popayan-fachada", "popayan-habitacion", "popayan-bano", "popayan-sala", "popayan-tejados"],
+    ), None),
+    ("pedro@correo.com", "2026-04-20", "ACTIVA", pub(
+        "Habitación cerca de la Plaza Mayor", "Habitación", "Villa de Leyva", "Calle 12 con carrera 9, a una cuadra de la Plaza Mayor",
+        "Habitación con baño privado en una casa colonial, a una cuadra de la Plaza Mayor de Villa de Leyva.",
+        2, 150000, 25000, ["Wi-Fi", "Agua caliente"], ["No fumar", "Llegada antes de las 10 p. m."],
+        ["leyva2-calle", "leyva2-habitacion", "leyva2-bano", "leyva2-sala", "leyva2-plaza"],
+        servicios_adicionales=[{"nombre": "Desayuno boyacense", "precio": Decimal(20000)}],
+    ), None),
+    ("pedro@correo.com", "2026-05-15", "ACTIVA", pub(
+        "Cabaña junto al embalse de Tominé", "Cabaña", "Guatavita", "Vereda Potrero Largo, orilla del embalse",
+        "Cabaña de madera a la orilla del embalse de Tominé, a diez minutos del pueblo de Guatavita, con chimenea.",
+        4, 280000, 50000, ["Wi-Fi", "Parqueadero", "Cocina", "Agua caliente"], ["No fumar", "Sin fiestas"],
+        ["tomine-embalse", "tomine-sala", "tomine-habitacion", "tomine-cocina", "tomine-lancha"],
+    ), None),
+    ("anfitrion@correo.com", "2026-07-08", "ACTIVA", pub(
+        "Apartamento en Pereira", "Apartamento", "Pereira", "Pinares, avenida Circunvalar con calle 10",
+        "Apartamento con balcón y vista a la ciudad, cerca de la avenida Circunvalar y a diez minutos del centro.",
+        4, 190000, 40000, ["Wi-Fi", "Cocina", "Lavadora", "TV", "Agua caliente"], ["No fumar", "Sin fiestas"],
+        ["pereira-vista", "pereira-sala", "pereira-habitacion", "pereira-cocina", "pereira-plaza"],
+    ), None),
+    ("anfitrion@correo.com", "2026-08-03", "ACTIVA", pub(
+        "Apartamento en Chipre", "Apartamento", "Manizales", "Chipre, avenida 12 de Octubre",
+        "Apartamento en el barrio Chipre, a pasos del Monumento a los Colonizadores y de la torre de Chipre, con atardeceres "
+        "sobre la cordillera.",
+        3, 180000, 40000, ["Wi-Fi", "Cocina", "Agua caliente", "TV"], ["No fumar", "Silencio después de las 10 p. m."],
+        ["chipre-vista", "chipre-sala", "chipre-habitacion", "chipre-bano", "chipre-torre"],
+    ), None),
+    ("anfitrion@correo.com", "2026-02-02", "ACTIVA", pub(
+        "Casa campestre en los Llanos", "Casa", "Villavicencio", "Vereda La Llanerita, vía a Puerto López",
+        "Casa campestre con piscina y kiosco, rodeada de llanura, a veinte minutos de Villavicencio.",
+        8, 350000, 70000, ["Wi-Fi", "Aire acondicionado", "Piscina", "Parqueadero", "Cocina"], ["No fumar", "Sin música después de las 11 p. m."],
+        ["llanos-caballo", "llanos-sala", "llanos-habitacion", "llanos-cocina", "llanos-atardecer"],
+        servicios_adicionales=[{"nombre": "Asado llanero", "precio": Decimal(60000)}],
+    ), None),
 ]
 # Reservas por el flujo real (cotizar y reservar con el pago simulado). El reloj de la aplicación fija la fecha de
 # creación, que es la que usan el tablero y los reportes (RF-D-ADM-05). Octubre y noviembre de 2026 muestran todos
@@ -202,6 +300,22 @@ RESERVAS = [  # índice de la publicación, llegada, salida, huéspedes, creada,
     (19, "2026-07-03", "2026-07-06", 2, "2026-06-20", ("2026-06-29", "Viaje de trabajo aplazado"), "santiago@correo.com"),  # 4 días: 50 %
     (19, "2026-08-14", "2026-08-17", 3, "2026-08-01", None, "mariana@correo.com"),     # La Macarena: COMPLETADA
     (19, "2026-09-18", "2026-09-21", 2, "2026-09-03", None, "huesped@correo.com"),     # La Macarena: COMPLETADA
+    # ---- Tercera tanda (MAL-35): reservas en las ciudades nuevas, creadas de febrero a septiembre de 2026. Pedro sigue
+    # sin reservas pendientes (las de Popayán y Villa de Leyva ya terminaron).
+    (20, "2026-05-08", "2026-05-12", 2, "2026-04-10", None, "mariana@correo.com"),     # San Andrés: COMPLETADA
+    (20, "2027-01-22", "2027-01-27", 3, "2026-09-12", None, "camila@correo.com"),      # San Andrés: CONFIRMADA (5 noches, 10 %)
+    (21, "2026-02-20", "2026-02-23", 6, "2026-02-05", None, "santiago@correo.com"),    # El Prado: COMPLETADA
+    (22, "2026-12-11", "2026-12-14", 2, "2026-09-05", None, "huesped@correo.com"),     # Cabecera: CONFIRMADA
+    (23, "2026-07-10", "2026-07-13", 4, "2026-06-15", ("2026-07-05", "Cambio en el itinerario"), "santiago@correo.com"),  # 5 días: 50 %
+    (24, "2026-08-28", "2026-08-31", 5, "2026-08-02", None, "camila@correo.com"),      # Barichara: COMPLETADA
+    (25, "2026-09-11", "2026-09-14", 3, "2026-08-20", None, "mariana@correo.com"),     # Jardín: COMPLETADA
+    (26, "2026-12-30", "2027-01-06", 6, "2026-09-18", None, "huesped@correo.com"),     # Santa Fe: CONFIRMADA (7 noches, 12 %)
+    (27, "2026-04-24", "2026-04-27", 2, "2026-04-02", None, "huesped@correo.com"),     # Salento: COMPLETADA
+    (28, "2026-04-01", "2026-04-04", 1, "2026-03-10", None, "santiago@correo.com"),    # Popayán, Semana Santa: COMPLETADA
+    (29, "2026-06-19", "2026-06-21", 2, "2026-06-01", None, "mariana@correo.com"),     # Villa de Leyva: COMPLETADA
+    (31, "2026-12-18", "2026-12-21", 2, "2026-09-22", None, "camila@correo.com"),      # Pereira: CONFIRMADA
+    (32, "2026-09-25", "2026-09-28", 2, "2026-09-08", None, "santiago@correo.com"),    # Chipre: COMPLETADA
+    (33, "2026-03-27", "2026-03-30", 6, "2026-03-05", None, "camila@correo.com"),      # Llanos: COMPLETADA
 ]
 
 
@@ -247,6 +361,7 @@ class Command(BaseCommand):
                 call_command("flush", interactive=False, verbosity=0)
         # Catálogos fijos (la misma carga de la migración; no duplica datos)
         import_module("apps.catalogo.migrations.0002_catalogos_iniciales").cargar(apps, None)
+        import_module("apps.catalogo.migrations.0006_mas_ciudades").agregar(apps, None)
         if not reiniciar and Usuario.objects.filter(correo="admin@inversioneslr.com").exists():
             self.stdout.write(self.style.WARNING("Los datos de demostración ya existen. Usa --reiniciar para vaciar la base y cargarlos de nuevo."))
             return
