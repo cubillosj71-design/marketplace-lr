@@ -10,7 +10,7 @@ Cada evento se entrega por dos señales, como en el diagrama C4 nivel 3:
 - `evento_dominio`: DESPUÉS de confirmar la transacción (transaction.on_commit). La usa Notificaciones para crear
   los avisos. Se envía con send_robust: si un receptor falla, la operación ya confirmada no se rompe.
 
-La auditoría NO usa estos eventos: cada módulo llama a auditoria.services.registrar() en la misma transacción
+La auditoría NO usa estos eventos: cada módulo llama a auditoria.services.registrar_evento() en la misma transacción
 del cambio (C4 nivel 3, vista b).
 """
 
@@ -51,7 +51,7 @@ def publicar(
     detalle: dict[str, Any] | None = None,
 ) -> None:
     if nombre not in EVENTOS_DE_DOMINIO:
-        raise ValueError(f"{nombre} no es un evento de dominio del diagrama; para auditar usa auditoria.services.registrar().")
+        raise ValueError(f"{nombre} no es un evento de dominio del diagrama; para auditar usa auditoria.services.registrar_evento().")
     datos = dict(nombre=nombre, usuario_id=usuario_id, entidad=entidad, entidad_id=entidad_id, detalle=detalle or {})
     evento_dominio_en_transaccion.send(sender=nombre, **datos)  # misma transacción: si falla, se revierte
     transaction.on_commit(lambda: _despues_de_confirmar(nombre, datos))

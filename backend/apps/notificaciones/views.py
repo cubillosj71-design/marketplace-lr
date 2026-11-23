@@ -14,7 +14,7 @@ class Bandeja(APIView):
     permission_classes = [RequierePermiso("notificaciones.ver")]
 
     def get(self, request):
-        return Response(services.bandeja(request.user))
+        return Response(services.consultar_bandeja(request.user))
 
 
 class MarcarLeida(APIView):

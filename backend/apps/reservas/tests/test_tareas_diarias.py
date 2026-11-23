@@ -24,7 +24,7 @@ def con_token(settings):
 def test_sin_token_o_con_token_incorrecto_responde_403_y_queda_registrado(con_token, cliente, encabezados):
     r = cliente.post(RUTA, **encabezados)
     assert r.status_code == 403
-    intento = auditoria.consultar(accion="AccesoDenegado").get()
+    intento = auditoria.consultar_eventos(accion="AccesoDenegado").get()
     assert intento.exitoso is False and intento.detalle["ruta"] == RUTA
 
 
@@ -46,7 +46,7 @@ def test_con_token_completa_y_cancela_en_orden(con_token, cliente, alojamiento_7
     Reserva = apps.get_model("reservas", "Reserva")
     assert Reserva.objects.get(pk=vencida["id"]).estado == "COMPLETADA"
     assert Reserva.objects.get(pk=en_revision["id"]).estado == "CANCELADA"
-    assert auditoria.consultar(accion="TareasDiarias").get().detalle["origen"] == "interno"
+    assert auditoria.consultar_eventos(accion="TareasDiarias").get().detalle["origen"] == "interno"
 
 
 def test_concilia_los_pagos_en_verificacion(con_token, cliente, alojamiento_740, reservar, reloj, monkeypatch):
@@ -71,7 +71,7 @@ def test_el_comando_hace_lo_mismo(alojamiento_740, reservar, reloj):
     call_command("tareas_diarias", stdout=salida)
     assert "Reservas completadas: 1" in salida.getvalue()
     assert apps.get_model("reservas", "Reserva").objects.get(pk=r["id"]).estado == "COMPLETADA"
-    assert auditoria.consultar(accion="TareasDiarias").get().detalle["origen"] == "comando"
+    assert auditoria.consultar_eventos(accion="TareasDiarias").get().detalle["origen"] == "comando"
 
 
 def test_salud_sigue_publica(cliente):

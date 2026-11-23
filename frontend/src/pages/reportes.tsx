@@ -16,7 +16,7 @@ const REPORTES = [
   { tipo: "publicaciones", nombre: "Publicaciones", descripcion: "Creadas en el periodo, con sus reservas e ingresos." },
   { tipo: "reservas", nombre: "Reservas", descripcion: "Creadas en el periodo, con su estado, devolución, monto bruto e ingreso." },
   { tipo: "ingresos", nombre: "Ingresos estimados", descripcion: "Monto bruto e ingreso de la plataforma por mes." },
-  { tipo: "demanda", nombre: "Demanda", descripcion: "Reservas y monto bruto por ciudad y por tipo de alojamiento." },
+  { tipo: "demanda", nombre: "Demanda", descripcion: "Reservas y monto bruto por día, ciudad y tipo de alojamiento." },
 ] as const;
 type TipoReporte = (typeof REPORTES)[number]["tipo"];
 
@@ -33,7 +33,8 @@ export function Reportes() {
   const [descargando, setDescargando] = useState(false);
 
   useEffect(() => {
-    Promise.all([catalogoApi.ciudades(), catalogoApi.tipos()]).then(([c, t]) => setCat({ ciudades: c.data, tipos: t.data })).catch(() => {});
+    Promise.all([catalogoApi.ciudades(), catalogoApi.tipos()]).then(([c, t]) => setCat({ ciudades: c.data, tipos: t.data }))
+      .catch((e) => setError(`No se pudieron cargar las ciudades y los tipos para los filtros: ${leerError(e).error}`));
   }, []);
 
   const descargar = async () => {
@@ -82,7 +83,7 @@ export function Reportes() {
                 <option value="">Todos</option>{(Object.keys(ROL_TXT) as Rol[]).map((r) => <option key={r} value={r}>{ROL_TXT[r]}</option>)}
               </select></Field>
               <Field label="Estado de la cuenta"><select className="select" value={filtros.estado_cuenta} onChange={(e) => set("estado_cuenta", e.target.value)}>
-                <option value="">Todos</option>{["ACTIVA", "DESACTIVADA", "RESTRINGIDA"].map((e) => <option key={e} value={e}>{e}</option>)}
+                <option value="">Todos</option>{([["ACTIVA", "Activa"], ["DESACTIVADA", "Desactivada"], ["RESTRINGIDA", "Restringida"]] as const).map(([e, t]) => <option key={e} value={e}>{t}</option>)}
               </select></Field>
             </div>
           )}

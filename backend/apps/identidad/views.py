@@ -14,6 +14,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.comun import rbac
+from apps.comun.entrada import texto_de
 from apps.comun.errores import ErrorNegocio
 from apps.comun.eventos import ip_de
 from apps.comun.permisos import RequierePermiso
@@ -41,11 +42,11 @@ class Registro(APIView):
         s = RegistroSerializer(data=request.data)
         s.is_valid(raise_exception=True)
         d = s.validated_data
-        u = services.registrar(
+        u = services.registrar_usuario(
             nombre_completo=d["nombre_completo"], correo=d["correo"], telefono=d["telefono"], password=d["password"],
             rol=d["rol"], acepta_datos=d["acepta_datos"], ciudad=d.get("ciudad"), ip=ip_de(request),
         )
-        return Response(services.a_dict(u), status=status.HTTP_201_CREATED)
+        return Response(services.convertir_usuario_a_dict(u), status=status.HTTP_201_CREATED)
 
 
 COOKIE = settings.IDENTIDAD_COOKIE_RENOVACION
@@ -70,7 +71,7 @@ def _quitar_cookie(respuesta: Response) -> Response:
 
 def _refresh_de(request) -> str:
     # La cookie es la vía normal. El cuerpo se acepta para clientes sin navegador (pruebas, Postman).
-    return request.COOKIES.get(COOKIE["nombre"]) or request.data.get("refresh", "")
+    return request.COOKIES.get(COOKIE["nombre"]) or texto_de(request, "refresh")
 
 
 class Token(APIView):
@@ -82,7 +83,7 @@ class Token(APIView):
 
     def post(self, request):
         return _responder_con_sesion(
-            services.iniciar_sesion(request.data.get("correo"), request.data.get("password"), ip=ip_de(request))
+            services.iniciar_sesion(texto_de(request, "correo"), texto_de(request, "password"), ip=ip_de(request))
         )
 
 
@@ -128,7 +129,7 @@ class Recuperacion(APIView):
     throttle_scope = "recuperacion"
 
     def post(self, request):
-        token = services.solicitar_recuperacion(request.data.get("correo", ""), ip=ip_de(request))
+        token = services.solicitar_recuperacion(texto_de(request, "correo"), ip=ip_de(request))
         cuerpo = {"detalle": "Si el correo está registrado, aquí aparece un enlace que sirve una vez y vence en 20 minutos."}
         if token:
             cuerpo["enlace"] = f"{settings.FRONTEND_URL}/#/restablecer/{token}"
@@ -145,10 +146,10 @@ class RecuperacionToken(APIView):
     throttle_scope = "recuperacion_enlace"
 
     def get(self, request, token):
-        return Response({"estado": services.estado_enlace(token)})
+        return Response({"estado": services.consultar_estado_enlace(token)})
 
     def post(self, request, token):
-        services.restablecer_clave(token, request.data.get("password", ""), ip=ip_de(request))
+        services.restablecer_clave(token, texto_de(request, "password"), ip=ip_de(request))
         return Response({"detalle": "Tu contraseña se actualizó. Ya puedes iniciar sesión."})
 
 
@@ -164,9 +165,10 @@ class Permisos(APIView):
 
 class Roles(APIView):
     """GET /identidad/roles (RF-D-USU-02.1): la matriz completa de apps.comun.rbac, para la pantalla "Roles y
-    permisos". Es pública: no revela datos de nadie, solo qué puede hacer cada rol."""
+    permisos". Solo la ve el Administrador (usuarios.ver): describe cómo está protegida la plataforma, y eso no
+    es información para huéspedes, anfitriones ni visitantes. Cada quien ve sus propios permisos en /permisos."""
 
-    permission_classes = [AllowAny]
+    permission_classes = [RequierePermiso("usuarios.ver")]
 
     def get(self, request):
         orden = [rbac.VISITANTE, "HUESPED", "ANFITRION", "ADMINISTRADOR"]
@@ -187,13 +189,13 @@ class Perfil(APIView):
     permission_classes = [RequierePermiso("perfil.gestionar")]
 
     def get(self, request):
-        return Response(services.a_dict(request.user))
+        return Response(services.convertir_usuario_a_dict(request.user))
 
     def patch(self, request):
         s = PerfilSerializer(data=request.data, partial=True)
         s.is_valid(raise_exception=True)
         u = services.actualizar_perfil(request.user, s.validated_data, ip=ip_de(request))
-        return Response(services.a_dict(u))
+        return Response(services.convertir_usuario_a_dict(u))
 
 
 class Desactivar(APIView):
@@ -219,7 +221,7 @@ class RestriccionAdmin(APIView):
     def post(self, request, usuario_id):
         s = RestriccionSerializer(data=request.data)
         s.is_valid(raise_exception=True)
-        r = services.restringir(request.user, usuario_id, s.validated_data["motivo"], s.validated_data.get("fecha_fin"), ip=ip_de(request))
+        r = services.restringir_usuario(request.user, usuario_id, s.validated_data["motivo"], s.validated_data.get("fecha_fin"), ip=ip_de(request))
         return Response(
             {"id": r.id, "usuario": usuario_id, "motivo": r.motivo, "fecha_inicio": r.fecha_inicio, "fecha_fin": r.fecha_fin},
             status=status.HTTP_201_CREATED,
@@ -239,4 +241,4 @@ class UsuariosAdmin(APIView):
         rol = request.query_params.get("rol") or None
         if rol and rol not in ("HUESPED", "ANFITRION", "ADMINISTRADOR"):
             raise ErrorNegocio("El rol debe ser HUESPED, ANFITRION o ADMINISTRADOR.", campo="rol")
-        return Response(services.usuarios_para_admin(rol, request.query_params.get("q")))
+        return Response(services.listar_usuarios_para_admin(rol, request.query_params.get("q")))

@@ -17,6 +17,8 @@ from reportlab.lib.units import mm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 VERDE = colors.HexColor("#0F766E")
+# Hoja "Detalle" del Excel: título (1), periodo y orden (2), vacía (3), encabezado (4), datos desde la 5
+FILA_CABECERA = 4
 
 
 @dataclass
@@ -26,6 +28,7 @@ class Reporte:
     columnas: list[str]
     filas: list[list]
     moneda: list[int] = field(default_factory=list)  # columnas en pesos: número en Excel, formato COP en PDF
+    orden: str = ""  # RF-D-ADM-05.2: "fecha de registro, ascendente; luego por código" (lo dice el encabezado)
     periodo: str = ""
     generado_por: str = ""
 
@@ -49,7 +52,7 @@ def pdf(r: Reporte) -> bytes:
     contenido = [
         Paragraph("Alojamientos LR", est["Title"].clone("t", alignment=0, textColor=VERDE, fontSize=18)),
         Paragraph(r.titulo, est["Heading2"]),
-        Paragraph(f"Periodo: {r.periodo}<br/>Generado por: {r.generado_por} · {_ahora()}", est["BodyText"]),
+        Paragraph(f"Periodo: {r.periodo}<br/>Ordenado por: {r.orden}<br/>Generado por: {r.generado_por} · {_ahora()}", est["BodyText"]),
         Spacer(1, 6 * mm),
     ]
     resumen = Table([["Indicador", "Valor"]] + [[k, str(v)] for k, v in r.resumen], colWidths=[95 * mm, 45 * mm], hAlign="LEFT")
@@ -86,30 +89,36 @@ def xlsx(r: Reporte) -> bytes:
     wb = Workbook()
     ws = wb.active
     ws.title = "Detalle"
-    ws.append(r.columnas)
+    ws.append([r.titulo])
+    ws["A1"].font = Font(bold=True, size=13)
+    ws.append([f"Periodo: {r.periodo} · Ordenado por: {r.orden}"])
+    ws.append([])
+    ws.append(r.columnas)  # fila FILA_CABECERA
     for f in r.filas:
         ws.append([float(v) if isinstance(v, Decimal) else v for v in f])
     relleno = PatternFill("solid", fgColor="0F766E")
-    for c in ws[1]:
+    for c in ws[FILA_CABECERA]:
         c.font, c.fill = Font(bold=True, color="FFFFFF"), relleno
     for i in r.moneda:
-        for celda in ws.iter_rows(min_row=2, min_col=i + 1, max_col=i + 1):
+        for celda in ws.iter_rows(min_row=FILA_CABECERA + 1, min_col=i + 1, max_col=i + 1):
             celda[0].number_format = '"$"#,##0'
     for i, nombre in enumerate(r.columnas, start=1):
         largo = max([len(nombre)] + [len(str(f[i - 1])) + 3 for f in r.filas])
         ws.column_dimensions[get_column_letter(i)].width = min(48, largo + 2)
-    ws.freeze_panes = "A2"
-    if r.filas:
-        ws.auto_filter.ref = ws.dimensions
+    # La fila de encabezado queda inmovilizada (y las de arriba) y las columnas llevan autofiltro
+    ws.freeze_panes = f"A{FILA_CABECERA + 1}"
+    ultima = get_column_letter(len(r.columnas))
+    ws.auto_filter.ref = f"A{FILA_CABECERA}:{ultima}{FILA_CABECERA + len(r.filas)}"
 
     rs = wb.create_sheet("Resumen")
     rs.append([r.titulo])
     rs["A1"].font = Font(bold=True, size=14)
     rs.append([f"Periodo: {r.periodo}"])
+    rs.append([f"Ordenado por: {r.orden}"])
     rs.append([f"Generado por: {r.generado_por} · {_ahora()}"])
     rs.append([])
     rs.append(["Indicador", "Valor"])
-    for c in rs[5]:
+    for c in rs[6]:
         c.font, c.fill = Font(bold=True, color="FFFFFF"), relleno
     for k, v in r.resumen:
         rs.append([k, v])

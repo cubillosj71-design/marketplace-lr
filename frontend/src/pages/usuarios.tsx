@@ -2,7 +2,7 @@ import { Check, KeyRound, Minus, PowerOff, ShieldCheck, UserRound } from "lucide
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { catalogoApi, identidadApi, leerError, misReservasApi, type ReservaResumen } from "../api";
-import { PERMISO_TXT, ROL_TXT, fechaLarga, iniciales, isoDia } from "../data";
+import { PERMISO_TXT, RESERVA_TXT, ROL_TXT, TELEFONO_VALIDO, fechaLarga, iniciales, isoDia, soloNumeros } from "../data";
 import { Page } from "../layout";
 import { useStore, useToast } from "../store";
 import { Alert, Field, Modal } from "../ui";
@@ -44,6 +44,7 @@ export function Perfil() {
     const er: Record<string, string> = {};
     if (!f.nombre.trim()) er.nombre = "El nombre no puede quedar vacío.";
     if (!f.telefono.trim()) er.telefono = "El teléfono no puede quedar vacío.";
+    else if (!TELEFONO_VALIDO(f.telefono)) er.telefono = "El teléfono debe tener entre 7 y 15 números.";
     setErr(er);
     if (Object.keys(er).length) return;
     try {
@@ -92,7 +93,7 @@ export function Perfil() {
               <input className="input" value={f.nombre} onChange={(e) => setF({ ...f, nombre: e.target.value })} />
             </Field>
             <Field label="Teléfono" error={err.telefono}>
-              <input className="input" value={f.telefono} onChange={(e) => setF({ ...f, telefono: e.target.value })} />
+              <input className="input" inputMode="numeric" maxLength={20} value={f.telefono} onChange={(e) => setF({ ...f, telefono: soloNumeros(e.target.value) })} />
             </Field>
             <Field label="Ciudad (opcional)" error={err.ciudad}>
               <select className="select" value={f.ciudad} onChange={(e) => setF({ ...f, ciudad: e.target.value })}>
@@ -115,7 +116,7 @@ export function Perfil() {
             </p>
           )}
           <div className="row-between">
-            <span className="subtle">El rol tampoco se cambia: cada cuenta tiene un único rol.</span>
+            <span />
             <button className="btn btn-primary" disabled={!cambiado} onClick={guardar}>Guardar cambios</button>
           </div>
         </section>
@@ -136,11 +137,11 @@ export function Perfil() {
             </p>
             {pendientes.length > 0 && (
               <Alert tipo="warn">
-                No puedes desactivarla: tienes {pendientes.length} {pendientes.length === 1 ? "reserva pendiente" : "reservas pendientes"} (CONFIRMADA o EN_REVISION)
+                No puedes desactivarla: tienes {pendientes.length} {pendientes.length === 1 ? "reserva pendiente" : "reservas pendientes"} (confirmadas o en revisión)
                 {comoAnfitrion ? " en tus alojamientos" : " como huésped"}.
                 <ul>
                   {pendientes.map((r) => (
-                    <li key={r.id}>{r.alojamiento}: {fechaLarga(r.fecha_llegada)} al {fechaLarga(r.fecha_salida)} ({r.estado})</li>
+                    <li key={r.id}>{r.alojamiento}: {fechaLarga(r.fecha_llegada)} al {fechaLarga(r.fecha_salida)} ({RESERVA_TXT[r.estado]?.toLowerCase()})</li>
                   ))}
                 </ul>
               </Alert>
@@ -242,7 +243,7 @@ export function Roles() {
               <tbody>
                 {filas.map((p) => (
                   <tr key={p}>
-                    <td>{PERMISO_TXT[p] ?? p}<br /><code className="subtle">{p}</code></td>
+                    <td>{PERMISO_TXT[p] ?? p}</td>
                     {roles.map((r) => (
                       <td key={r.rol} style={{ textAlign: "center", background: r.rol === actual ? "var(--accent-soft)" : undefined }}>
                         {porRol.get(r.rol)?.has(p)

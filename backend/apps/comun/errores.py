@@ -51,16 +51,23 @@ def manejar_excepcion(exc, contexto):
 
 
 def _auditar_falla(exc, contexto) -> None:
-    """RNF-O-OPE-01: la falla queda en la auditoría. Si ni eso se puede guardar (por ejemplo, la base
-    no responde), queda solo en el log y la respuesta sigue siendo el 500 controlado."""
-    from apps.auditoria import services as auditoria  # import tardío: comun se carga antes que las apps
-
     request = contexto.get("request")
     usuario = getattr(request, "user", None)
+    auditar_falla(exc, actor_id=getattr(usuario, "id", None), ip=ip_de(request), ruta=getattr(request, "path", None))
+
+
+def auditar_falla(exc: Exception, *, actor_id: int | None = None, ip: str | None = None, entidad: str | None = None,
+                  entidad_id: int | None = None, **detalle) -> None:
+    """RNF-O-OPE-01: la falla queda en la auditoría como ErrorOperacion, en su propia transacción. Si ni eso se
+    puede guardar (por ejemplo, la base no responde), queda solo en el log y quien llama sigue su camino.
+    La usan el manejador de la API (500 controlado) y las tareas en lote (una falla no detiene las demás)."""
+    from django.db import transaction
+
+    from apps.auditoria import services as auditoria  # import tardío: comun se carga antes que las apps
+
     try:
-        auditoria.registrar(
-            getattr(usuario, "id", None), "ErrorOperacion", exitoso=False, ip=ip_de(request),
-            detalle={"error": type(exc).__name__, "mensaje": str(exc)[:300], "ruta": getattr(request, "path", None)},
-        )
+        with transaction.atomic():
+            auditoria.registrar_evento(actor_id, "ErrorOperacion", exitoso=False, ip=ip, entidad=entidad, entidad_id=entidad_id,
+                                detalle={"error": type(exc).__name__, "mensaje": str(exc)[:300], **detalle})
     except Exception:  # noqa: BLE001
         log.exception("No se pudo registrar la falla en la auditoría")

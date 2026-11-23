@@ -11,7 +11,7 @@ USUARIOS = "/api/v1/admin/usuarios"
 
 def test_lista_con_activa_restringida_y_motivo(demo, entrar):
     lista = entrar("admin@inversioneslr.com").get(USUARIOS).json()
-    assert len(lista) == 6
+    assert len(lista) == 11
     restringido = next(u for u in lista if u["correo"] == "restringido@correo.com")
     assert restringido["activa"] is True and restringido["restringida"] is True
     assert "cobros por fuera" in restringido["motivo_restriccion"] and restringido["restriccion_hasta"]
@@ -22,8 +22,9 @@ def test_lista_con_activa_restringida_y_motivo(demo, entrar):
 @pytest.mark.parametrize("filtros,correos", [
     ({"q": "sofía"}, {"sofia@correo.com"}),
     ({"q": "PEDRO@"}, {"pedro@correo.com"}),
-    ({"rol": "HUESPED"}, {"huesped@correo.com"}),
-    ({"rol": "ANFITRION", "q": "a"}, {"anfitrion@correo.com", "pedro@correo.com", "sofia@correo.com", "restringido@correo.com"}),
+    ({"rol": "HUESPED"}, {"huesped@correo.com", "santiago@correo.com", "mariana@correo.com", "camila@correo.com"}),
+    ({"rol": "ANFITRION", "q": "a"}, {"anfitrion@correo.com", "pedro@correo.com", "sofia@correo.com", "restringido@correo.com",
+                                     "valentina@correo.com", "julian@correo.com"}),
 ])
 def test_busca_por_nombre_o_correo_y_filtra_por_rol(demo, entrar, filtros, correos):
     lista = entrar("admin@inversioneslr.com").get(USUARIOS, filtros).json()

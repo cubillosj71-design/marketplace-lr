@@ -26,8 +26,7 @@ class UsuarioReporte(models.Model):
         managed = False
         db_table = "v_usuario_reporte"
 
-    @property
-    def estado_cuenta(self) -> str:
+    def obtener_estado_cuenta(self) -> str:
         """Solo para mostrar: no es una columna (MOD-01)."""
         return "RESTRINGIDA" if self.restringida else ("ACTIVA" if self.activa else "DESACTIVADA")
 

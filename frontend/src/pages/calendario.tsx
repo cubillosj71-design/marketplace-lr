@@ -6,7 +6,7 @@ import { anfitrionApi, leerError, misReservasApi, type PublicacionAdmin, type Re
 import { fechaLarga, isoDia } from "../data";
 import { Page } from "../layout";
 import { useToast } from "../store";
-import { Alert, Badge } from "../ui";
+import { Alert } from "../ui";
 
 const DOW = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 
@@ -38,7 +38,9 @@ export function Calendario() {
 
   useEffect(() => {
     anfitrionApi.mias().then((l) => setMias(l.filter((p) => p.estado !== "BLOQUEADA"))).catch((e) => setError(leerError(e).error));
-    misReservasApi.deMisAlojamientos().then((r) => setReservas(r.data)).catch(() => {});
+    // Sin las reservas el calendario parecería libre: se avisa en vez de callar el error
+    misReservasApi.deMisAlojamientos().then((r) => setReservas(r.data))
+      .catch((e) => setError(`No se pudieron cargar las reservas de tus alojamientos: ${leerError(e).error}`));
   }, []);
 
   const pubId = Number(params.get("pub")) || mias?.[0]?.id;
@@ -94,7 +96,7 @@ export function Calendario() {
       // CA-09.2: no se bloquean noches con una reserva CONFIRMADA; la API manda cuáles
       const choque = isAxiosError(e) ? ((e.response?.data as { fechas?: string[] })?.fechas ?? []) : [];
       setError(choque.length
-        ? `No se puede bloquear ${choque.length > 1 ? `del ${fechaLarga(choque[0]!)} al ${fechaLarga(choque[choque.length - 1]!)}` : `el ${fechaLarga(choque[0]!)}`}: ${choque.length > 1 ? "tienen" : "tiene"} una reserva CONFIRMADA.`
+        ? `No se puede bloquear ${choque.length > 1 ? `del ${fechaLarga(choque[0]!)} al ${fechaLarga(choque[choque.length - 1]!)}` : `el ${fechaLarga(choque[0]!)}`}: ${choque.length > 1 ? "tienen" : "tiene"} una reserva confirmada.`
         : leerError(e).error);
     } finally {
       setGuardando(false);
@@ -157,7 +159,7 @@ export function Calendario() {
 
         <aside className="stack">
           <section className="card stack">
-            <div className="row-between"><h3>Fechas seleccionadas</h3>{pub && <Badge estado={pub.estado} />}</div>
+            <h3>Fechas seleccionadas</h3>
             {r.length ? (
               <p><b>{r.length === 1 ? fechaLarga(r[0]!) : `${fechaLarga(r[0]!)} – ${fechaLarga(r[r.length - 1]!)}`}</b> · {r.length} {r.length === 1 ? "noche" : "noches"}</p>
             ) : (

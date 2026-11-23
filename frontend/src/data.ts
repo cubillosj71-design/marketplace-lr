@@ -18,6 +18,10 @@ export const ESTADO_TXT: Record<EstadoPub, string> = {
   PAUSADA: "Pausada",
   BLOQUEADA: "Bloqueada",
 };
+/** Estados de una reserva como los lee el cliente (el código interno no se muestra). */
+export const RESERVA_TXT: Record<string, string> = {
+  CONFIRMADA: "Confirmada", CANCELADA: "Cancelada", COMPLETADA: "Completada", EN_REVISION: "En revisión",
+};
 
 /** Descripción de cada permiso de la matriz (mismo nombre que en el backend). */
 export const PERMISO_TXT: Record<string, string> = {
@@ -63,6 +67,11 @@ export const cop = (n: number | string | null | undefined) =>
 
 export const iniciales = (nombre: string) =>
   nombre.split(" ").filter(Boolean).slice(0, 2).map((s) => s[0]!.toUpperCase()).join("");
+
+/** Teléfono: solo números y espacios para separarlos; lo que no sea número se descarta al escribir o pegar. */
+export const soloNumeros = (texto: string) => texto.replace(/[^0-9 ]/g, "").replace(/ {2,}/g, " ");
+/** Entre 7 y 15 números, la misma regla que valida el backend (identidad.models.validar_telefono). */
+export const TELEFONO_VALIDO = (texto: string) => /^[0-9]{7,15}$/.test(texto.replace(/ /g, ""));
 
 export function isoDia(d: Date) {
   const z = (n: number) => String(n).padStart(2, "0");

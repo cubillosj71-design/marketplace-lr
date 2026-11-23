@@ -19,7 +19,7 @@ from typing import Any
 from .models import EventoAuditoria
 
 
-def registrar(
+def registrar_evento(
     actor_id: int | None,
     accion: str,
     *,
@@ -44,7 +44,7 @@ TIPOS_ACCION: dict[str, dict] = {
     "acceso_no_permitido": {"nombre": "Intento de usar una función no permitida", "acciones": ["AccesoDenegado"]},
     "estado_publicacion": {"nombre": "Cambio de estado de una publicación", "acciones": [
         "PublicacionEnviadaARevision", "PublicacionAprobada", "PublicacionDevuelta", "PublicacionBloqueada",
-        "PublicacionDesbloqueada", "PublicacionPausada", "PublicacionReactivada"]},
+        "PublicacionDesbloqueada", "PublicacionPausada", "PublicacionReactivada", "PublicacionEliminada"]},
     "estado_reserva": {"nombre": "Cambio de estado de una reserva", "acciones": [
         "ReservaConfirmada", "ReservaEnRevision", "ReservaResuelta", "ReservaCompletada"]},
     "reserva_rechazada": {"nombre": "Intento de reserva rechazado", "acciones": ["ReservaRechazada"]},
@@ -59,11 +59,11 @@ TIPOS_ACCION: dict[str, dict] = {
 }
 
 
-def tipos_accion() -> list[dict]:
+def listar_tipos_accion() -> list[dict]:
     return [{"clave": k, "nombre": v["nombre"]} for k, v in TIPOS_ACCION.items()]
 
 
-def consultar(*, actor_id=None, accion=None, tipo=None, desde=None, hasta=None, exitoso=None):
+def consultar_eventos(*, actor_id=None, accion=None, tipo=None, desde=None, hasta=None, exitoso=None):
     """Consulta para el administrador (RF-D-ADM-04.1, CA-23.1): filtra por usuario (actor), tipo de acción, acción
     y periodo. Trae el nombre del actor por la llave foránea de la propia tabla (sin importar Identidad)."""
     qs = EventoAuditoria.objects.select_related("actor")

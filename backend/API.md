@@ -42,6 +42,17 @@ Cuentas de ejemplo: `admin@inversioneslr.com`, `anfitrion@correo.com`, `huesped@
 
 Errores de negocio: `{"detalle": "...", "campo": "..."}` con 400, 401, 403, 404, 409 o 410.
 
+Manejo de excepciones (`apps/comun/errores.py`, `EXCEPTION_HANDLER` de DRF):
+
+- Un dato que manda el cliente nunca produce un 500. Los cuerpos se validan con serializers (400 con el campo); las
+  vistas que leen el cuerpo sin serializer (`token`, `token/renovar`, `salir`, `recuperacion`, `recuperacion/{token}`
+  y `bloqueo`) usan `apps.comun.entrada.texto_de`: si el cuerpo no es un objeto JSON o el campo no es texto, se toma
+  como vacío y la regla responde su mensaje de siempre (401, 400 o 404).
+- Una falla no prevista responde `500 {"detalle": "Ocurrió un error inesperado. Intenta de nuevo."}` sin detalles
+  internos. El detalle queda en el log JSON y en la auditoría como `ErrorOperacion` (`exitoso = false`).
+- En el frontend, `leerError()` traduce cada error de la API al mensaje que se muestra y `LimiteDeError` (Error
+  Boundary) evita la pantalla en blanco si una pantalla falla al dibujarse.
+
 ## Usuario (MOD-01)
 
 Tabla `usuario`: `id`, `correo` VARCHAR(254) único, `nombre_completo` VARCHAR(120), `telefono` VARCHAR(20),
@@ -76,9 +87,10 @@ Registro, sesión (`usuario`) y perfil devuelven:
 | Identidad | `GET y PATCH /identidad/perfil` | Huésped, Anfitrión, Administrador | RF-D-USU-01.4 |
 | Identidad | `POST /identidad/perfil/desactivar` | Huésped, Anfitrión | RF-D-USU-01.4 |
 | Identidad | `GET /identidad/permisos` | Todos (sin sesión, los del Visitante) | RF-D-USU-02.1 |
-| Identidad | `GET /identidad/roles` (la matriz completa) | Todos (pública) | RF-D-USU-02.1 |
+| Identidad | `GET /identidad/roles` (la matriz completa) | Administrador (`usuarios.ver`) | RF-D-USU-02.1 |
 | Identidad | `POST y DELETE /admin/usuarios/{id}/restriccion` | Administrador | RF-D-ADM-02.1 |
 | Catálogo | `POST /catalogo/publicaciones` · `GET /catalogo/mis-publicaciones` | Anfitrión | RF-D-ALO-01.1, 02.1 |
+| Catálogo | `DELETE /catalogo/mis-publicaciones/{id}`: elimina una publicación propia en BORRADOR (204; 409 si no está en borrador; 403 si es ajena). Queda `PublicacionEliminada` en la auditoría | Anfitrión dueño | Pedido del PO (2026-11-18), fuera del SRS v3.5 |
 | Catálogo | `GET y PATCH /catalogo/publicaciones/{id}` · `POST .../pausar` · `POST .../reactivar` | Anfitrión dueño, Administrador | RF-D-ALO-02.1, ADM-01.1 |
 | Catálogo | `POST /catalogo/publicaciones/{id}/enviar-revision` | Anfitrión | RF-D-ALO-01.2 |
 | Reservas | `GET y POST /catalogo/publicaciones/{id}/calendario` (la ruta se conserva; la atiende Reservas) | Anfitrión dueño | RF-D-ALO-02.2 |
@@ -95,7 +107,7 @@ Registro, sesión (`usuario`) y perfil devuelven:
 | Reservas | `GET /reservas/{id}` | Huésped dueño, anfitrión de la publicación, Administrador | HU-14, HU-26 |
 | Reservas | `GET /reservas/{id}/cancelar` (simula la devolución) · `POST /reservas/{id}/cancelar` | Huésped dueño | RF-D-RES-03.1 |
 | Reservas | `GET /admin/reservas?estado=EN_REVISION` · `POST /admin/reservas/{id}/resolver` | Administrador | RF-D-ADM-01.2 |
-| Reservas | `GET y PUT /admin/tarifa-servicio` | Administrador | RF-D-ADM-03.1 |
+| Reservas | `GET /admin/tarifa-servicio?desde&hasta` y `PUT /admin/tarifa-servicio` | Administrador | RF-D-ADM-03.1, CA-22 |
 | Notificaciones | `GET /notificaciones` · `POST /notificaciones/{id}/leida` · `POST /notificaciones/leidas` | Huésped, Anfitrión, Administrador | RF-D-RES-04.1 |
 | Interno | `POST /interno/tareas/diarias` (encabezado `X-Token-Tareas`) | Tarea programada | RF-D-RES-02.3, CA-20.5 |
 | Identidad | `GET /admin/usuarios?rol&q` | Administrador | RF-D-ADM-02.1, HU-21 |
@@ -128,9 +140,10 @@ permisos basta tener uno.
   un anfitrión con `publicaciones.gestionar_propias` recibe 403 sobre una publicación ajena.
 - `GET /identidad/permisos` devuelve `{"rol", "permisos"}` de quien llama; sin sesión, los del Visitante.
 - `GET /identidad/roles` devuelve la matriz completa `{"roles": [{"rol", "permisos"}]}` (Visitante, Huésped,
-  Anfitrión, Administrador). La pantalla "Roles y permisos" se arma con ella.
+  Anfitrión, Administrador) solo al Administrador (`usuarios.ver`); los demás reciben 401 o 403. La pantalla
+  "Roles y permisos" se arma con ella y solo aparece en el menú del Administrador.
 - Rutas sin `RequierePermiso` (lista blanca, verificada por `apps/comun/tests/test_rbac.py`): `salud`, `token`,
-  `token/renovar`, `salir`, `recuperacion`, `recuperacion/{token}`, `permisos`, `roles` y `interno/tareas/diarias` (su propio
+  `token/renovar`, `salir`, `recuperacion`, `recuperacion/{token}`, `permisos` e `interno/tareas/diarias` (su propio
   token). El sitio `/admin/` de Django queda fuera de la API.
 
 | Permiso | Roles | Rutas | RF |
@@ -145,7 +158,7 @@ permisos basta tener uno.
 | `perfil.gestionar` | Huésped, Anfitrión, Administrador | `GET y PATCH /identidad/perfil` | RF-D-USU-01.4 |
 | `cuenta.desactivar` | Huésped, Anfitrión | `POST /identidad/perfil/desactivar` | RF-D-USU-01.4 |
 | `notificaciones.ver` | Huésped, Anfitrión, Administrador | `GET /notificaciones` · `POST /notificaciones/{id}/leida` · `POST /notificaciones/leidas` | RF-D-RES-04.1 |
-| `publicaciones.gestionar_propias` | Anfitrión | `POST /catalogo/publicaciones` · `GET /catalogo/mis-publicaciones` · `GET y PATCH /catalogo/publicaciones/{id}` · `POST .../pausar` · `POST .../reactivar` · `POST .../enviar-revision` | RF-D-ALO-01.1, 01.2, 02.1 |
+| `publicaciones.gestionar_propias` | Anfitrión | `POST /catalogo/publicaciones` · `GET /catalogo/mis-publicaciones` · `DELETE /catalogo/mis-publicaciones/{id}` · `GET y PATCH /catalogo/publicaciones/{id}` · `POST .../pausar` · `POST .../reactivar` · `POST .../enviar-revision` | RF-D-ALO-01.1, 01.2, 02.1 |
 | `calendario.gestionar` | Anfitrión | `GET y POST /catalogo/publicaciones/{id}/calendario` | RF-D-ALO-02.2 |
 | `reservas.ver_de_mis_alojamientos` | Anfitrión | `GET /reservas/de-mis-alojamientos` · `GET /reservas/{id}` | RF-D-RES-02.3, HU-26 |
 | `publicaciones.moderar` | Administrador | `GET /admin/publicaciones` · `POST /admin/publicaciones/{id}/revision` · `POST y DELETE /admin/publicaciones/{id}/bloqueo` · `GET y PATCH /catalogo/publicaciones/{id}` · `POST .../pausar` · `POST .../reactivar` | RF-D-ADM-01.1, 01.2, ALO-02.1 |
@@ -207,6 +220,8 @@ anfitrión de la publicación o administrador) y las de una publicación (anfitr
 - **Reloj inyectable.** Las reglas que dependen del día (cancelación, COMPLETADA, EN_REVISION vencidas, límite de
   12 meses) leen la fecha en `apps/comun/reloj.py` (hora de Colombia). Las pruebas la fijan con `reloj.fijar()`.
 - **Imágenes.** Se guardan como rutas o URL (`imagen_publicacion.ruta`). La subida de archivos queda para el despliegue.
+  Las de `cargar_demo` son rutas locales (`/alojamientos/<nombre>.jpg`) a fotos con licencia libre que sirve el
+  frontend desde `frontend/public/alojamientos/` (créditos en `CREDITOS.md` de esa carpeta).
 
 
 ## Vistas de solo lectura
@@ -289,15 +304,15 @@ dueño, anfitrión de la publicación o Administrador; los demás reciben 403 y 
 `estado`, `alojamiento`, fechas, `noches`, `num_huespedes`, `total`, `cancelable` y, si está cancelada,
 `cancelacion` con `fecha`, `motivo`, `porcentaje_devolucion` y `valor_devolucion`.
 
-**COMPLETADA (RF-D-RES-02.3).** `reservas.services.completar_vencidas()` pasa a COMPLETADA las CONFIRMADAS cuya
-fecha de salida ya pasó (`Reserva.completar()`). La corre la tarea diaria y también cada consulta, así la respuesta
+**COMPLETADA (RF-D-RES-02.3).** `reservas.services.completar_reservas_vencidas()` pasa a COMPLETADA las CONFIRMADAS cuya
+fecha de salida ya pasó (`Reserva.completar_reserva()`). La corre la tarea diaria y también cada consulta, así la respuesta
 nunca muestra CONFIRMADA una reserva vencida (CA-14.2).
 
 **Cancelar (RF-D-RES-03.1).** `POST /reservas/{id}/cancelar` con `{"motivo": "..."}`, solo el huésped dueño.
 `GET` con la misma ruta devuelve cuánto se devolvería hoy, para mostrarlo antes de confirmar.
 - Solo CONFIRMADA y antes del día de llegada: desde ese día responde 409 y la reserva sigue CONFIRMADA (CA-15.5).
 - `dias_anticipacion` = días calendario entre hoy (hora de Colombia) y la llegada. El porcentaje sale de
-  `PoliticaCancelacion.porcentaje_devolucion(dias)` de la **política guardada en la reserva** (`politica_id`).
+  `PoliticaCancelacion.calcular_porcentaje_devolucion(dias)` de la **política guardada en la reserva** (`politica_id`).
   Moderada: 7 o más días 100 %, de 2 a 6 días 50 %, menos de 2 días 0 % (CA-15.1 a CA-15.4).
 - En una sola transacción: reserva CANCELADA, fila en `cancelacion`, pago `DEVOLUCION` simulado (si el valor es
   mayor que 0), auditoría `ReservaCancelada` (quién, cuándo, motivo y valor, CA-15.3) y evento `ReservaCancelada`.
@@ -311,7 +326,7 @@ UPDATE, DELETE y TRUNCATE.
 - Al bloquear una publicación, sus reservas futuras CONFIRMADAS pasan a EN_REVISION en la misma transacción del
   bloqueo y se publica `ReservaEnRevision` por cada una (CA-20.1).
 - `GET /admin/reservas?estado=EN_REVISION` las lista.
-- `POST /admin/reservas/{id}/resolver` (`Reserva.resolver(mantener)`):
+- `POST /admin/reservas/{id}/resolver` (`Reserva.resolver_revision(mantener)`):
   - Con `{"mantener": true}` la reserva vuelve a CONFIRMADA (CA-20.2).
   - Con `{"mantener": false, "motivo": "..."}` queda CANCELADA con devolución del 100 % y `cancelada_por` = el
     administrador (CA-20.3).
@@ -347,12 +362,15 @@ marca todas.
 (sin valor en el repositorio). Sin token o con uno incorrecto responde 403 y registra `AccesoDenegado`. Con el token
 correcto ejecuta, en este orden:
 
-1. `completar_vencidas()`
+1. `completar_reservas_vencidas()`
 2. `cancelar_en_revision_vencidas()`
 3. `conciliar_pagos()`
 
 Registra `TareasDiarias` en la auditoría y responde
-`{"reservas_completadas", "reservas_canceladas_sin_resolucion", "pagos_conciliados"}`. Para correrlo a mano:
+`{"reservas_completadas", "reservas_canceladas_sin_resolucion", "pagos_conciliados"}`. Cada tarea va aislada: si una
+falla, las demás corren igual, su valor llega en `null`, la respuesta agrega `"errores": {"<tarea>": "<tipo de error>"}`
+y `TareasDiarias` queda con `exitoso = false`. Dentro de cada tarea, una reserva o un pago que falla se revierte solo,
+queda como `ErrorOperacion` en la auditoría y se reintenta al día siguiente; los demás se procesan. Para correrlo a mano:
 `python manage.py tareas_diarias`. El workflow `.github/workflows/tareas-diarias.yml` lo llama a diario a las 05:10
 UTC (00:10 en Colombia) con los secretos `API_URL` y `TOKEN_TAREAS`. `/api/v1/salud` sigue pública.
 
@@ -378,12 +396,43 @@ al bruto y $30.000 a la plataforma.
 - `reservas_por_estado` y `reservas_total` del periodo.
 - `ingresos.bruto` e `ingresos.plataforma` del periodo.
 - `top_ciudades`: las 5 ciudades con más reservas, de `v_demanda`.
+- `serie_diaria`: `[{"fecha", "reservas", "monto_bruto", "ingreso_plataforma"}]` por día de creación, de `v_demanda`,
+  solo los días con reservas (el frontend completa con 0 y agrupa por mes si el periodo pasa de 62 días). Suma lo mismo
+  que `reservas_total` e `ingresos`.
 
 **Reportes.** Los cinco (`usuarios`, `publicaciones`, `reservas`, `ingresos`, `demanda`), en PDF o Excel, usan las
-mismas funciones de consulta del tablero (`reservas_del_periodo`, `conteo_por_estado`, `ingresos` y `demanda`), así
+mismas funciones de consulta del tablero (`consultar_reservas_del_periodo`, `contar_reservas_por_estado`, `calcular_ingresos` y `calcular_demanda`), así
 sus totales coinciden (CA-25.1). Cada descarga se registra como `ReporteDescargado`, con el administrador, el reporte,
 el formato y el periodo, **antes** de entregar el archivo. Si no se puede registrar, el archivo no se entrega
 (CA-25.2).
+
+**Orden de los reportes (RF-D-ADM-05.2).** Todos salen de la fecha más antigua a la más reciente, con el mismo orden en
+PDF y en Excel, y el encabezado lo dice ("Ordenado por: fecha de registro, ascendente; luego por código"):
+
+| Reporte | Orden |
+|---|---|
+| `usuarios` | fecha de registro, luego código (id). Tiene columna "Código". |
+| `publicaciones` | fecha de creación, luego código |
+| `reservas` | fecha de creación, luego código |
+| `ingresos` | mes |
+| `demanda` | fecha, luego ciudad y tipo: una fila por día, ciudad y tipo (`v_demanda` no tiene id) |
+
+En el Excel, la hoja "Detalle" lleva el título y la línea "Periodo · Ordenado por" arriba; el encabezado está en la fila
+4, inmovilizado, y las columnas llevan autofiltro.
+
+## Tarifa de servicio (RF-D-ADM-03.1, CA-22)
+
+Tabla `tarifa_servicio`: `porcentaje` (0 % a 30 %), `vigente_desde` y `vigente_hasta` (TIMESTAMPTZ, NULL = la vigente
+hoy). Cada tarifa rige en `[vigente_desde, vigente_hasta)`.
+
+- `PUT /admin/tarifa-servicio` crea la nueva desde ahora y, **en la misma transacción**, cierra la abierta con
+  `vigente_hasta` = `vigente_desde` de la nueva. Queda en la auditoría como `TarifaActualizada`.
+- `CHECK (vigente_hasta IS NULL OR vigente_hasta > vigente_desde)` y un índice único parcial
+  (`WHERE vigente_hasta IS NULL`, `NULLS NOT DISTINCT`) que impide dos tarifas abiertas a la vez.
+- Cada cotización usa la tarifa vigente en su fecha de creación (`cotizacion.tarifa_servicio_id`).
+- `GET /admin/tarifa-servicio?desde&hasta` (fechas AAAA-MM-DD, ambas incluidas) trae en `historial` solo las tarifas
+  vigentes en algún momento del rango, cada una con `vigente_desde` y `vigente_hasta`. Si `desde > hasta`, 400. En el
+  código: `reservas.services.consultar_tarifas_vigentes(desde, hasta)`.
 
 ## Administración de usuarios y registro de acciones
 

@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 import { adminApi, api, notificacionesApi } from "./api";
 import { ROL_TXT, iniciales } from "./data";
+import { LimiteDeError } from "./LimiteDeError";
 import { useStore } from "./store";
 import { ImageTile, Logo } from "./ui";
 
@@ -20,7 +21,7 @@ export function AuthLayout({ children }: { children: ReactNode }) {
           <h1>Tu alojamiento ideal, a un clic.</h1>
           <p className="lead">Anfitriones y huéspedes conectados en un solo lugar, con disponibilidad al día y reglas claras.</p>
           <div className="hero-card" aria-hidden>
-            <ImageTile img={{ id: "h", nombre: "", color: "linear-gradient(135deg,#2d7f74,#8fd3c4)" }} />
+            <ImageTile img={{ id: "h", nombre: "", color: "linear-gradient(135deg,#2d7f74,#8fd3c4)", src: "/alojamientos/lago-muelle.jpg" }} />
             <div className="meta">
               <b>Cabaña del Lago</b>
               <div className="row" style={{ justifyContent: "space-between", marginTop: 4 }}>
@@ -63,7 +64,7 @@ const ALOJAMIENTOS: Item[] = [
 const USUARIOS: Item[] = [
   { to: "/perfil", label: "Mi perfil", icon: UserRound, permiso: "perfil.gestionar" },
   { to: "/perfil/contrasena", label: "Cambiar contraseña", icon: KeyRound, permiso: "perfil.gestionar" },
-  { to: "/roles", label: "Roles y permisos", icon: ShieldCheck, permiso: null },
+  { to: "/roles", label: "Roles y permisos", icon: ShieldCheck, permiso: "usuarios.ver" },
   { to: "/admin/usuarios", label: "Usuarios", icon: FileBarChart2, permiso: "usuarios.ver" },
 ];
 
@@ -96,7 +97,7 @@ function useNav(): { titulo: string; items: Item[] }[] {
 /** Primera pantalla del menú que el usuario puede abrir: ahí llega al entrar. */
 export function usePrimeraPantalla(): string {
   const { tiene } = useStore();
-  return [...ALOJAMIENTOS, ...USUARIOS].find((it) => it.permiso !== null && tiene(it.permiso))?.to ?? "/roles";
+  return [...ALOJAMIENTOS, ...USUARIOS].find((it) => it.permiso !== null && tiene(it.permiso))?.to ?? "/perfil";
 }
 
 const MIGAS: [RegExp, string][] = [
@@ -194,20 +195,16 @@ export function AppLayout() {
           </div>
         </header>
         <nav className="mobile-nav" aria-label="Navegación">{links.map(renderLink)}</nav>
-        <Outlet />
+        <LimiteDeError reinicio={loc.pathname}><Outlet /></LimiteDeError>
       </div>
     </div>
   );
 }
 
-/** Contenido de una página con su etiqueta de trazabilidad al pie. */
-export function Page({ req, children }: { req: string; children: ReactNode }) {
-  return (
-    <>
-      <div className="content">{children}</div>
-      <div className="req-tag">{req}</div>
-    </>
-  );
+/** Contenido de una página. `req` es la trazabilidad (requisito y caso de uso) para quien lee el código: no se
+ *  muestra, porque el cliente no usa esos códigos. */
+export function Page({ req: _req, children }: { req: string; children: ReactNode }) {
+  return <div className="content">{children}</div>;
 }
 
 /** Protección por permiso (RF-D-USU-02.1). Sin sesión lleva a "Ingresar"; sin el permiso muestra el aviso.

@@ -1,4 +1,4 @@
-import { ArrowLeft, CalendarX, Check, Lock, MapPin, Search, Star, Users } from "lucide-react";
+import { ArrowLeft, CalendarX, Check, ChevronLeft, ChevronRight, ImageIcon, Lock, MapPin, Search, Star, Users } from "lucide-react";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
@@ -41,11 +41,49 @@ function Estrellas({ promedio, total }: { promedio: string | null; total: number
   return <span className="row" style={{ gap: 4 }}><Star size={14} /> {Number(promedio).toFixed(1).replace(".", ",")} ({total})</span>;
 }
 
-function Foto({ src, alt, style }: { src?: string | null; alt: string; style?: React.CSSProperties }) {
+/** Foto con fondo neutro: si no hay ruta o la imagen no carga, queda el ícono de imagen (sin texto). */
+function Foto({ src, alt, style, className = "" }: { src?: string | null; alt: string; style?: React.CSSProperties; className?: string }) {
+  const [rota, setRota] = useState(false);
+  useEffect(() => setRota(false), [src]);
   return (
-    <div className="img-ph" style={{ background: "linear-gradient(135deg,#cfdcd8,#e8efec)", ...style }}>
-      {src && <img src={src} alt={alt} loading="lazy" />}
+    <div className={`img-ph ${className}`} style={{ background: "linear-gradient(135deg,#cfdcd8,#e8efec)", ...style }}>
+      {src && !rota ? <img src={src} alt={alt} loading="lazy" onError={() => setRota(true)} /> : <ImageIcon aria-hidden />}
     </div>
+  );
+}
+
+/** HU-11: todas las fotos de la publicación, en su orden. La grande se cambia con las miniaturas, las flechas o el
+ *  teclado (← →). La primera es la portada que sale en la búsqueda. */
+function Galeria({ imagenes, titulo }: { imagenes: DetallePublico["imagenes"]; titulo: string }) {
+  const lista = [...imagenes].sort((a, b) => a.orden - b.orden);
+  const [i, setI] = useState(0);
+  const n = lista.length;
+  const actual = lista[Math.min(i, Math.max(n - 1, 0))];
+  const mover = (paso: number) => setI((x) => (x + paso + n) % n);
+  return (
+    <section className="galeria" aria-label={`Fotos de ${titulo}`} tabIndex={n > 1 ? 0 : undefined}
+      onKeyDown={(e) => { if (e.key === "ArrowLeft") mover(-1); if (e.key === "ArrowRight") mover(1); }}>
+      <div className="galeria-principal">
+        <Foto src={actual?.ruta} alt={n ? `${titulo}: foto ${i + 1} de ${n}` : titulo} />
+        {n > 1 && (
+          <>
+            <button type="button" className="galeria-flecha izq" aria-label="Foto anterior" onClick={() => mover(-1)}><ChevronLeft /></button>
+            <button type="button" className="galeria-flecha der" aria-label="Foto siguiente" onClick={() => mover(1)}><ChevronRight /></button>
+            <span className="galeria-contador" aria-live="polite">{i + 1} / {n}</span>
+          </>
+        )}
+      </div>
+      {n > 1 && (
+        <div className="galeria-miniaturas">
+          {lista.map((im, k) => (
+            <button key={im.orden} type="button" className={k === i ? "on" : ""} aria-label={`Ver foto ${k + 1} de ${n}`} aria-pressed={k === i}
+              onClick={() => setI(k)}>
+              <Foto src={im.ruta} alt="" />
+            </button>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -225,10 +263,7 @@ function Detalle({ base }: { base: string }) {
     <Page req="RF-D-RES-01.2 · HU-11 · RF-D-RES-02.1 · HU-12">
       <Link to={base} className="back"><ArrowLeft /> Volver a explorar</Link>
       <div className="page-head"><div><h1>{d.titulo}</h1><p style={{ display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}><MapPin size={15} />{d.ubicacion_textual}, {d.ciudad} · <Estrellas {...d.calificacion} /></p></div></div>
-      <div style={{ display: "grid", gridTemplateColumns: d.imagenes.length <= 1 ? "1fr" : "2fr 1fr", gridTemplateRows: d.imagenes.length <= 2 ? "310px" : "150px 150px", gap: 10 }} className="gallery">
-        <Foto src={d.imagenes[0]?.ruta} alt={d.titulo} style={{ gridRow: "span 2" }} />
-        {d.imagenes.slice(1, 3).map((im) => <Foto key={im.orden} src={im.ruta} alt={`${d.titulo} ${im.orden}`} />)}
-      </div>
+      <Galeria imagenes={d.imagenes} titulo={d.titulo} />
       <div className="detail-grid" style={{ display: "grid", gridTemplateColumns: "minmax(0,1.6fr) minmax(0,1fr)", gap: 20, alignItems: "start" }}>
         <div className="stack">
           <section className="card stack">

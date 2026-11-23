@@ -1,17 +1,18 @@
 import {
   ArrowLeft, Ban, BarChart3, Check, CheckCircle2, ClipboardList, FileEdit, History, PauseCircle, Percent, PlayCircle, Search,
-  ShieldAlert, ShieldOff, Undo2, Users,
+  ShieldAlert, ShieldOff, Undo2, Users, XCircle,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   adminApi, leerError,
-  type EventoAuditoriaApi, type PublicacionAdmin, type PublicacionCompleta, type RevisionApi, type TableroApi, type UsuarioAdmin,
+  type EventoAuditoriaApi, type PublicacionAdmin, type PublicacionCompleta, type RevisionApi, type TarifaApi, type TableroApi, type UsuarioAdmin,
 } from "../api";
-import { ROL_TXT, cop, type AccionModeracion, type EstadoPub, type Rol } from "../data";
+import { ESTADO_TXT, RESERVA_TXT, ROL_TXT, cop, fechaLarga, type AccionModeracion, type EstadoPub, type Rol } from "../data";
 import { Page } from "../layout";
 import { useToast } from "../store";
 import { Alert, Badge, Field, Modal } from "../ui";
+import { BarrasHorizontales, PartesDelTodo, SERIE, SerieEnElTiempo, type Punto } from "../graficas";
 
 const pesos = (v: string | null | undefined) => (v == null ? "—" : cop(Number(v)));
 const fechaHora = (f: string) => new Date(f).toLocaleString("es-CO", { dateStyle: "medium", timeStyle: "short" }).replace(/\.$/, "");
@@ -66,7 +67,7 @@ function AccionesPublicacion({ p, alCambiar, compacto }: { p: Pick<PublicacionAd
         <Modal onClose={() => setBloquear(false)}>
           <span className="ico-big" style={{ background: "var(--err-soft)", color: "var(--err)" }}><Ban /></span>
           <h2>Bloquear «{p.titulo}»</h2>
-          <p className="muted">Deja de aparecer en las búsquedas y sus reservas futuras pasan a EN_REVISION. El anfitrión ve el motivo.</p>
+          <p className="muted">Deja de aparecer en las búsquedas y sus reservas futuras quedan en revisión. El anfitrión ve el motivo.</p>
           <Field label="Motivo" hint="Obligatorio." error={error}>
             <textarea className="textarea" placeholder="Ej. La dirección publicada no coincide con la del alojamiento." value={motivo} onChange={(e) => setMotivo(e.target.value)} />
           </Field>
@@ -115,7 +116,7 @@ export function AdminPublicaciones({ soloPendientes = false }: { soloPendientes?
         {!soloPendientes && (
           <select className="select" value={estado} onChange={(e) => setEstado(e.target.value as EstadoPub | "")} aria-label="Estado">
             <option value="">Estado: todos</option>
-            {(["PENDIENTE_REVISION", "ACTIVA", "PAUSADA", "BLOQUEADA"] as EstadoPub[]).map((e) => <option key={e} value={e}>{e.replace("_", " ")}</option>)}
+            {(["PENDIENTE_REVISION", "ACTIVA", "PAUSADA", "BLOQUEADA"] as EstadoPub[]).map((e) => <option key={e} value={e}>{ESTADO_TXT[e]}</option>)}
           </select>
         )}
       </div>
@@ -220,7 +221,7 @@ export function RevisarPublicacion() {
       {devolver && (
         <Modal onClose={() => setDevolver(false)}>
           <h2>Devolver al anfitrión</h2>
-          <p className="muted">La publicación vuelve a BORRADOR y el anfitrión ve la observación.</p>
+          <p className="muted">La publicación vuelve a borrador y el anfitrión ve la observación.</p>
           <Field label="Observación" hint="Obligatoria.">
             <textarea className="textarea" placeholder="Ej. Las fotos no corresponden al alojamiento." value={obs} onChange={(e) => setObs(e.target.value)} />
           </Field>
@@ -291,7 +292,7 @@ export function UsuariosAdmin() {
                     <td className="cell-2"><b>{u.nombre_completo}</b><span className="subtle">{u.correo}</span></td>
                     <td>{ROL_TXT[u.rol]}</td>
                     <td>
-                      <span className={`badge ${estado(u) === "ACTIVA" ? "badge-ACTIVA" : estado(u) === "RESTRINGIDA" ? "badge-BLOQUEADA" : "badge-PAUSADA"}`}>{estado(u)}</span>
+                      <span className={`badge ${estado(u) === "ACTIVA" ? "badge-ACTIVA" : estado(u) === "RESTRINGIDA" ? "badge-BLOQUEADA" : "badge-PAUSADA"}`}>{{ ACTIVA: "Activa", RESTRINGIDA: "Restringida", DESACTIVADA: "Desactivada" }[estado(u)]}</span>
                       {u.motivo_restriccion && <span className="subtle" style={{ display: "block", marginTop: 4, maxWidth: 260 }}>
                         {u.motivo_restriccion}{u.restriccion_hasta ? ` · hasta ${new Date(u.restriccion_hasta).toLocaleDateString("es-CO")}` : ""}</span>}
                     </td>
@@ -388,7 +389,7 @@ export function RegistroAcciones() {
                   <td className="cell-2"><b>{e.actor_nombre ?? (e.actor_id ? `#${e.actor_id}` : "Sistema o visitante")}</b>{e.actor_correo && <span className="subtle">{e.actor_correo}</span>}</td>
                   <td>{e.accion}</td>
                   <td>{sobreQue(e)}</td>
-                  <td><span className={`badge ${e.exitoso ? "badge-ACTIVA" : "badge-BLOQUEADA"}`}>{e.exitoso ? "ÉXITO" : "FALLO"}</span></td>
+                  <td><span className={`badge ${e.exitoso ? "badge-ACTIVA" : "badge-BLOQUEADA"}`}>{e.exitoso ? "Éxito" : "Fallo"}</span></td>
                   <td className="subtle" style={{ maxWidth: 320 }}>{detalleCorto(e)}</td>
                 </tr>
               ))}
@@ -437,14 +438,29 @@ export function HistorialRevisiones({ revisiones }: { revisiones: RevisionApi[] 
 /* ---------------- HU-22 Tarifa de servicio ---------------- */
 export function TarifaServicioPage() {
   const toast = useToast();
-  const [datos, setDatos] = useState<{ porcentaje: string; historial: { porcentaje: string; vigente_desde: string; administrador: number }[] } | null>(null);
+  const [datos, setDatos] = useState<{ porcentaje: string; historial: TarifaApi[] } | null>(null);
   const [nuevo, setNuevo] = useState("");
   const [error, setError] = useState("");
+  const [rango, setRango] = useState({ desde: "", hasta: "" });
+  const [errorRango, setErrorRango] = useState("");
   const nombres = useNombres();
   const cargar = useCallback(() => {
-    adminApi.tarifa().then((r) => { setDatos(r.data); setNuevo(String(Number(r.data.porcentaje))); }).catch((e) => setError(leerError(e).error));
+    // El porcentaje vigente solo llena el campo si está vacío: una respuesta que llega tarde no pisa lo que se escribió
+    adminApi.tarifa().then((r) => { setDatos(r.data); setNuevo((v) => (v === "" ? String(Number(r.data.porcentaje)) : v)); })
+      .catch((e) => setError(leerError(e).error));
   }, []);
   useEffect(cargar, [cargar]);
+  // Historial filtrado por rango (RF-D-ADM-03.1): tarifas vigentes en algún momento entre desde y hasta
+  const [historial, setHistorial] = useState<TarifaApi[] | null>(null);
+  useEffect(() => {
+    let vigente = true;
+    setErrorRango("");
+    if (rango.desde && rango.hasta && rango.desde > rango.hasta) { setErrorRango("La fecha inicial no puede ser posterior a la final."); return; }
+    adminApi.tarifa(rango.desde, rango.hasta)
+      .then((r) => { if (vigente) setHistorial(r.data.historial); })
+      .catch((e) => { if (vigente) setErrorRango(leerError(e).error); });
+    return () => { vigente = false; };
+  }, [rango, datos]);
 
   const guardar = async () => {
     setError("");
@@ -462,17 +478,34 @@ export function TarifaServicioPage() {
             <input className="input" type="number" step="0.5" min={0} max={30} value={nuevo} onChange={(e) => setNuevo(e.target.value)} />
           </Field>
           <button className="btn btn-primary" disabled={!datos || nuevo === "" || Number(nuevo) === Number(datos?.porcentaje)} onClick={guardar}>Guardar</button>
-          <Alert tipo="info">Las reservas ya confirmadas conservan los valores con los que se cotizaron (CA-22.1).</Alert>
+          <Alert tipo="info">Las reservas ya confirmadas conservan los valores con los que se cotizaron.</Alert>
         </section>
         <section className="card stack">
           <h3 className="row" style={{ gap: 8 }}><History size={18} /> Historial</h3>
+          <div className="grid-2">
+            <Field label="Vigentes desde" error={errorRango}>
+              <input className="input" type="date" aria-label="Desde" value={rango.desde} onChange={(e) => setRango({ ...rango, desde: e.target.value })} />
+            </Field>
+            <Field label="Hasta">
+              <input className="input" type="date" aria-label="Hasta" value={rango.hasta} onChange={(e) => setRango({ ...rango, hasta: e.target.value })} />
+            </Field>
+          </div>
+          {(rango.desde || rango.hasta) && (
+            <button className="link-btn" style={{ alignSelf: "flex-start" }} onClick={() => setRango({ desde: "", hasta: "" })}>Ver todo el historial</button>
+          )}
           <div className="table-wrap">
             <table className="table">
-              <thead><tr><th>Porcentaje</th><th>Vigente desde</th><th>Administrador</th></tr></thead>
+              <thead><tr><th>Porcentaje</th><th>Desde</th><th>Hasta</th><th>Administrador</th></tr></thead>
               <tbody>
-                {(datos?.historial ?? []).map((t) => (
-                  <tr key={t.vigente_desde}><td><b>{Number(t.porcentaje)} %</b></td><td>{fechaHora(t.vigente_desde)}</td><td>{nombres[t.administrador] ?? `#${t.administrador}`}</td></tr>
+                {(historial ?? []).map((t) => (
+                  <tr key={t.id}>
+                    <td><b>{Number(t.porcentaje)} %</b></td>
+                    <td>{fechaHora(t.vigente_desde)}</td>
+                    <td>{t.vigente_hasta ? fechaHora(t.vigente_hasta) : <span className="badge badge-ACTIVA">Vigente</span>}</td>
+                    <td>{nombres[t.administrador] ?? `#${t.administrador}`}</td>
+                  </tr>
                 ))}
+                {historial && historial.length === 0 && <tr><td colSpan={4} className="muted">Ninguna tarifa estuvo vigente en ese rango.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -507,9 +540,42 @@ export function SelectorPeriodo({ desde, hasta, onCambio }: { desde: string; has
   );
 }
 
-const ESTADOS_RESERVA: [string, string, string][] = [
-  ["CONFIRMADA", "#dcf3e4", "#166534"], ["EN_REVISION", "#e3ecfa", "#1e4a8a"], ["COMPLETADA", "#fdf0c8", "#8a4b05"], ["CANCELADA", "#fbe1de", "#9b1c12"],
-];
+const ESTADOS_RESERVA = ["CONFIRMADA", "EN_REVISION", "COMPLETADA", "CANCELADA"] as const;
+const DIAS_POR_DIA = 62;  // hasta dos meses, una barra por día; si el periodo es más largo, una por mes
+const MES_CORTO = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+const MES_LARGO = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+const DIA_MS = 86400000;
+
+/** Pesos abreviados para el eje: $350 mil, $1,2 M. */
+const pesosCorto = (v: number) => (v >= 1e6 ? `$${(v / 1e6).toLocaleString("es-CO", { maximumFractionDigits: 1 })} M`
+  : v >= 1e3 ? `$${Math.round(v / 1e3)} mil` : `$${v}`);
+
+/** La serie del periodo con 0 en los días o meses sin reservas (la API solo trae los días que tienen reservas). */
+function serieDelPeriodo(t: TableroApi, campo: "reservas" | "ingreso_plataforma"): { puntos: Punto[]; porMes: boolean } {
+  const porDia = new Map(t.serie_diaria.map((d) => [d.fecha, Number(d[campo])]));
+  const [y0, m0, d0] = t.desde.split("-").map(Number) as [number, number, number];
+  const [y1, m1, d1] = t.hasta.split("-").map(Number) as [number, number, number];
+  const inicio = Date.UTC(y0, m0 - 1, d0);
+  const dias = Math.round((Date.UTC(y1, m1 - 1, d1) - inicio) / DIA_MS) + 1;
+  const puntos: Punto[] = [];
+  if (dias <= DIAS_POR_DIA) {
+    for (let i = 0; i < dias; i++) {
+      const f = new Date(inicio + i * DIA_MS);
+      const clave = f.toISOString().slice(0, 10);
+      puntos.push({ etiqueta: `${f.getUTCDate()} ${MES_CORTO[f.getUTCMonth()]}`, detalle: fechaLarga(clave), valor: porDia.get(clave) ?? 0 });
+    }
+    return { puntos, porMes: false };
+  }
+  let y = y0, m = m0 - 1;
+  while (y < y1 || (y === y1 && m <= m1 - 1)) {
+    const prefijo = `${y}-${String(m + 1).padStart(2, "0")}`;
+    let valor = 0;
+    porDia.forEach((v, f) => { if (f.startsWith(prefijo)) valor += v; });
+    puntos.push({ etiqueta: MES_CORTO[m]!, detalle: `${MES_LARGO[m]} de ${y}`, valor });
+    if (m === 11) { y += 1; m = 0; } else { m += 1; }
+  }
+  return { puntos, porMes: true };
+}
 
 export function Tablero() {
   const inicial = periodosRapidos()[0]!;
@@ -524,7 +590,11 @@ export function Tablero() {
       .catch((e) => { if (vigente) { setT(null); setError(leerError(e).error); } });
     return () => { vigente = false; };
   }, [p]);
-  const maxCiudad = useMemo(() => Math.max(1, ...(t?.top_ciudades ?? []).map((c) => c.reservas)), [t]);
+  const reservas = useMemo(() => (t ? serieDelPeriodo(t, "reservas") : { puntos: [], porMes: false }), [t]);
+  const ingreso = useMemo(() => (t ? serieDelPeriodo(t, "ingreso_plataforma") : { puntos: [], porMes: false }), [t]);
+  const unidad = reservas.porMes ? "mes" : "día";
+  const tasaCancelacion = t && t.reservas_total ? Math.round(((t.reservas_por_estado.CANCELADA ?? 0) / t.reservas_total) * 100) : 0;
+  const filasTabla = reservas.puntos.map((r, i) => ({ ...r, ingreso: ingreso.puntos[i]?.valor ?? 0 })).filter((f) => f.valor || f.ingreso);
 
   return (
     <Page req="RF-D-ADM-05.1 · HU-24 · una reserva cuenta en el periodo según su fecha de creación">
@@ -533,43 +603,52 @@ export function Tablero() {
       {error && <Alert tipo="error">{error}</Alert>}
       {t && (
         <>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: 14 }}>
+          <div className="kpis" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14 }}>
             <Stat icon={BarChart3} v={pesos(t.ingresos.bruto)} label="Monto bruto de reservas" bg="#dcf3e4" fg="#166534" />
             <Stat icon={Percent} v={pesos(t.ingresos.plataforma)} label="Ingreso de la plataforma" bg="#e3ecfa" fg="#1e4a8a" />
-            <Stat icon={CheckCircle2} v={t.publicaciones_activas} label="Publicaciones ACTIVAS" bg="#fdf0c8" fg="#8a4b05" />
             <Stat icon={ClipboardList} v={t.reservas_total} label="Reservas creadas" bg="#f1f1ef" fg="#57534e" />
+            <Stat icon={CheckCircle2} v={t.publicaciones_activas} label="Publicaciones activas" bg="#fdf0c8" fg="#8a4b05" />
+            <Stat icon={XCircle} v={`${tasaCancelacion} %`} label="Reservas canceladas" bg="#fbe1de" fg="#9b1c12" />
           </div>
-          <div className="detail-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 20, alignItems: "start" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 20, alignItems: "start" }}>
             <section className="card stack">
-              <h3>Reservas por estado</h3>
-              <ul className="list-plain stack" style={{ gap: 8 }}>
-                {ESTADOS_RESERVA.map(([e, bg, fg]) => (
-                  <li key={e} className="row-between"><span className="badge" style={{ background: bg, color: fg }}>{e.replace("_", " ")}</span><b>{t.reservas_por_estado[e] ?? 0}</b></li>
-                ))}
-              </ul>
+              <h3>Reservas creadas por {unidad}</h3>
+              <SerieEnElTiempo nombre="Reservas creadas" puntos={reservas.puntos} formato={(v) => String(Math.round(v))} enteros />
             </section>
             <section className="card stack">
-              <h3>Usuarios por rol</h3>
-              <ul className="list-plain stack" style={{ gap: 8 }}>
-                {(Object.keys(ROL_TXT) as Rol[]).map((r) => <li key={r} className="row-between"><span>{ROL_TXT[r]}</span><b>{t.usuarios_por_rol[r] ?? 0}</b></li>)}
-              </ul>
+              <h3>Ingreso de la plataforma por {unidad}</h3>
+              <SerieEnElTiempo nombre="Ingreso de la plataforma" puntos={ingreso.puntos} formato={pesosCorto} />
+            </section>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 20, alignItems: "start" }}>
+            <section className="card stack">
+              <h3>Reservas por estado</h3>
+              <PartesDelTodo unidad={["reserva", "reservas"]}
+                partes={ESTADOS_RESERVA.map((e, i) => ({ clave: e, nombre: RESERVA_TXT[e]!, valor: t.reservas_por_estado[e] ?? 0, color: SERIE[i]! }))} />
             </section>
             <section className="card stack">
               <h3>Las 5 ciudades con más reservas</h3>
-              {t.top_ciudades.length === 0 ? <p className="muted">Sin reservas en el periodo.</p> : (
-                <ol className="list-plain stack" style={{ gap: 10 }}>
-                  {t.top_ciudades.map((c) => (
-                    <li key={c.ciudad} className="stack" style={{ gap: 4 }}>
-                      <div className="row-between"><b>{c.ciudad}</b><span className="subtle">{c.reservas} · {pesos(c.monto_bruto)}</span></div>
-                      <div style={{ height: 8, borderRadius: 999, background: "var(--accent-soft)" }}>
-                        <div style={{ width: `${(c.reservas / maxCiudad) * 100}%`, height: "100%", borderRadius: 999, background: "var(--accent)" }} />
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-              )}
+              <BarrasHorizontales vacio="Sin reservas en el periodo."
+                filas={t.top_ciudades.map((c) => ({ nombre: c.ciudad, valor: c.reservas, detalle: pesos(c.monto_bruto) }))} />
+            </section>
+            <section className="card stack">
+              <h3>Usuarios por rol</h3>
+              <BarrasHorizontales vacio="Sin usuarios registrados."
+                filas={(["HUESPED", "ANFITRION", "ADMINISTRADOR"] as Rol[]).map((r) => ({ nombre: ROL_TXT[r]!, valor: t.usuarios_por_rol[r] ?? 0 }))} />
             </section>
           </div>
+          <details className="card">
+            <summary style={{ cursor: "pointer", fontWeight: 600 }}>Ver los datos de las gráficas en una tabla</summary>
+            <div style={{ overflowX: "auto", marginTop: 12 }}>
+              <table className="table">
+                <thead><tr><th>{reservas.porMes ? "Mes" : "Día"}</th><th>Reservas creadas</th><th>Ingreso de la plataforma</th></tr></thead>
+                <tbody>
+                  {filasTabla.map((f) => <tr key={f.detalle}><td>{f.detalle}</td><td>{f.valor}</td><td>{pesos(String(f.ingreso))}</td></tr>)}
+                  {filasTabla.length === 0 && <tr><td colSpan={3} className="muted">Sin reservas en el periodo.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </details>
         </>
       )}
     </Page>

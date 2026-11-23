@@ -46,8 +46,8 @@ def test_ca_13_1_reserva_confirmada_y_noches_ocupadas(cotizacion, cliente, dias)
     assert Pago().objects.get(cotizacion_id=cotizacion.cot["id"]).reserva_id == r_db.id
     noches = cliente.get(f"/api/v1/busqueda/publicaciones/{cotizacion.pid}", {"desde": dias(29), "hasta": dias(35)}).json()
     assert noches["disponibilidad"]["noches_no_disponibles"] == [dias(30).isoformat(), dias(31).isoformat(), dias(32).isoformat()]
-    assert auditoria.consultar(accion="ReservaConfirmada").filter(entidad_id=reserva["id"]).exists()
-    assert auditoria.consultar(accion="PagoAprobado").exists()
+    assert auditoria.consultar_eventos(accion="ReservaConfirmada").filter(entidad_id=reserva["id"]).exists()
+    assert auditoria.consultar_eventos(accion="PagoAprobado").exists()
 
 
 def test_reserva_confirmada_publica_el_evento_de_dominio(cotizacion, django_capture_on_commit_callbacks):
@@ -69,7 +69,7 @@ def test_ca_13_3_pago_rechazado_no_crea_la_reserva(cotizacion):
     assert r.status_code == 402 and r.json()["estado_pago"] == "RECHAZADO" and "rechaz" in r.json()["detalle"]
     assert not Reserva().objects.filter(cotizacion_id=cotizacion.cot["id"]).exists()
     assert not Pago().objects.filter(cotizacion_id=cotizacion.cot["id"]).exists()
-    intento = auditoria.consultar(accion="ReservaRechazada").get()
+    intento = auditoria.consultar_eventos(accion="ReservaRechazada").get()
     assert intento.exitoso is False and intento.actor_id == cotizacion.usuario["id"]
     assert _reservar(cotizacion).status_code == 201  # con otro medio sí reserva
 
@@ -100,14 +100,14 @@ def test_rnf_p_fia_03_falla_a_la_mitad_no_deja_registros(cotizacion, monkeypatch
         raise RuntimeError("Falla después del pago")
 
     monkeypatch.setattr(services, "publicar", fallar)
-    confirmadas, aprobados = auditoria.consultar(accion="ReservaConfirmada").count(), auditoria.consultar(accion="PagoAprobado").count()
+    confirmadas, aprobados = auditoria.consultar_eventos(accion="ReservaConfirmada").count(), auditoria.consultar_eventos(accion="PagoAprobado").count()
     with pytest.raises(RuntimeError):
-        services.reservar(apps.get_model("identidad", "Usuario").objects.get(pk=cotizacion.usuario["id"]),
+        services.reservar_alojamiento(apps.get_model("identidad", "Usuario").objects.get(pk=cotizacion.usuario["id"]),
                           cotizacion.cot["id"], uuid.uuid4(), "tarjeta")
     assert not Reserva().objects.filter(cotizacion_id=cotizacion.cot["id"]).exists()
     assert not Pago().objects.filter(cotizacion_id=cotizacion.cot["id"]).exists()
-    assert auditoria.consultar(accion="ReservaConfirmada").count() == confirmadas
-    assert auditoria.consultar(accion="PagoAprobado").count() == aprobados
+    assert auditoria.consultar_eventos(accion="ReservaConfirmada").count() == confirmadas
+    assert auditoria.consultar_eventos(accion="PagoAprobado").count() == aprobados
 
 
 def test_rnf_p_fia_03_falla_de_la_pasarela_no_deja_registros(cotizacion, monkeypatch):
@@ -121,7 +121,7 @@ def test_rnf_p_fia_03_falla_de_la_pasarela_no_deja_registros(cotizacion, monkeyp
     assert r.status_code == 500
     assert not Reserva().objects.filter(cotizacion_id=cotizacion.cot["id"]).exists()
     assert not Pago().objects.filter(cotizacion_id=cotizacion.cot["id"]).exists()
-    assert auditoria.consultar(accion="ErrorOperacion", exitoso=False).exists()
+    assert auditoria.consultar_eventos(accion="ErrorOperacion", exitoso=False).exists()
 
 
 def test_cotizacion_cambiada_responde_409_con_la_nueva(cotizacion, entrar):

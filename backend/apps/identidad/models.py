@@ -15,6 +15,24 @@ from django.db import models
 from django.db.models import Q
 from django.utils import timezone
 
+from apps.comun.errores import ErrorNegocio
+
+TELEFONO_MIN, TELEFONO_MAX = 7, 15  # un fijo de 7 dígitos hasta un número internacional (E.164)
+
+
+def validar_telefono(valor) -> str:
+    """El teléfono solo lleva números; se aceptan espacios para separarlos (300 123 4567). Devuelve el valor sin
+    espacios sobrantes o lanza ErrorNegocio con campo "telefono"."""
+    valor = " ".join(str(valor or "").split())
+    digitos = valor.replace(" ", "")
+    if not digitos:
+        raise ErrorNegocio("Escribe tu teléfono.", campo="telefono")
+    if not digitos.isdigit() or not digitos.isascii():
+        raise ErrorNegocio("El teléfono solo puede tener números.", campo="telefono")
+    if not TELEFONO_MIN <= len(digitos) <= TELEFONO_MAX:
+        raise ErrorNegocio(f"El teléfono debe tener entre {TELEFONO_MIN} y {TELEFONO_MAX} números.", campo="telefono")
+    return valor
+
 
 class RolUsuario(models.TextChoices):
     HUESPED = "HUESPED", "Huésped"
@@ -69,7 +87,7 @@ class Usuario(AbstractBaseUser):
         return self.rol == RolUsuario.ADMINISTRADOR
 
     @property
-    def restringida(self) -> bool:
+    def esta_restringida(self) -> bool:
         """Derivada: hay una RestriccionUsuario vigente."""
         return any(r.esta_vigente() for r in RestriccionUsuario.objects.filter(usuario_id=self.pk))
 
@@ -77,7 +95,47 @@ class Usuario(AbstractBaseUser):
     def is_active(self) -> bool:  # type: ignore[override]
         """SimpleJWT la revisa en cada petición: una cuenta desactivada o restringida pierde el
         acceso en la siguiente petición (ADR-005)."""
-        return self.activa and not self.restringida
+        return self.activa and not self.esta_restringida
+
+    # ---- operaciones del diagrama de clases (MOD-01). Cambian el estado de la cuenta; los permisos, los
+    # mensajes, la auditoría y los tokens los orquesta identidad.services en la misma transacción.
+    @classmethod
+    def registrar(cls, correo: str, clave: str, rol: str, **datos) -> "Usuario":
+        """registrar(correo, clave, rol) del diagrama: crea la cuenta con la contraseña cifrada y la fecha de la
+        autorización de tratamiento de datos (Ley 1581). Las validaciones previas las hace identidad.services."""
+        return cls.objects.create_user(correo=correo, password=clave, rol=rol, autorizacion_datos=timezone.now(), **datos)
+
+    def iniciar_sesion(self, correo: str, clave: str) -> bool:
+        """iniciarSesion(correo, clave) del diagrama: True si el correo y la contraseña son de esta cuenta."""
+        return (correo or "").strip().lower() == self.correo.lower() and self.check_password(clave or "")
+
+    _SIN_CAMBIO = object()
+
+    def actualizar_perfil(self, nombre=_SIN_CAMBIO, telefono=_SIN_CAMBIO) -> list[str]:
+        """actualizarPerfil(nombre, telefono) del diagrama: cambia los datos que llegan (ninguno puede quedar vacío,
+        CA-04.1) y devuelve los campos cambiados para guardarlos. El correo y el rol no se cambian aquí."""
+        cambiados = []
+        if nombre is not self._SIN_CAMBIO:
+            nombre = (nombre or "").strip()
+            if not nombre:
+                raise ErrorNegocio("Este dato no puede quedar vacío.", campo="nombre_completo")
+            self.nombre_completo = nombre
+            cambiados.append("nombre_completo")
+        if telefono is not self._SIN_CAMBIO:
+            self.telefono = validar_telefono(telefono)
+            cambiados.append("telefono")
+        return cambiados
+
+    def desactivar_cuenta(self) -> None:
+        """desactivar() del diagrama: la cuenta queda inactiva (CA-04.2). Las reglas previas (no ser administrador,
+        no tener reservas pendientes) las revisa identidad.services.desactivar_cuenta."""
+        self.activa = False
+        self.save(update_fields=["activa"])
+
+    def reactivar_cuenta(self) -> None:
+        """reactivar() del diagrama: la cuenta desactivada vuelve a estar activa al ingresar de nuevo (CA-04.4)."""
+        self.activa = True
+        self.save(update_fields=["activa"])
 
     def has_perm(self, perm, obj=None) -> bool:
         return self.is_staff

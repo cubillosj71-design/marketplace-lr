@@ -26,8 +26,8 @@ Para generar la versión estática: `npm run build` (queda en `dist/`).
 
 ## Cuentas de prueba
 
-Todas usan la contraseña `Clave1234`. En "Ingresar", los botones de cuentas de prueba solo llenan el correo: la
-contraseña se escribe.
+Todas usan la contraseña `Clave1234`. La pantalla "Ingresar" no muestra atajos a estas cuentas, porque la ve el
+cliente: el correo y la contraseña se escriben a mano.
 
 | Rol | Correo |
 |---|---|
@@ -43,7 +43,7 @@ contraseña se escribe.
 | Iniciar sesión, registro, recuperar contraseña | `/ingresar`, `/registro`, `/recuperar`, `/restablecer/:token` | Sin sesión |
 | Explorar sin cuenta y detalle | `/explorar-publico`, `/explorar-publico/:id` | Sin sesión (Visitante: `busqueda.ver`) |
 | Mi perfil y desactivar cuenta · Cambiar contraseña | `/perfil`, `/perfil/contrasena` | `perfil.gestionar` (desactivar: `cuenta.desactivar`) |
-| Roles y permisos (matriz de `GET /identidad/roles`) | `/roles` | Solo sesión |
+| Roles y permisos (matriz de `GET /identidad/roles`) | `/roles` | `usuarios.ver` (solo Administrador) |
 | Avisos | `/avisos` | `notificaciones.ver` |
 | Explorar y detalle | `/explorar`, `/explorar/:id` | `busqueda.ver` |
 | Cotización y pago | `/cotizacion/:id` | `reservas.cotizar` |
@@ -63,8 +63,13 @@ contraseña se escribe.
 ## Imágenes de las publicaciones
 
 La API guarda la dirección (URL) de cada imagen (`imagen_publicacion.ruta`, hasta 500 caracteres). El formulario
-agrega imágenes por URL o con "Agregar imagen de ejemplo". No hay subida de archivos: el backend no tiene un servicio
-de almacenamiento de archivos y el esquema no se cambia.
+agrega imágenes por URL. No hay subida de archivos: el backend no tiene un servicio de almacenamiento de archivos y el
+esquema no se cambia.
+
+Las fotos de los datos de demostración (`cargar_demo`) están en `public/alojamientos/` y el sitio las sirve en
+`/alojamientos/`, así se ven sin conexión a internet. Son de Wikimedia Commons con licencia libre (CC0, CC BY y
+CC BY-SA): el autor, la licencia y el enlace de cada una están en `public/alojamientos/CREDITOS.md`, que las licencias
+CC BY exigen. Para cambiar una, reemplaza el archivo con el mismo nombre y actualiza sus créditos.
 
 ## Estructura
 

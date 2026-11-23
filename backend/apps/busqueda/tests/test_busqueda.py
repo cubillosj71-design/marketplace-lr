@@ -7,20 +7,25 @@ from django.apps import apps
 
 from apps.catalogo import services as catalogo
 from apps.comun.fechas import fecha_maxima
+from apps.comun.management.commands.cargar_demo import PUBLICACIONES
 
 pytestmark = pytest.mark.django_db
 BUSCAR = "/api/v1/busqueda/publicaciones"
 
 
 def _ids_catalogo():
-    cat = catalogo.catalogos()
+    cat = catalogo.listar_catalogos()
     return ({c["nombre"]: c["id"] for c in cat["ciudades"]}, {t["nombre"]: t["id"] for t in cat["tipos"]},
             {s["nombre"]: s["id"] for s in cat["servicios"]})
 
 
+# La demo también tiene alojamientos en Cartagena: las pruebas solo miran los que crean ellas mismas
+DEMO = {datos["titulo"] for _, _, _, datos, _ in PUBLICACIONES}
+
+
 def _titulos(r):
     assert r.status_code == 200, r.content
-    return {p["titulo"] for p in r.json()}
+    return {p["titulo"] for p in r.json()} - DEMO
 
 
 def _reservar(entrar, pid, llegada, salida, huespedes=2):
@@ -158,6 +163,6 @@ def test_la_busqueda_es_publica_y_no_audita(publicar, cliente):
     from apps.auditoria import services as auditoria
 
     publicar("Pública")
-    antes = auditoria.consultar().count()
+    antes = auditoria.consultar_eventos().count()
     assert cliente.get(BUSCAR).status_code == 200
-    assert auditoria.consultar().count() == antes
+    assert auditoria.consultar_eventos().count() == antes

@@ -29,13 +29,13 @@ def test_ca_21_1_usuario_restringido_no_inicia_sesion(demo, entrar, cliente):
 def test_restringir_no_cambia_la_cuenta_ni_el_estado_de_sus_reservas(demo, entrar):
     huesped = entrar("huesped@correo.com")
     uid = huesped.usuario["id"]
-    antes = {r["id"]: r["estado"] for r in reservas.reservas_para_reporte() if r["huesped"] == uid}
+    antes = {r["id"]: r["estado"] for r in reservas.listar_reservas_para_reporte() if r["huesped"] == uid}
     assert antes and "CONFIRMADA" in set(antes.values())
     entrar("admin@inversioneslr.com").post(_url(uid), {"motivo": "Prueba"}, format="json")
-    despues = {r["id"]: r["estado"] for r in reservas.reservas_para_reporte() if r["huesped"] == uid}
+    despues = {r["id"]: r["estado"] for r in reservas.listar_reservas_para_reporte() if r["huesped"] == uid}
     assert despues == antes
     cuenta = apps.get_model("identidad", "Usuario").objects.get(pk=uid)
-    assert cuenta.activa is True and cuenta.restringida is True and cuenta.is_active is False
+    assert cuenta.activa is True and cuenta.esta_restringida is True and cuenta.is_active is False
 
 
 def test_ca_21_3_al_levantar_la_restriccion_vuelve_a_entrar(demo, entrar, cliente):

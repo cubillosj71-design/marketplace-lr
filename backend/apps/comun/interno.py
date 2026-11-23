@@ -19,7 +19,7 @@ class TareasDiarias(APIView):
         if not token_valido(request.headers.get("X-Token-Tareas")):
             from apps.auditoria import services as auditoria
 
-            auditoria.registrar(None, "AccesoDenegado", exitoso=False, ip=ip_de(request),
+            auditoria.registrar_evento(None, "AccesoDenegado", exitoso=False, ip=ip_de(request),
                                 detalle={"ruta": request.path, "metodo": request.method, "motivo": "Token de tareas ausente o incorrecto"})
             return Response({"detalle": "No autorizado."}, status=403)
         return Response(ejecutar_tareas_diarias("interno", ip=ip_de(request)))

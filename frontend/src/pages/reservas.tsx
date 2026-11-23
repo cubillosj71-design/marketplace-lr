@@ -4,7 +4,7 @@ import {
   leerError, misReservasApi, notificacionesApi,
   type NotificacionApi, type ReservaResumen, type SimulacionCancelacion,
 } from "../api";
-import { cop } from "../data";
+import { RESERVA_TXT, cop } from "../data";
 import { Page } from "../layout";
 import { useToast } from "../store";
 import { Alert, Field, Modal } from "../ui";
@@ -17,7 +17,7 @@ const CLASE_ESTADO: Record<ReservaResumen["estado"], string> = {
   CONFIRMADA: "badge-ACTIVA", COMPLETADA: "badge-PENDIENTE_REVISION", CANCELADA: "badge-BLOQUEADA", EN_REVISION: "badge-PAUSADA",
 };
 const EstadoReserva = ({ estado }: { estado: ReservaResumen["estado"] }) =>
-  <span className={`badge ${CLASE_ESTADO[estado]}`}>{estado.replace("_", " ")}</span>;
+  <span className={`badge ${CLASE_ESTADO[estado]}`}>{RESERVA_TXT[estado]}</span>;
 
 /** Hook común: carga una lista de la API y expone recargar. */
 function useLista(cargar: () => Promise<{ data: ReservaResumen[] }>) {
@@ -129,7 +129,7 @@ export function ReservasDeMisAlojamientos() {
       <div className="row" style={{ gap: 8 }}>
         <select className="select" value={filtro} onChange={(e) => setFiltro(e.target.value)} aria-label="Estado" style={{ maxWidth: 240 }}>
           <option value="">Todos los estados</option>
-          {["CONFIRMADA", "EN_REVISION", "COMPLETADA", "CANCELADA"].map((e) => <option key={e} value={e}>{e.replace("_", " ")}</option>)}
+          {["CONFIRMADA", "EN_REVISION", "COMPLETADA", "CANCELADA"].map((e) => <option key={e} value={e}>{RESERVA_TXT[e]}</option>)}
         </select>
       </div>
       {error && <Alert tipo="error">{error}</Alert>}
@@ -153,7 +153,7 @@ export function ReservasEnRevision() {
     setEnviando(r.id);
     try {
       await misReservasApi.resolver(r.id, mantener, mantener ? undefined : motivo.trim());
-      toast(mantener ? "La reserva vuelve a CONFIRMADA" : "Reserva cancelada con devolución del 100 %");
+      toast(mantener ? "La reserva sigue confirmada" : "Reserva cancelada con devolución del 100 %");
       setCancelar(null);
       recargar();
     } catch (e) {

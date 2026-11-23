@@ -14,6 +14,7 @@ from django.core.management import call_command
 from openpyxl import load_workbook
 
 from apps.auditoria import services as auditoria
+from apps.reportes import archivos
 from apps.reservas import services as reservas
 
 pytestmark = pytest.mark.django_db
@@ -34,8 +35,8 @@ def reservar_en(reloj):
     def _reservar(pid, creada, llegada, noches=1, adicionales=()):
         reloj(creada)
         d = date.fromisoformat(llegada)
-        cot = reservas.cotizar(huesped, pid, d, d + timedelta(days=noches), 2, adicionales)
-        r, _ = reservas.reservar(huesped, cot.id, uuid.uuid4(), "simulado")
+        cot = reservas.cotizar_estancia(huesped, pid, d, d + timedelta(days=noches), 2, adicionales)
+        r, _ = reservas.reservar_alojamiento(huesped, cot.id, uuid.uuid4(), "simulado")
         return r["id"]
 
     _reservar.huesped = huesped
@@ -44,7 +45,7 @@ def reservar_en(reloj):
 
 def _cancelar(reloj, huesped, rid, dia, motivo="Cambio de planes"):
     reloj(dia)
-    return reservas.cancelar(huesped, rid, motivo)
+    return reservas.cancelar_reserva(huesped, rid, motivo)
 
 
 def _tablero(admin, periodo=OCTUBRE):
@@ -62,7 +63,7 @@ def test_ca_24_1_cantidades_por_estado_de_las_reservas_creadas_en_octubre(admin,
     for rid in canceladas:
         _cancelar(reloj, reservar_en.huesped, rid, "2027-10-20")
     reloj("2027-11-01")
-    reservas.completar_vencidas()  # (cancelar ya completa las vencidas; aquí no queda ninguna)
+    reservas.completar_reservas_vencidas()  # (cancelar ya completa las vencidas; aquí no queda ninguna)
     assert apps.get_model("reservas", "Reserva").objects.filter(pk__in=completadas, estado="COMPLETADA").count() == 5
     t = _tablero(admin)
     assert t["reservas_por_estado"] == {"CONFIRMADA": 12, "EN_REVISION": 0, "COMPLETADA": 5, "CANCELADA": 3}
@@ -75,7 +76,7 @@ def test_ca_24_2_completadas_por_2_millones_con_180_mil_de_servicio(admin, publi
     reservar_en(pid, "2027-10-02", "2027-10-05")
     reservar_en(pid, "2027-10-03", "2027-10-08")
     reloj("2027-11-01")
-    reservas.completar_vencidas()
+    reservas.completar_reservas_vencidas()
     t = _tablero(admin)
     assert t["reservas_por_estado"]["COMPLETADA"] == 2
     assert t["ingresos"] == {"bruto": "2000000.00", "plataforma": "180000.00"}
@@ -121,8 +122,8 @@ def test_en_revision_suma_al_bruto_y_a_la_plataforma(admin, publicar, reservar_e
 
 def test_tablero_usuarios_por_rol_y_publicaciones_activas(admin):
     t = _tablero(admin, {"desde": "2026-01-01", "hasta": "2026-12-31"})
-    assert t["usuarios_por_rol"] == {"HUESPED": 1, "ANFITRION": 4, "ADMINISTRADOR": 1}
-    assert t["publicaciones_activas"] == 5
+    assert t["usuarios_por_rol"] == {"HUESPED": 4, "ANFITRION": 6, "ADMINISTRADOR": 1}
+    assert t["publicaciones_activas"] == 13
 
 
 @pytest.mark.parametrize("periodo,mensaje", [
@@ -157,19 +158,24 @@ def test_ca_25_1_excel_de_reservas_de_octubre_coincide_con_el_tablero(admin, pub
     _cancelar(reloj, reservar_en.huesped, rid, "2027-10-15")
     reservar_en(pid, "2027-11-02", "2027-12-10")  # de noviembre: no entra
     reloj("2027-11-05")
-    reservas.completar_vencidas()
+    reservas.completar_reservas_vencidas()
     t = _tablero(admin)
     libro = _excel(admin, "reservas")
-    filas = list(libro["Detalle"].iter_rows(min_row=2, values_only=True))
-    cabecera = [c.value for c in libro["Detalle"][1]]
+    filas = list(libro["Detalle"].iter_rows(min_row=archivos.FILA_CABECERA + 1, values_only=True))
+    cabecera = [c.value for c in libro["Detalle"][archivos.FILA_CABECERA]]
     col = {nombre: i for i, nombre in enumerate(cabecera)}
     assert len(filas) == t["reservas_total"] == 3
     assert Decimal(str(sum(f[col["Monto bruto"]] for f in filas))) == Decimal(t["ingresos"]["bruto"])
     assert Decimal(str(sum(f[col["Ingreso plataforma"]] for f in filas))) == Decimal(t["ingresos"]["plataforma"])
     estados = {e: sum(1 for f in filas if f[col["Estado"]] == e) for e in t["reservas_por_estado"]}
     assert estados == t["reservas_por_estado"]
-    resumen = dict(libro["Resumen"].iter_rows(min_row=6, values_only=True))
+    resumen = dict(libro["Resumen"].iter_rows(min_row=7, values_only=True))
     assert resumen["Reservas creadas en el periodo"] == t["reservas_total"]
+    # La serie por día de las gráficas suma lo mismo que las cifras del tablero
+    assert sum(d["reservas"] for d in t["serie_diaria"]) == t["reservas_total"]
+    assert sum(Decimal(d["monto_bruto"]) for d in t["serie_diaria"]) == Decimal(t["ingresos"]["bruto"])
+    assert sum(Decimal(d["ingreso_plataforma"]) for d in t["serie_diaria"]) == Decimal(t["ingresos"]["plataforma"])
+    assert [d["fecha"] for d in t["serie_diaria"]] == sorted(d["fecha"] for d in t["serie_diaria"])
 
 
 def test_ingresos_y_demanda_cuadran_con_el_tablero(admin, publicar, reservar_en):
@@ -177,17 +183,18 @@ def test_ingresos_y_demanda_cuadran_con_el_tablero(admin, publicar, reservar_en)
     reservar_en(cartagena, "2027-10-01", "2027-10-10")
     reservar_en(cartagena, "2027-10-02", "2027-10-20")
     t = _tablero(admin)
-    resumen = dict(_excel(admin, "ingresos")["Resumen"].iter_rows(min_row=6, values_only=True))
+    resumen = dict(_excel(admin, "ingresos")["Resumen"].iter_rows(min_row=7, values_only=True))
     assert resumen["Monto bruto (COP)"] == "$220.000" and t["ingresos"]["bruto"] == "220000.00"
     assert resumen["Ingreso de la plataforma, tarifa de servicio (COP)"] == "$20.000"
-    demanda = list(_excel(admin, "demanda")["Detalle"].iter_rows(min_row=2, values_only=True))
-    assert ("Ciudad", "Cartagena", 2, 220000) in [tuple(f) for f in demanda]
+    demanda = list(_excel(admin, "demanda")["Detalle"].iter_rows(min_row=archivos.FILA_CABECERA + 1, values_only=True))
+    cartagena_filas = [f for f in demanda if f[1] == "Cartagena"]  # una fila por día, ciudad y tipo
+    assert sum(f[3] for f in cartagena_filas) == 2 and sum(f[4] for f in cartagena_filas) == 220000
     assert t["top_ciudades"][0] == {"ciudad": "Cartagena", "reservas": 2, "monto_bruto": "220000.00"}
 
 
 def test_ca_25_2_la_descarga_queda_registrada_con_administrador_reporte_formato_y_periodo(admin):
     admin.get("/api/v1/admin/reportes/usuarios", {**OCTUBRE, "formato": "pdf"})
-    evento = auditoria.consultar(accion="ReporteDescargado").get()
+    evento = auditoria.consultar_eventos(accion="ReporteDescargado").get()
     assert evento.actor_id == admin.usuario["id"] and evento.fecha
     assert (evento.detalle["tipo"], evento.detalle["formato"], evento.detalle["desde"], evento.detalle["hasta"]) == (
         "usuarios", "pdf", "2027-10-01", "2027-10-31")
@@ -201,7 +208,7 @@ def test_ca_25_2_si_no_se_puede_registrar_no_se_entrega_el_archivo(admin, monkey
     def fallar(*a, **kw):
         raise RuntimeError("auditoría no disponible")
 
-    monkeypatch.setattr(services.auditoria, "registrar", fallar)
+    monkeypatch.setattr(services.auditoria, "registrar_evento", fallar)
     r = admin.get("/api/v1/admin/reportes/usuarios", {**OCTUBRE, "formato": "pdf"})
     assert r.status_code == 500 and not r.content.startswith(b"%PDF")
 
@@ -216,21 +223,23 @@ def test_ca_25_3_cada_reporte_de_octubre_en_su_formato(admin, tipo, formato):
     assert r.status_code == 200
     assert r.content[:4] == (b"%PDF" if formato == "pdf" else b"PK\x03\x04")
     assert f'filename="reporte-{tipo}_2026-10-01_2026-10-31.{formato}"' in r["Content-Disposition"]
-    registrados = auditoria.consultar(accion="ReporteDescargado").get().detalle["registros"]
-    esperados = {"usuarios": 1, "publicaciones": 3, "reservas": 4, "ingresos": 1, "demanda": 6}
+    registrados = auditoria.consultar_eventos(accion="ReporteDescargado").get().detalle["registros"]
+    # Demanda: una fila por día, ciudad y tipo (RF-D-ADM-05.2, ordenada por fecha): las 4 reservas de octubre de la
+    # demo se crearon en 4 días distintos
+    esperados = {"usuarios": 1, "publicaciones": 3, "reservas": 4, "ingresos": 1, "demanda": 4}
     assert registrados == esperados[tipo]  # datos de octubre de ese reporte
 
 
 def test_reporte_de_usuarios_filtra_por_estado_derivado_de_la_cuenta(admin):
     libro = _excel(admin, "usuarios", {"desde": "2026-01-01", "hasta": "2026-12-31", "estado": "RESTRINGIDA"})
-    filas = list(libro["Detalle"].iter_rows(min_row=2, values_only=True))
-    assert [(f[1], f[3], f[5]) for f in filas] == [("restringido@correo.com", "Bogotá", "Restringida")]
+    filas = list(libro["Detalle"].iter_rows(min_row=archivos.FILA_CABECERA + 1, values_only=True))
+    assert [(f[2], f[4], f[6]) for f in filas] == [("restringido@correo.com", "Bogotá", "Restringida")]
 
 
 def test_reporte_de_publicaciones_filtra_por_ciudad_y_estado(admin):
     libro = _excel(admin, "publicaciones", {"desde": "2026-01-01", "hasta": "2026-12-31", "ciudad": "bogotá", "estado": "ACTIVA"})
-    titulos = {f[1] for f in libro["Detalle"].iter_rows(min_row=2, values_only=True)}
-    assert titulos == {"Apartamento con vista a Monserrate"}
+    titulos = {f[1] for f in libro["Detalle"].iter_rows(min_row=archivos.FILA_CABECERA + 1, values_only=True)}
+    assert titulos == {"Apartamento con vista a Monserrate", "Apartamento en La Macarena"}
 
 
 def test_tipo_invalido(admin):
@@ -242,7 +251,7 @@ def test_la_demo_trae_todos_los_estados_en_octubre_y_noviembre_de_2026(reloj, db
     call_command("cargar_demo", verbosity=0)
     t = _tablero(entrar("admin@inversioneslr.com"), {"desde": "2026-10-01", "hasta": "2026-11-30"})
     assert t["reservas_por_estado"] == {"CONFIRMADA": 3, "EN_REVISION": 1, "COMPLETADA": 2, "CANCELADA": 1}
-    cancelacion = apps.get_model("reservas", "Cancelacion").objects.get()
+    cancelacion = apps.get_model("reservas", "Cancelacion").objects.get(motivo="Cambio de planes")  # la de noviembre (Laureles)
     assert 0 < cancelacion.porcentaje_devolucion < 100  # devolución parcial
     assert t["top_ciudades"][0]["ciudad"] == "Bogotá"
 
