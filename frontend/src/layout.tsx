@@ -119,6 +119,7 @@ const MIGAS: [RegExp, string][] = [
   [/^\/admin\/revision/, "Pendientes de revisión"],
   [/^\/admin\/publicaciones/, "Todas las publicaciones"],
   [/^\/admin\/registro/, "Registro de acciones"],
+  [/^\/admin\/reservas\/\d+/, "Detalle de la reserva"],
   [/^\/admin\/reservas/, "Reservas en revisión"],
   [/^\/reservas-alojamientos\/\d+/, "Detalle de la reserva"],
   [/^\/reservas\/\d+/, "Detalle de la reserva"],

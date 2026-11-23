@@ -253,6 +253,8 @@ CASOS = [
     Caso("GET", "api/v1/admin/tarifa-servicio", frozenset({ADM}), _fija("/api/v1/admin/tarifa-servicio")),
     Caso("PUT", "api/v1/admin/tarifa-servicio", frozenset({ADM}), _fija("/api/v1/admin/tarifa-servicio", {"porcentaje": "12.00"})),
     Caso("GET", "api/v1/admin/reservas", frozenset({ADM}), _fija("/api/v1/admin/reservas")),
+    Caso("GET", "api/v1/admin/reservas/resueltas", frozenset({ADM}), _fija("/api/v1/admin/reservas/resueltas")),
+    Caso("GET", "api/v1/admin/reservas/<int:pk>", frozenset({ADM}), lambda c, r: (f"/api/v1/admin/reservas/{c['en_revision']}", None)),
     Caso("POST", "api/v1/admin/reservas/<int:pk>/resolver", frozenset({ADM}),
          lambda c, r: (f"/api/v1/admin/reservas/{c['en_revision']}/resolver", {"mantener": False, "motivo": "Publicación engañosa"})),
     Caso("GET", "api/v1/admin/auditoria", frozenset({ADM}), _fija("/api/v1/admin/auditoria")),

@@ -1,4 +1,4 @@
-import { ArrowLeft, Bell, CalendarCheck, CheckCheck, ClipboardCheck, Home, Inbox, MapPin, Search, XCircle } from "lucide-react";
+import { ArrowLeft, Bell, CalendarCheck, CheckCheck, Home, Inbox, MapPin, Search, XCircle } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
@@ -31,8 +31,8 @@ const QUIEN_CANCELO: Record<string, { huesped: string; anfitrion: string }> = {
   AUTOMATICA: { huesped: " automáticamente", anfitrion: " automáticamente" },
 };
 /** "Cancelada el 10 nov 2026, 10:00 a. m. por el huésped." */
-const textoCancelada = (c: NonNullable<ReservaResumen["cancelacion"]>, vista: "huesped" | "anfitrion") => {
-  const quien = QUIEN_CANCELO[c.cancelada_por_rol]?.[vista];
+const textoCancelada = (c: NonNullable<ReservaResumen["cancelacion"]>, vista: "huesped" | "anfitrion" | "admin") => {
+  const quien = QUIEN_CANCELO[c.cancelada_por_rol]?.[vista === "huesped" ? "huesped" : "anfitrion"];
   // fechaHora quita el punto final de "a. m." para cerrar la frase; si sigue "por ...", va la hora completa
   const completa = new Date(c.fecha).toLocaleString("es-CO", { dateStyle: "medium", timeStyle: "short" });
   return quien ? `Cancelada el ${completa}${quien}.` : `Cancelada el ${fechaHora(c.fecha)}.`;
@@ -47,29 +47,6 @@ function useLista(cargar: () => Promise<{ data: ReservaResumen[] }>) {
   }, [cargar]);
   useEffect(recargar, [recargar]);
   return { lista, error, recargar };
-}
-
-function TarjetaReserva({ r, verHuesped, children }: { r: ReservaResumen; verHuesped?: boolean; children?: React.ReactNode }) {
-  return (
-    <section className="card stack" style={{ gap: 10 }}>
-      <div className="row-between" style={{ gap: 8, flexWrap: "wrap" }}>
-        <h3 style={{ margin: 0 }}>{r.alojamiento ?? `Alojamiento ${r.publicacion}`}</h3>
-        <EstadoReserva r={r} />
-      </div>
-      <p className="muted" style={{ margin: 0 }}>
-        {fecha(r.fecha_llegada)} al {fecha(r.fecha_salida)} · {r.noches} {r.noches === 1 ? "noche" : "noches"} · {r.num_huespedes} {r.num_huespedes === 1 ? "huésped" : "huéspedes"}
-        {verHuesped && r.huesped_nombre ? ` · ${r.huesped_nombre}` : ""}
-      </p>
-      <p style={{ margin: 0 }}>Total: <b>{pesos(r.total)}</b></p>
-      {r.cancelacion && (
-        <Alert tipo="info">
-          {textoCancelada(r.cancelacion, "anfitrion")}{" "}
-          Motivo: {r.cancelacion.motivo.replace(/\.$/, "")}. Devolución: {pesos(r.cancelacion.valor_devolucion)} ({Number(r.cancelacion.porcentaje_devolucion)} %).
-        </Alert>
-      )}
-      {children}
-    </section>
-  );
 }
 
 /* ---------------- HU-15 Cancelar: la misma ventana en la tarjeta y en el detalle ---------------- */
@@ -125,6 +102,100 @@ function useCancelarReserva(alCancelar: () => void) {
   return { abrir, ventana };
 }
 
+/* ---------------- HU-20 Resolver una reserva EN_REVISION: la misma confirmación en la tarjeta y en el detalle ---------------- */
+type ParaResolver = Pick<ReservaResumen, "id" | "alojamiento" | "fecha_llegada" | "fecha_salida" | "total">;
+
+function useResolverReserva(alResolver: () => void) {
+  const toast = useToast();
+  const [pendiente, setPendiente] = useState<{ r: ParaResolver; mantener: boolean } | null>(null);
+  const [motivo, setMotivo] = useState("");
+  const [errModal, setErrModal] = useState("");
+  const [enviando, setEnviando] = useState(false);
+
+  const abrir = (r: ParaResolver, mantener: boolean) => { setMotivo(""); setErrModal(""); setPendiente({ r, mantener }); };
+  const confirmar = async () => {
+    if (!pendiente) return;
+    const { r, mantener } = pendiente;
+    if (!mantener && !motivo.trim()) return setErrModal("Escribe el motivo de la cancelación.");
+    setEnviando(true);
+    try {
+      await misReservasApi.resolver(r.id, mantener, mantener ? undefined : motivo.trim());
+      toast(mantener ? "La reserva sigue confirmada" : "Reserva cancelada con devolución del 100 %");
+      setPendiente(null);
+      alResolver();
+    } catch (e) { setErrModal(leerError(e).error); }
+    finally { setEnviando(false); }
+  };
+
+  const ventana = pendiente && (
+    <Modal onClose={() => setPendiente(null)}>
+      <h2>{pendiente.mantener ? "¿Mantener la reserva?" : "Cancelar con devolución"}</h2>
+      <p className="muted">{pendiente.r.alojamiento} · {fecha(pendiente.r.fecha_llegada)} al {fecha(pendiente.r.fecha_salida)}</p>
+      {pendiente.mantener ? (
+        <>
+          <Alert tipo="info">La reserva vuelve a Confirmada y se avisa al huésped y al anfitrión.</Alert>
+          {errModal && <Alert tipo="error">{errModal}</Alert>}
+        </>
+      ) : (
+        <>
+          <Alert tipo="warn">Se cancela y se devuelve <b>{pesos(pendiente.r.total)}</b> (100 %) al huésped. El huésped y el anfitrión reciben un aviso.</Alert>
+          <Field label="Motivo (obligatorio)" error={errModal}>
+            <textarea className="input" rows={3} value={motivo} onChange={(e) => setMotivo(e.target.value)} />
+          </Field>
+        </>
+      )}
+      <div className="modal-actions">
+        <button className="btn btn-secondary" onClick={() => setPendiente(null)}>Volver</button>
+        <button className="btn btn-primary" style={pendiente.mantener ? undefined : { background: "var(--err)" }} disabled={enviando} onClick={confirmar}>
+          {enviando ? "Guardando…" : pendiente.mantener ? "Sí, mantener" : "Cancelar reserva"}
+        </button>
+      </div>
+    </Modal>
+  );
+  return { abrir, ventana };
+}
+
+/** "Faltan 5 días para la llegada. Si no se resuelve, se cancela sola el 10 de dic de 2026 con devolución del 100 %."
+ *  Con 3 días o menos va en color de alerta. */
+function AvisoPlazo({ r }: { r: ReservaResumen }) {
+  const n = r.dias_para_llegada ?? 0;
+  const faltan = n <= 0 ? "La llegada es hoy." : `Faltan ${n} ${n === 1 ? "día" : "días"} para la llegada.`;
+  return (
+    <Alert tipo={n <= 3 ? "warn" : "info"}>
+      {faltan} Si no se resuelve, se cancela sola el {fecha(r.fecha_llegada)} con devolución del 100 %.
+    </Alert>
+  );
+}
+
+/** Bloqueo de la publicación (historial de revisiones) y, en Resueltas, el resultado. */
+function DatosRevision({ r }: { r: ReservaResumen }) {
+  const res = r.resolucion;
+  return (
+    <>
+      {r.bloqueo && (
+        <p className="muted" style={{ margin: 0 }}>
+          Publicación bloqueada el {fechaHora(r.bloqueo.fecha)}. Motivo: {(r.bloqueo.motivo ?? "sin motivo").replace(/\.$/, "")}.
+        </p>
+      )}
+      {res?.resultado === "MANTENIDA" && (
+        <p style={{ margin: 0 }}><b>Mantenida:</b> volvió a Confirmada.{res.por ? ` La resolvió ${res.por}` : ""}{res.fecha ? ` el ${fechaHora(res.fecha)}` : ""}.</p>
+      )}
+      {res?.resultado === "CANCELADA_ADMINISTRADOR" && (
+        <p style={{ margin: 0 }}>
+          <b>Cancelada por el administrador</b>{res.por ? ` (${res.por})` : ""}{res.fecha ? ` el ${fechaHora(res.fecha)}` : ""}.
+          {res.motivo ? ` Motivo: ${res.motivo.replace(/\.$/, "")}.` : ""} Devuelto: {pesos(res.valor_devolucion ?? "0")} (100 %).
+        </p>
+      )}
+      {res?.resultado === "CANCELADA_AUTOMATICA" && (
+        <p style={{ margin: 0 }}>
+          <b>Cancelada automáticamente</b>{res.fecha ? ` el ${fechaHora(res.fecha)}` : ""}. Motivo: Sin resolución antes de la llegada.
+          {" "}Devuelto: {pesos(res.valor_devolucion ?? "0")} (100 %).
+        </p>
+      )}
+    </>
+  );
+}
+
 /** Portada del alojamiento; sin imagen (o si no carga) queda el fondo neutro con el ícono de la casa. */
 function Portada({ src, alt, className = "" }: { src: string | null; alt: string; className?: string }) {
   const [rota, setRota] = useState(false);
@@ -137,14 +208,14 @@ function Portada({ src, alt, className = "" }: { src: string | null; alt: string
 }
 
 /* ---------------- Pestañas y tarjetas con portada: Mis reservas (huésped) y Reservas de mis alojamientos (anfitrión) ---------------- */
-type Vista = "huesped" | "anfitrion";
+type Vista = "huesped" | "anfitrion" | "admin";
 const PESTANAS = [
   { clave: "proximas", nombre: "Próximas", vacia: "No hay reservas próximas." },
   { clave: "revision", nombre: "En revisión", vacia: "No hay reservas en revisión." },
   { clave: "pasadas", nombre: "Pasadas", vacia: "Todavía no hay estancias pasadas." },
   { clave: "canceladas", nombre: "Canceladas", vacia: "No hay reservas canceladas." },
 ] as const;
-type Pestana = (typeof PESTANAS)[number]["clave"];
+type Pestana = (typeof PESTANAS)[number]["clave"];  // las del huésped y el anfitrión
 
 /** Huésped: Próximas son las pendientes (mismo criterio que el perfil, incluye EN_REVISION). Anfitrión: Próximas son las
  *  CONFIRMADAS con salida >= hoy y las EN_REVISION van en su propia pestaña. Pasadas: COMPLETADA o con la salida ya
@@ -164,13 +235,19 @@ function separarReservas(lista: ReservaResumen[], vista: Vista, hoy = hoyEnColom
   };
 }
 
-/** Enlace a la publicación: el huésped va al detalle de Explorar; el anfitrión, a su publicación. */
+/** Enlace a la publicación: el huésped va al detalle de Explorar; el anfitrión, a su publicación; el Administrador, al
+ *  detalle de administración. */
 const enlacePublicacion = (vista: Vista, id: number) =>
-  vista === "huesped" ? { to: `/explorar/${id}`, texto: "Ver alojamiento" } : { to: `/publicaciones/${id}`, texto: "Ver publicación" };
+  vista === "huesped" ? { to: `/explorar/${id}`, texto: "Ver alojamiento" }
+    : vista === "anfitrion" ? { to: `/publicaciones/${id}`, texto: "Ver publicación" }
+      : { to: `/admin/publicaciones/${id}`, texto: "Ver publicación" };
+const RUTA_DETALLE: Record<Vista, string> = { huesped: "/reservas", anfitrion: "/reservas-alojamientos", admin: "/admin/reservas" };
 
-function TarjetaConPortada({ r, vista, onCancelar }: { r: ReservaResumen; vista: Vista; onCancelar?: () => void }) {
+function TarjetaConPortada({ r, vista, onCancelar, onResolver }: {
+  r: ReservaResumen; vista: Vista; onCancelar?: () => void; onResolver?: (mantener: boolean) => void;
+}) {
   const go = useNavigate();
-  const detalle = vista === "huesped" ? `/reservas/${r.id}` : `/reservas-alojamientos/${r.id}`;
+  const detalle = `${RUTA_DETALLE[vista]}/${r.id}`;
   const enlace = enlacePublicacion(vista, r.publicacion);
   const parar = (e: React.SyntheticEvent) => e.stopPropagation();  // los botones de adentro no abren el detalle
   return (
@@ -189,10 +266,15 @@ function TarjetaConPortada({ r, vista, onCancelar }: { r: ReservaResumen; vista:
           {fecha(r.fecha_llegada)} al {fecha(r.fecha_salida)} · {r.noches} {r.noches === 1 ? "noche" : "noches"} · {r.num_huespedes} {r.num_huespedes === 1 ? "huésped" : "huéspedes"}
         </p>
         {vista === "anfitrion" && r.huesped_nombre && <p style={{ margin: 0 }}>Huésped: <b>{r.huesped_nombre}</b></p>}
+        {vista === "admin" && (
+          <p style={{ margin: 0 }}>Huésped: <b>{r.huesped_nombre ?? "—"}</b> · Anfitrión: <b>{r.anfitrion_nombre ?? "—"}</b></p>
+        )}
         <p style={{ margin: 0 }}>Total: <b>{pesos(r.total)}</b></p>
         {vista === "huesped" && estaEnCurso(r) && <p className="muted" style={{ margin: 0 }}>{EN_CURSO_SIN_CANCELAR}</p>}
         {vista === "anfitrion" && r.estado === "EN_REVISION" && <p className="muted" style={{ margin: 0 }}>La resuelve el administrador antes de la llegada.</p>}
-        {r.cancelacion && (
+        {vista === "admin" && <DatosRevision r={r} />}
+        {vista === "admin" && r.estado === "EN_REVISION" && <AvisoPlazo r={r} />}
+        {vista !== "admin" && r.cancelacion && (
           <p className="muted" style={{ margin: 0 }}>
             {textoCancelada(r.cancelacion, vista)} Devolución: {pesos(r.cancelacion.valor_devolucion)} ({Number(r.cancelacion.porcentaje_devolucion)} %).
           </p>
@@ -202,44 +284,58 @@ function TarjetaConPortada({ r, vista, onCancelar }: { r: ReservaResumen; vista:
           {vista === "huesped" && r.cancelable && onCancelar && (
             <button className="btn btn-secondary btn-sm" onClick={(e) => { parar(e); onCancelar(); }}><XCircle /> Cancelar</button>
           )}
+          {vista === "admin" && r.estado === "EN_REVISION" && onResolver && (
+            <>
+              <button className="btn btn-primary btn-sm" onClick={(e) => { parar(e); onResolver(true); }}>Mantener</button>
+              <button className="btn btn-danger btn-sm" onClick={(e) => { parar(e); onResolver(false); }}>Cancelar con devolución</button>
+            </>
+          )}
         </div>
       </div>
     </section>
   );
 }
 
-/** Pestañas con su número, la elegida en la URL (?pestana=), y las tarjetas. El anfitrión ve "En revisión" solo si hay. */
-function ReservasConPestanas({ vista, lista, onCancelar }: { vista: Vista; lista: ReservaResumen[] | null; onCancelar?: (r: ReservaResumen) => void }) {
+/** Pestañas con su número y la elegida en la URL (?pestana=; la primera no se escribe), con sus tarjetas. La usan las tres
+ *  pantallas de reservas: huésped, anfitrión y Administrador. */
+type PestanaDeReservas = { clave: string; nombre: string; vacia: string; lista: ReservaResumen[] };
+function PestanasDeReservas({ pestanas, cargada, tarjeta, accionVacia }: {
+  pestanas: PestanaDeReservas[]; cargada: boolean; tarjeta: (r: ReservaResumen) => React.ReactNode; accionVacia?: React.ReactNode;
+}) {
   const [params, setParams] = useSearchParams();
-  const grupos = useMemo(() => separarReservas(lista ?? [], vista), [lista, vista]);
-  const visibles = PESTANAS.filter((p) => p.clave !== "revision" || (vista === "anfitrion" && grupos.revision.length > 0));
-  const pedida = params.get("pestana");
-  const actual = visibles.find((p) => p.clave === pedida) ?? visibles[0];
-  const elegir = (clave: Pestana) => {
+  const actual = pestanas.find((p) => p.clave === params.get("pestana")) ?? pestanas[0];
+  const elegir = (clave: string) => {
     const nuevos = new URLSearchParams(params);
-    if (clave === "proximas") nuevos.delete("pestana"); else nuevos.set("pestana", clave);
+    if (clave === pestanas[0].clave) nuevos.delete("pestana"); else nuevos.set("pestana", clave);
     setParams(nuevos, { replace: true });
   };
   return (
     <>
       <div className="chips" role="tablist" aria-label="Reservas">
-        {visibles.map((p) => (
+        {pestanas.map((p) => (
           <button key={p.clave} role="tab" aria-selected={p.clave === actual.clave} className={`chip-toggle ${p.clave === actual.clave ? "on" : ""}`}
             onClick={() => elegir(p.clave)}>
-            {p.nombre} ({lista ? grupos[p.clave].length : "…"})
+            {p.nombre} ({cargada ? p.lista.length : "…"})
           </button>
         ))}
       </div>
-      {lista && grupos[actual.clave].length === 0 && (
-        <div className="card empty-state">
-          <CalendarCheck /><b>{actual.vacia}</b>
-          {vista === "huesped" && <Link className="btn btn-primary" to="/explorar"><Search /> Explorar alojamientos</Link>}
-        </div>
+      {cargada && actual.lista.length === 0 && (
+        <div className="card empty-state"><CalendarCheck /><b>{actual.vacia}</b>{accionVacia}</div>
       )}
-      <div className="stack" role="tabpanel" aria-label={actual.nombre}>
-        {grupos[actual.clave].map((r) => <TarjetaConPortada key={r.id} r={r} vista={vista} onCancelar={onCancelar && (() => onCancelar(r))} />)}
-      </div>
+      <div className="stack" role="tabpanel" aria-label={actual.nombre}>{actual.lista.map((r) => tarjeta(r))}</div>
     </>
+  );
+}
+
+/** Huésped y anfitrión: las pestañas salen de separarReservas. El anfitrión ve "En revisión" solo si hay. */
+function ReservasConPestanas({ vista, lista, onCancelar }: { vista: Vista; lista: ReservaResumen[] | null; onCancelar?: (r: ReservaResumen) => void }) {
+  const grupos = useMemo(() => separarReservas(lista ?? [], vista), [lista, vista]);
+  const pestanas = PESTANAS.filter((p) => p.clave !== "revision" || (vista === "anfitrion" && grupos.revision.length > 0))
+    .map((p) => ({ ...p, lista: grupos[p.clave] }));
+  return (
+    <PestanasDeReservas pestanas={pestanas} cargada={!!lista}
+      accionVacia={vista === "huesped" && <Link className="btn btn-primary" to="/explorar"><Search /> Explorar alojamientos</Link>}
+      tarjeta={(r) => <TarjetaConPortada key={r.id} r={r} vista={vista} onCancelar={onCancelar && (() => onCancelar(r))} />} />
   );
 }
 
@@ -304,22 +400,25 @@ const Linea = ({ izq, der, fuerte }: { izq: React.ReactNode; der: React.ReactNod
   <div className="row-between" style={{ gap: 12, fontWeight: fuerte ? 700 : undefined }}><span>{izq}</span><span style={{ whiteSpace: "nowrap" }}>{der}</span></div>
 );
 
-export function DetalleReserva() {
+export function DetalleReserva({ admin = false }: { admin?: boolean }) {
   const { id } = useParams();
   const { usuario, tiene } = useStore();
   const go = useNavigate();
   const [r, setR] = useState<ReservaDetalleApi | null>(null);
   const [error, setError] = useState("");
   const cargar = useCallback(() => {
-    misReservasApi.detalle(Number(id)).then((x) => { setR(x.data); setError(""); }).catch((e) => setError(leerError(e).error));
-  }, [id]);
+    (admin ? misReservasApi.detalleAdmin : misReservasApi.detalle)(Number(id))
+      .then((x) => { setR(x.data); setError(""); }).catch((e) => setError(leerError(e).error));
+  }, [id, admin]);
   useEffect(() => { setR(null); setError(""); }, [id]);  // otra reserva: no mostrar la anterior mientras carga
   useEffect(cargar, [cargar]);
   const { abrir, ventana } = useCancelarReserva(cargar);
+  const resolver = useResolverReserva(cargar);
   const esHuesped = !!r && r.huesped === usuario?.id;
   const esAnfitrion = !!r && !esHuesped && r.anfitrion === usuario?.id;
   // Volver a la lista de donde viene: Mis reservas (huésped) o Reservas de mis alojamientos (anfitrión)
-  const volver = esHuesped || (!r && tiene("reservas.ver_propias")) ? { to: "/reservas", texto: "Mis reservas" }
+  const volver = admin ? { to: "/admin/reservas", texto: "Reservas en revisión" }
+    : esHuesped || (!r && tiene("reservas.ver_propias")) ? { to: "/reservas", texto: "Mis reservas" }
     : esAnfitrion || (!r && tiene("reservas.ver_de_mis_alojamientos")) ? { to: "/reservas-alojamientos", texto: "Reservas de mis alojamientos" } : null;
   const enlaceVolver = volver
     ? <Link to={volver.to} className="row" style={{ gap: 4 }}><ArrowLeft size={16} /> {volver.texto}</Link>
@@ -357,7 +456,22 @@ export function DetalleReserva() {
         </section>
 
         <div className="stack">
-          {r.estado === "CANCELADA" && r.cancelacion && (
+          {admin && (r.bloqueo || r.resolucion) && (
+            <section className="card stack" style={{ gap: 8 }}>
+              <h2 style={{ margin: 0 }}>Revisión</h2>
+              <DatosRevision r={r} />
+            </section>
+          )}
+          {admin && r.estado === "EN_REVISION" && (
+            <>
+              <AvisoPlazo r={r} />
+              <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                <button className="btn btn-primary" onClick={() => resolver.abrir(r, true)}>Mantener</button>
+                <button className="btn btn-danger" onClick={() => resolver.abrir(r, false)}>Cancelar con devolución</button>
+              </div>
+            </>
+          )}
+          {!admin && r.estado === "CANCELADA" && r.cancelacion && (
             <Alert tipo="info">
               {textoCancelada(r.cancelacion, esHuesped ? "huesped" : "anfitrion")}{" "}
               Motivo: {r.cancelacion.motivo.replace(/\.$/, "")}. Valor devuelto: <b>{pesos(r.cancelacion.valor_devolucion)}</b> ({Number(r.cancelacion.porcentaje_devolucion)} %).
@@ -408,62 +522,28 @@ export function DetalleReserva() {
         </div>
       </div>
       {ventana}
+      {resolver.ventana}
     </Page>
   );
 }
 
-/* ---------------- HU-20 Reservas en revisión (Administrador) ---------------- */
+/* ---------------- HU-20 Reservas en revisión (Administrador, RF-D-ADM-01.2) ---------------- */
 export function ReservasEnRevision() {
-  const toast = useToast();
-  const { lista, error, recargar } = useLista(misReservasApi.enRevision);
-  const [cancelar, setCancelar] = useState<ReservaResumen | null>(null);
-  const [motivo, setMotivo] = useState("");
-  const [errModal, setErrModal] = useState("");
-  const [enviando, setEnviando] = useState<number | null>(null);
-
-  const resolver = async (r: ReservaResumen, mantener: boolean) => {
-    if (!mantener && !motivo.trim()) return setErrModal("Escribe el motivo de la cancelación.");
-    setEnviando(r.id);
-    try {
-      await misReservasApi.resolver(r.id, mantener, mantener ? undefined : motivo.trim());
-      toast(mantener ? "La reserva sigue confirmada" : "Reserva cancelada con devolución del 100 %");
-      setCancelar(null);
-      recargar();
-    } catch (e) {
-      if (mantener) toast(leerError(e).error, "err"); else setErrModal(leerError(e).error);
-    } finally { setEnviando(null); }
-  };
-
+  const pendientes = useLista(misReservasApi.enRevision);
+  const resueltas = useLista(misReservasApi.resueltas);
+  const recargar = () => { pendientes.recargar(); resueltas.recargar(); };
+  const { abrir, ventana } = useResolverReserva(recargar);
+  const pestanas = [
+    { clave: "pendientes", nombre: "Pendientes", vacia: "No hay reservas en revisión", lista: pendientes.lista ?? [] },
+    { clave: "resueltas", nombre: "Resueltas", vacia: "Todavía no hay reservas resueltas", lista: resueltas.lista ?? [] },
+  ];
   return (
     <Page req="RF-D-ADM-01.2 · HU-20">
       <div className="page-head"><div><h1>Reservas en revisión</h1><p>Reservas de publicaciones bloqueadas. Si nadie las resuelve antes de la llegada, se cancelan solas con devolución del 100 %.</p></div></div>
-      {error && <Alert tipo="error">{error}</Alert>}
-      {lista && lista.length === 0 && <div className="card empty-state"><ClipboardCheck /><b>No hay reservas en revisión</b></div>}
-      <div className="stack">
-        {(lista ?? []).map((r) => (
-          <TarjetaReserva key={r.id} r={r} verHuesped>
-            <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-              <button className="btn btn-primary" disabled={enviando === r.id} onClick={() => resolver(r, true)}>Mantener</button>
-              <button className="btn btn-danger" disabled={enviando === r.id} onClick={() => { setMotivo(""); setErrModal(""); setCancelar(r); }}>Cancelar con devolución</button>
-            </div>
-          </TarjetaReserva>
-        ))}
-      </div>
-      {cancelar && (
-        <Modal onClose={() => setCancelar(null)}>
-          <h2>Cancelar la reserva</h2>
-          <Alert tipo="info">Se devuelve el 100 %: <b>{pesos(cancelar.total)}</b>. El huésped y el anfitrión reciben un aviso.</Alert>
-          <Field label="Motivo" error={errModal}>
-            <textarea className="input" rows={3} value={motivo} onChange={(e) => setMotivo(e.target.value)} />
-          </Field>
-          <div className="modal-actions">
-            <button className="btn btn-secondary" onClick={() => setCancelar(null)}>Volver</button>
-            <button className="btn btn-primary" style={{ background: "var(--err)" }} disabled={enviando === cancelar.id} onClick={() => resolver(cancelar, false)}>
-              Cancelar reserva
-            </button>
-          </div>
-        </Modal>
-      )}
+      {(pendientes.error || resueltas.error) && <Alert tipo="error">{pendientes.error || resueltas.error}</Alert>}
+      <PestanasDeReservas pestanas={pestanas} cargada={!!pendientes.lista && !!resueltas.lista}
+        tarjeta={(r) => <TarjetaConPortada key={r.id} r={r} vista="admin" onResolver={(mantener) => abrir(r, mantener)} />} />
+      {ventana}
     </Page>
   );
 }

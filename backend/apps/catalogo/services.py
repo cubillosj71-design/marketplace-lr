@@ -92,6 +92,15 @@ def obtener_politica_con_tramos(politica_id: int) -> dict | None:
     return _politica_dict(p) if p else None
 
 
+def obtener_bloqueos_de_publicaciones(ids) -> dict[int, dict]:
+    """{id: {"motivo", "fecha"}} del último bloqueo de cada publicación (historial de revisiones, acción BLOQUEAR), en
+    una sola consulta (DISTINCT ON). Las publicaciones que nunca se bloquearon no aparecen."""
+    filas = (RevisionPublicacion.objects.filter(publicacion_id__in=list(ids), accion=AccionModeracion.BLOQUEAR)
+             .order_by("publicacion_id", "-fecha", "-id").distinct("publicacion_id")
+             .values("publicacion_id", "observacion", "fecha"))
+    return {f["publicacion_id"]: {"motivo": f["observacion"], "fecha": f["fecha"]} for f in filas}
+
+
 def obtener_portadas_y_ciudades(ids) -> dict[int, dict]:
     """{id: {"portada", "ciudad"}} de varias publicaciones en una sola consulta (listado de Mis reservas).
     La portada es la imagen de menor orden (la 1); None si la publicación no tiene imágenes o ciudad."""

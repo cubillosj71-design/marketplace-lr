@@ -63,6 +63,18 @@ def listar_tipos_accion() -> list[dict]:
     return [{"clave": k, "nombre": v["nombre"]} for k, v in TIPOS_ACCION.items()]
 
 
+def listar_eventos_de_entidades(acciones, entidad: str, entidad_ids=None) -> list[dict]:
+    """Eventos con esas acciones sobre una entidad (por ejemplo ReservaEnRevision y ReservaResuelta de Reserva), con el
+    nombre del actor, en una sola consulta y del más antiguo al más reciente. Para pantallas que muestran el historial
+    de una acción de negocio sin modelo propio (Reservas en revisión, RF-D-ADM-01.2)."""
+    qs = EventoAuditoria.objects.select_related("actor").filter(accion__in=list(acciones), entidad=entidad).order_by("fecha", "id")
+    if entidad_ids is not None:
+        qs = qs.filter(entidad_id__in=list(entidad_ids))
+    return [{"accion": e.accion, "entidad_id": e.entidad_id, "actor_id": e.actor_id,
+             "actor_nombre": e.actor.nombre_completo if e.actor else None, "fecha": e.fecha, "detalle": e.detalle or {}}
+            for e in qs]
+
+
 def consultar_eventos(*, actor_id=None, accion=None, tipo=None, desde=None, hasta=None, exitoso=None):
     """Consulta para el administrador (RF-D-ADM-04.1, CA-23.1): filtra por usuario (actor), tipo de acción, acción
     y periodo. Trae el nombre del actor por la llave foránea de la propia tabla (sin importar Identidad)."""
