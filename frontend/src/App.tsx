@@ -44,6 +44,7 @@ export const RUTAS: { path: string; permiso: string | string[] | null; api?: str
   { path: "/admin/revision/:id", permiso: "publicaciones.moderar", api: "/admin/publicaciones", el: <RevisarPublicacion /> },
   { path: "/admin/publicaciones/:id", permiso: "publicaciones.moderar", api: "/admin/publicaciones", el: <RevisarPublicacion /> },
   { path: "/admin/reservas", permiso: "reservas.resolver", api: "/admin/reservas", el: <ReservasEnRevision /> },
+  { path: "/admin/reservas/:id", permiso: "reservas.resolver", api: "/admin/reservas/:id", el: <DetalleReserva admin /> },
   { path: "/admin/usuarios", permiso: "usuarios.ver", api: "/admin/usuarios", el: <UsuariosAdmin /> },
   { path: "/admin/tarifa", permiso: "tarifa.configurar", api: "/admin/tarifa-servicio", el: <TarifaServicioPage /> },
   { path: "/admin/registro", permiso: "auditoria.consultar", api: "/admin/auditoria", el: <RegistroAcciones /> },

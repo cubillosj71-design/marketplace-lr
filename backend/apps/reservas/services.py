@@ -567,9 +567,73 @@ def listar_reservas_de_mis_alojamientos(anfitrion) -> list[dict]:
 
 
 def listar_reservas_admin(estado: str | None = None) -> list[dict]:
+    if estado == EstadoReserva.EN_REVISION:
+        return listar_reservas_en_revision()
     completar_reservas_vencidas()
     qs = Reserva.objects.all()
     return _listar(qs.filter(estado=estado) if estado else qs)
+
+
+# ---------------------------------------------------------------- HU-20 Pantalla "Reservas en revisión" (RF-D-ADM-01.2)
+# Solo lectura: arma lo que muestra la pantalla con datos que ya existen (historial de revisiones de la publicación,
+# cancelacion y registro de acciones). La regla de negocio sigue en resolver_reserva y cancelar_en_revision_vencidas.
+
+def _agregar_datos_de_revision(datos: list[dict]) -> list[dict]:
+    """Anfitrión, motivo y fecha del bloqueo y días que faltan para la llegada. Una consulta por dato, no por reserva."""
+    bloqueos = catalogo.obtener_bloqueos_de_publicaciones({d["publicacion"] for d in datos})
+    anfitriones = identidad.obtener_nombres_usuarios({d["anfitrion"] for d in datos} - {None})
+    hoy = reloj.hoy()
+    for d in datos:
+        d["anfitrion_nombre"] = anfitriones.get(d["anfitrion"])
+        d["bloqueo"] = bloqueos.get(d["publicacion"])
+        d["dias_para_llegada"] = (d["fecha_llegada"] - hoy).days
+    return datos
+
+
+def _resolucion(d: dict, resuelta: dict | None) -> dict:
+    """Mantenida (volvió a CONFIRMADA), cancelada por el administrador o cancelada automáticamente (CA-20.2, 20.3, 20.5)."""
+    c = d["cancelacion"]
+    if resuelta and resuelta["detalle"].get("mantener"):
+        return {"resultado": "MANTENIDA", "por": resuelta["actor_nombre"], "fecha": resuelta["fecha"]}
+    if c and c["automatica"]:
+        return {"resultado": "CANCELADA_AUTOMATICA", "por": None, "fecha": c["fecha"], "motivo": c["motivo"],
+                "valor_devolucion": c["valor_devolucion"]}
+    return {"resultado": "CANCELADA_ADMINISTRADOR", "por": resuelta["actor_nombre"] if resuelta else None,
+            "fecha": c["fecha"] if c else (resuelta or {}).get("fecha"), "motivo": c["motivo"] if c else None,
+            "valor_devolucion": c["valor_devolucion"] if c else None}
+
+
+def listar_reservas_en_revision() -> list[dict]:
+    """Pendientes: las EN_REVISION, primero la llegada más cercana."""
+    completar_reservas_vencidas()
+    datos = _agregar_datos_de_revision(_listar(Reserva.objects.filter(estado=EstadoReserva.EN_REVISION)))
+    return sorted(datos, key=lambda d: (d["fecha_llegada"], d["id"]))
+
+
+def listar_reservas_resueltas_de_revision() -> list[dict]:
+    """Resueltas: las que pasaron a EN_REVISION (evento ReservaEnRevision) y ya no lo están, con el resultado. La más
+    reciente primero."""
+    completar_reservas_vencidas()
+    eventos = auditoria.listar_eventos_de_entidades(["ReservaEnRevision", "ReservaResuelta", "ReservaCancelada"], "Reserva")
+    ids = {e["entidad_id"] for e in eventos if e["accion"] == "ReservaEnRevision"}
+    resueltas = {e["entidad_id"]: e for e in eventos if e["accion"] == "ReservaResuelta"}  # la última de cada reserva
+    # Orden: el momento en que se resolvió según el registro de acciones (mantener, cancelar o la cancelación automática)
+    momento = {e["entidad_id"]: e["fecha"] for e in eventos if e["accion"] in ("ReservaResuelta", "ReservaCancelada")}
+    datos = _agregar_datos_de_revision(_listar(Reserva.objects.filter(pk__in=ids).exclude(estado=EstadoReserva.EN_REVISION)))
+    for d in datos:
+        d["resolucion"] = _resolucion(d, resueltas.get(d["id"]))
+    return sorted(datos, key=lambda d: (d["id"] in momento, momento.get(d["id"]), d["id"]), reverse=True)
+
+
+def obtener_reserva_en_revision(admin, reserva_id: int) -> dict:
+    """El detalle de la reserva (obtener_reserva) más el bloqueo, los días para la llegada y, si ya se resolvió, el
+    resultado. Solo para el Administrador (lo exige la vista)."""
+    d = _agregar_datos_de_revision([obtener_reserva(admin, reserva_id)])[0]
+    eventos = auditoria.listar_eventos_de_entidades(["ReservaEnRevision", "ReservaResuelta"], "Reserva", [reserva_id])
+    estuvo = any(e["accion"] == "ReservaEnRevision" for e in eventos)
+    resuelta = next((e for e in reversed(eventos) if e["accion"] == "ReservaResuelta"), None)
+    d["resolucion"] = _resolucion(d, resuelta) if estuvo and d["estado"] != EstadoReserva.EN_REVISION else None
+    return d
 
 
 def _negar(usuario, reserva_id: int, motivo: str):

@@ -194,6 +194,24 @@ class ReservasAdmin(APIView):
         return Response(services.listar_reservas_admin(request.query_params.get("estado") or None))
 
 
+class ReservasResueltasAdmin(APIView):
+    """GET /admin/reservas/resueltas: las que estuvieron EN_REVISION y ya se resolvieron, con el resultado."""
+
+    permission_classes = [RequierePermiso("reservas.resolver")]
+
+    def get(self, request):
+        return Response(services.listar_reservas_resueltas_de_revision())
+
+
+class ReservaEnRevisionAdmin(APIView):
+    """GET /admin/reservas/{id}: el detalle de la reserva con el bloqueo y, si ya se resolvió, el resultado."""
+
+    permission_classes = [RequierePermiso("reservas.resolver")]
+
+    def get(self, request, pk):
+        return Response(services.obtener_reserva_en_revision(request.user, pk))
+
+
 class ResolucionEntrada(serializers.Serializer):
     mantener = serializers.BooleanField()
     motivo = serializers.CharField(required=False, allow_blank=True)

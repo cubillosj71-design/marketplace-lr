@@ -241,6 +241,11 @@ export interface ReservaResumen {
   alojamiento: string | null; portada: string | null; ciudad: string | null; anfitrion: number | null; huesped: number;
   huesped_nombre: string | null; fecha_llegada: string; fecha_salida: string; noches: number; num_huespedes: number;
   total: string; cancelable: boolean; cancelacion: CancelacionApi | null; creada: string;
+  // Solo en las respuestas del Administrador (Reservas en revisión, RF-D-ADM-01.2)
+  anfitrion_nombre?: string | null; dias_para_llegada?: number;
+  bloqueo?: { motivo: string | null; fecha: string } | null;
+  resolucion?: { resultado: "MANTENIDA" | "CANCELADA_ADMINISTRADOR" | "CANCELADA_AUTOMATICA"; por: string | null; fecha: string | null;
+    motivo?: string | null; valor_devolucion?: string | null } | null;
 }
 
 export interface SimulacionCancelacion {
@@ -264,6 +269,8 @@ export const misReservasApi = {
   simularCancelacion: (id: number) => api.get<SimulacionCancelacion>(`/reservas/${id}/cancelar`),
   cancelar: (id: number, motivo: string) => api.post<ReservaResumen>(`/reservas/${id}/cancelar`, { motivo }),
   enRevision: () => api.get<ReservaResumen[]>("/admin/reservas", { params: { estado: "EN_REVISION" } }),
+  resueltas: () => api.get<ReservaResumen[]>("/admin/reservas/resueltas"),
+  detalleAdmin: (id: number) => api.get<ReservaDetalleApi>(`/admin/reservas/${id}`),
   resolver: (id: number, mantener: boolean, motivo?: string) =>
     api.post<ReservaResumen>(`/admin/reservas/${id}/resolver`, { mantener, ...(motivo ? { motivo } : {}) }),
 };
