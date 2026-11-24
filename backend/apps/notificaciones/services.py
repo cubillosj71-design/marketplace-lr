@@ -23,41 +23,41 @@ from .models import Notificacion
 log = logging.getLogger("marketplace")
 
 
-def _pesos(valor) -> str:
+def _formatear_pesos(valor) -> str:
     return "$" + f"{int(Decimal(valor)):,}".replace(",", ".")
 
 
-def _fecha(iso: str) -> str:
+def _formatear_fecha(iso: str) -> str:
     anio, mes, dia = iso[:10].split("-")
     return f"{dia}/{mes}/{anio}"
 
 
-def _reserva(d: dict, texto: str) -> str:
-    fechas = f" del {_fecha(d['llegada'])} al {_fecha(d['salida'])}" if d.get("llegada") and d.get("salida") else ""
+def _describir_reserva(d: dict, texto: str) -> str:
+    fechas = f" del {_formatear_fecha(d['llegada'])} al {_formatear_fecha(d['salida'])}" if d.get("llegada") and d.get("salida") else ""
     return f"{texto}: «{d.get('titulo') or 'alojamiento'}»{fechas}."
 
 
-def _cancelada(d: dict) -> str:
-    texto = _reserva(d, "Reserva cancelada")
+def _describir_cancelacion(d: dict) -> str:
+    texto = _describir_reserva(d, "Reserva cancelada")
     if d.get("valor_devolucion") is not None:
-        texto += f" Devolución: {_pesos(d['valor_devolucion'])}."
+        texto += f" Devolución: {_formatear_pesos(d['valor_devolucion'])}."
     if d.get("motivo"):
         texto += f" Motivo: {d['motivo']}"
     return texto
 
 
-def _resuelta(d: dict) -> str:
+def _describir_resolucion(d: dict) -> str:
     if d.get("mantener"):
-        return _reserva(d, "Tu reserva se mantiene CONFIRMADA")
-    return _reserva(d, "La revisión de tu reserva terminó con su cancelación")
+        return _describir_reserva(d, "Tu reserva se mantiene CONFIRMADA")
+    return _describir_reserva(d, "La revisión de tu reserva terminó con su cancelación")
 
 
 # evento -> (destinatarios, mensaje). CA-16.3
 AVISOS = {
-    "ReservaConfirmada": (("huesped", "anfitrion"), lambda d: _reserva(d, "Nueva reserva confirmada")),
-    "ReservaCancelada": (("huesped", "anfitrion"), _cancelada),
-    "ReservaEnRevision": (("huesped", "anfitrion"), lambda d: _reserva(d, "Reserva EN_REVISION porque el alojamiento fue bloqueado")),
-    "ReservaResuelta": (("huesped",), _resuelta),
+    "ReservaConfirmada": (("huesped", "anfitrion"), lambda d: _describir_reserva(d, "Nueva reserva confirmada")),
+    "ReservaCancelada": (("huesped", "anfitrion"), _describir_cancelacion),
+    "ReservaEnRevision": (("huesped", "anfitrion"), lambda d: _describir_reserva(d, "Reserva EN_REVISION porque el alojamiento fue bloqueado")),
+    "ReservaResuelta": (("huesped",), _describir_resolucion),
     "PublicacionAprobada": (("anfitrion",), lambda d: f"Tu publicación «{d.get('titulo')}» fue aprobada y ya aparece en las búsquedas."),
     "PublicacionDevuelta": (("anfitrion",), lambda d: f"Tu publicación «{d.get('titulo')}» fue devuelta. Observación: {d.get('observacion', '')}"),
     "PublicacionBloqueada": (("anfitrion",), lambda d: f"Tu publicación «{d.get('titulo')}» fue bloqueada. Motivo: {d.get('observacion', '')}"),
@@ -102,7 +102,7 @@ def recibir_evento_dominio(sender, nombre, entidad=None, entidad_id=None, detall
 
 # ---------------------------------------------------------------- bandeja (CA-16.2)
 
-def _dict(n: Notificacion) -> dict:
+def _serializar_notificacion(n: Notificacion) -> dict:
     return {"id": n.id, "tipo": n.tipo, "mensaje": n.mensaje, "entidad": n.entidad, "entidad_id": n.entidad_id,
             "leida": n.leida, "fecha": n.fecha}
 
@@ -111,7 +111,7 @@ def consultar_bandeja(usuario, limite: int = 100) -> dict:
     """Primero las no leídas y luego por fecha, con el conteo de no leídas."""
     qs = Notificacion.objects.filter(destinatario_id=usuario.id)
     return {"no_leidas": qs.filter(leida=False).count(),
-            "notificaciones": [_dict(n) for n in qs.order_by("leida", "-fecha", "-id")[:limite]]}
+            "notificaciones": [_serializar_notificacion(n) for n in qs.order_by("leida", "-fecha", "-id")[:limite]]}
 
 
 def marcar_leida(usuario, notificacion_id: int) -> dict:
@@ -119,7 +119,7 @@ def marcar_leida(usuario, notificacion_id: int) -> dict:
     if not n:
         raise NoEncontrado("La notificación no existe.")
     n.marcar_leida()
-    return _dict(n)
+    return _serializar_notificacion(n)
 
 
 def marcar_todas_leidas(usuario) -> int:

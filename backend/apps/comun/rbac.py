@@ -54,16 +54,16 @@ PERMISOS: dict[str, frozenset[str]] = {
 TODOS: frozenset[str] = frozenset().union(*PERMISOS.values())
 
 
-def rol_de(usuario) -> str:
+def obtener_rol(usuario) -> str:
     """El rol de la cuenta, o VISITANTE si no hay sesión."""
     if usuario is None or not getattr(usuario, "is_authenticated", False):
         return VISITANTE
     return usuario.rol
 
 
-def permisos_de(usuario) -> frozenset[str]:
-    return PERMISOS.get(rol_de(usuario), frozenset())
+def obtener_permisos(usuario) -> frozenset[str]:
+    return PERMISOS.get(obtener_rol(usuario), frozenset())
 
 
 def tiene_alguno(usuario, permisos) -> bool:
-    return not permisos_de(usuario).isdisjoint(permisos)
+    return not obtener_permisos(usuario).isdisjoint(permisos)

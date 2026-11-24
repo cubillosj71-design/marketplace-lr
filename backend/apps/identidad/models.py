@@ -100,7 +100,7 @@ class Usuario(AbstractBaseUser):
     # ---- operaciones del diagrama de clases (MOD-01). Cambian el estado de la cuenta; los permisos, los
     # mensajes, la auditoría y los tokens los orquesta identidad.services en la misma transacción.
     @classmethod
-    def registrar(cls, correo: str, clave: str, rol: str, **datos) -> "Usuario":
+    def registrar_usuario(cls, correo: str, clave: str, rol: str, **datos) -> "Usuario":
         """registrar(correo, clave, rol) del diagrama: crea la cuenta con la contraseña cifrada y la fecha de la
         autorización de tratamiento de datos (Ley 1581). Las validaciones previas las hace identidad.services."""
         return cls.objects.create_user(correo=correo, password=clave, rol=rol, autorizacion_datos=timezone.now(), **datos)

@@ -82,8 +82,8 @@ def calcular_serie_diaria(desde: date, hasta: date) -> list[dict]:
     filas = (Demanda.objects.filter(fecha__gte=desde, fecha__lte=hasta).values("fecha")
              .annotate(reservas=Sum("reservas"), monto_bruto=Sum("monto_bruto"), ingreso_plataforma=Sum("ingreso_plataforma"))
              .order_by("fecha"))
-    return [{"fecha": f["fecha"], "reservas": f["reservas"], "monto_bruto": _dinero(f["monto_bruto"] or CERO),
-             "ingreso_plataforma": _dinero(f["ingreso_plataforma"] or CERO)} for f in filas]
+    return [{"fecha": f["fecha"], "reservas": f["reservas"], "monto_bruto": _formatear_dinero(f["monto_bruto"] or CERO),
+             "ingreso_plataforma": _formatear_dinero(f["ingreso_plataforma"] or CERO)} for f in filas]
 
 
 def contar_usuarios_por_rol(hasta: date) -> dict[str, int]:
@@ -96,7 +96,7 @@ def contar_publicaciones_activas() -> int:
     return PublicacionReporte.objects.filter(estado="ACTIVA").count()
 
 
-def _dinero(v) -> str:
+def _formatear_dinero(v) -> str:
     return f"{Decimal(v):.2f}"
 
 
@@ -112,8 +112,8 @@ def consultar_tablero(desde: date, hasta: date) -> dict:
         "publicaciones_activas": contar_publicaciones_activas(),
         "reservas_por_estado": contar_reservas_por_estado(rs),
         "reservas_total": rs.count(),
-        "ingresos": {"bruto": _dinero(bruto), "plataforma": _dinero(plataforma)},
-        "top_ciudades": [{"ciudad": c["valor"], "reservas": c["reservas"], "monto_bruto": _dinero(c["monto_bruto"])}
+        "ingresos": {"bruto": _formatear_dinero(bruto), "plataforma": _formatear_dinero(plataforma)},
+        "top_ciudades": [{"ciudad": c["valor"], "reservas": c["reservas"], "monto_bruto": _formatear_dinero(c["monto_bruto"])}
                          for c in calcular_demanda(desde, hasta, "ciudad")[:5]],
         "serie_diaria": calcular_serie_diaria(desde, hasta),
     }
@@ -121,7 +121,7 @@ def consultar_tablero(desde: date, hasta: date) -> dict:
 
 # ================================================================ contenido de cada reporte
 
-def _reporte_usuarios(desde, hasta, f) -> archivos.Reporte:
+def _generar_reporte_usuarios(desde, hasta, f) -> archivos.Reporte:
     if f.get("estado") and f["estado"] not in FILTRO_ESTADO_CUENTA:
         raise ErrorNegocio("El estado de la cuenta debe ser ACTIVA, DESACTIVADA o RESTRINGIDA.", campo="estado")
     qs = UsuarioReporte.objects.filter(fecha_registro__date__gte=desde, fecha_registro__date__lte=hasta).order_by("fecha_registro", "id")
@@ -144,7 +144,7 @@ def _reporte_usuarios(desde, hasta, f) -> archivos.Reporte:
     )
 
 
-def _reporte_publicaciones(desde, hasta, f) -> archivos.Reporte:
+def _generar_reporte_publicaciones(desde, hasta, f) -> archivos.Reporte:
     qs = PublicacionReporte.objects.filter(creada__date__gte=desde, creada__date__lte=hasta).order_by("creada", "id")
     for campo in ("estado", "ciudad", "tipo"):
         if f.get(campo):
@@ -167,7 +167,7 @@ def _reporte_publicaciones(desde, hasta, f) -> archivos.Reporte:
     )
 
 
-def _reporte_reservas(desde, hasta, f) -> archivos.Reporte:
+def _generar_reporte_reservas(desde, hasta, f) -> archivos.Reporte:
     rs = consultar_reservas_del_periodo(desde, hasta)
     bruto, plataforma = calcular_ingresos(rs)
     conteo = contar_reservas_por_estado(rs)
@@ -175,7 +175,7 @@ def _reporte_reservas(desde, hasta, f) -> archivos.Reporte:
         titulo="Reporte de reservas",
         resumen=[("Reservas creadas en el periodo", rs.count())]
         + [(f"Reservas {e.replace('_', ' ').lower()}", conteo[e]) for e in ESTADOS_RESERVA]
-        + [("Monto bruto (COP)", archivos.pesos(bruto)), ("Ingreso de la plataforma (COP)", archivos.pesos(plataforma))],
+        + [("Monto bruto (COP)", archivos.formatear_pesos(bruto)), ("Ingreso de la plataforma (COP)", archivos.formatear_pesos(plataforma))],
         orden="fecha de creación, ascendente; luego por código",
         columnas=["Código", "Alojamiento", "Ciudad", "Huésped", "Creada", "Llegada", "Salida", "Noches", "Estado", "Total",
                   "Devolución", "Monto bruto", "Tarifa de servicio", "Ingreso plataforma"],
@@ -186,7 +186,7 @@ def _reporte_reservas(desde, hasta, f) -> archivos.Reporte:
     )
 
 
-def _reporte_ingresos(desde, hasta, f) -> archivos.Reporte:
+def _generar_reporte_ingresos(desde, hasta, f) -> archivos.Reporte:
     rs = consultar_reservas_del_periodo(desde, hasta)
     bruto, plataforma = calcular_ingresos(rs)
     por_mes: dict[str, list] = defaultdict(lambda: [0, CERO, CERO])
@@ -197,9 +197,9 @@ def _reporte_ingresos(desde, hasta, f) -> archivos.Reporte:
         por_mes[m][2] += r.ingreso_plataforma
     return archivos.Reporte(
         titulo="Reporte de ingresos estimados",
-        resumen=[("Reservas creadas en el periodo", rs.count()), ("Monto bruto (COP)", archivos.pesos(bruto)),
-                 ("Ingreso de la plataforma, tarifa de servicio (COP)", archivos.pesos(plataforma)),
-                 ("Para los anfitriones (COP)", archivos.pesos(bruto - plataforma))],
+        resumen=[("Reservas creadas en el periodo", rs.count()), ("Monto bruto (COP)", archivos.formatear_pesos(bruto)),
+                 ("Ingreso de la plataforma, tarifa de servicio (COP)", archivos.formatear_pesos(plataforma)),
+                 ("Para los anfitriones (COP)", archivos.formatear_pesos(bruto - plataforma))],
         columnas=["Mes", "Reservas", "Monto bruto", "Ingreso plataforma", "Para anfitriones"],
         orden="mes, ascendente",
         filas=[[m, v[0], v[1], v[2], v[1] - v[2]] for m, v in sorted(por_mes.items())],
@@ -207,7 +207,7 @@ def _reporte_ingresos(desde, hasta, f) -> archivos.Reporte:
     )
 
 
-def _reporte_demanda(desde, hasta, f) -> archivos.Reporte:
+def _generar_reporte_demanda(desde, hasta, f) -> archivos.Reporte:
     """Una fila por día, ciudad y tipo de alojamiento (v_demanda), de la fecha más antigua a la más reciente.
     v_demanda no tiene id (su clave es ciudad, tipo y fecha): el desempate es por ciudad y luego por tipo."""
     por_ciudad, por_tipo = calcular_demanda(desde, hasta, "ciudad"), calcular_demanda(desde, hasta, "tipo")
@@ -227,8 +227,8 @@ def _reporte_demanda(desde, hasta, f) -> archivos.Reporte:
 
 
 GENERADORES = {
-    "usuarios": _reporte_usuarios, "publicaciones": _reporte_publicaciones, "reservas": _reporte_reservas,
-    "ingresos": _reporte_ingresos, "demanda": _reporte_demanda,
+    "usuarios": _generar_reporte_usuarios, "publicaciones": _generar_reporte_publicaciones, "reservas": _generar_reporte_reservas,
+    "ingresos": _generar_reporte_ingresos, "demanda": _generar_reporte_demanda,
 }
 
 
@@ -245,7 +245,7 @@ def generar_reporte(admin, tipo: str, formato: str, desde: date, hasta: date, fi
     r = GENERADORES[tipo](desde, hasta, filtros or {})
     r.periodo = f"{desde:%d/%m/%Y} al {hasta:%d/%m/%Y}"
     r.generado_por = f"{admin.nombre_completo} ({admin.correo})"
-    contenido = archivos.pdf(r) if formato == "pdf" else archivos.xlsx(r)
+    contenido = archivos.generar_pdf(r) if formato == "pdf" else archivos.generar_xlsx(r)
     nombre = f"reporte-{tipo}_{desde.isoformat()}_{hasta.isoformat()}.{formato}"
     auditoria.registrar_evento(admin.id, "ReporteDescargado", entidad="Reporte", ip=ip,
                         detalle={"tipo": tipo, "formato": formato, "desde": desde.isoformat(), "hasta": hasta.isoformat(),

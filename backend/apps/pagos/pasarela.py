@@ -36,27 +36,27 @@ class ResultadoPago:
 
 class PasarelaPagos(ABC):
     @abstractmethod
-    def cobrar(self, monto: Decimal, clave: UUID, medio: str) -> ResultadoPago: ...
+    def cobrar_pago(self, monto: Decimal, clave: UUID, medio: str) -> ResultadoPago: ...
 
     @abstractmethod
-    def devolver(self, referencia: str, monto: Decimal) -> ResultadoPago: ...
+    def devolver_pago(self, referencia: str, monto: Decimal) -> ResultadoPago: ...
 
     @abstractmethod
-    def consultar(self, clave: UUID) -> ResultadoPago | None: ...
+    def consultar_pago(self, clave: UUID) -> ResultadoPago | None: ...
 
 
 class AdaptadorSimulado(PasarelaPagos):
     MEDIO_RECHAZO = "rechazar"
 
-    def cobrar(self, monto: Decimal, clave: UUID, medio: str) -> ResultadoPago:
+    def cobrar_pago(self, monto: Decimal, clave: UUID, medio: str) -> ResultadoPago:
         if (medio or "").strip().lower() == self.MEDIO_RECHAZO:
             return ResultadoPago(EstadoPago.RECHAZADO, f"SIM-{str(clave)[:8]}", "La entidad rechazó el pago (pago simulado).")
         return ResultadoPago(EstadoPago.APROBADO, f"SIM-{str(clave)[:8]}")
 
-    def devolver(self, referencia: str, monto: Decimal) -> ResultadoPago:
+    def devolver_pago(self, referencia: str, monto: Decimal) -> ResultadoPago:
         return ResultadoPago(EstadoPago.APROBADO, f"SIM-DEV-{(referencia or '').removeprefix('SIM-')[:8]}")
 
-    def consultar(self, clave: UUID) -> ResultadoPago | None:
+    def consultar_pago(self, clave: UUID) -> ResultadoPago | None:
         return None  # el simulado no guarda estado fuera de la tabla pago
 
 
@@ -85,13 +85,13 @@ class AdaptadorStripe(PasarelaPagos):
         self._intents = getattr(cliente, "v1", cliente).payment_intents
         self._reembolsos = getattr(cliente, "v1", cliente).refunds
 
-    def _resultado(self, intent) -> ResultadoPago:
+    def _convertir_resultado(self, intent) -> ResultadoPago:
         estado = _ESTADOS_STRIPE.get(intent.status, EstadoPago.RECHAZADO)
         error = getattr(intent, "last_payment_error", None)
         motivo = None if estado == EstadoPago.APROBADO else (getattr(error, "message", None) or f"Pago {intent.status}.")
         return ResultadoPago(estado, intent.id, motivo)
 
-    def cobrar(self, monto: Decimal, clave: UUID, medio: str) -> ResultadoPago:
+    def cobrar_pago(self, monto: Decimal, clave: UUID, medio: str) -> ResultadoPago:
         try:
             intent = self._intents.create(
                 params={
@@ -107,9 +107,9 @@ class AdaptadorStripe(PasarelaPagos):
             )
         except self._stripe.CardError as e:
             return ResultadoPago(EstadoPago.RECHAZADO, None, e.user_message or "La tarjeta fue rechazada.")
-        return self._resultado(intent)
+        return self._convertir_resultado(intent)
 
-    def devolver(self, referencia: str, monto: Decimal) -> ResultadoPago:
+    def devolver_pago(self, referencia: str, monto: Decimal) -> ResultadoPago:
         try:
             reembolso = self._reembolsos.create(
                 params={"payment_intent": referencia, "amount": int((monto * 100).to_integral_value())},
@@ -120,9 +120,9 @@ class AdaptadorStripe(PasarelaPagos):
         estado = _ESTADOS_REEMBOLSO.get(reembolso.status, EstadoPago.RECHAZADO)
         return ResultadoPago(estado, reembolso.id, None if estado == EstadoPago.APROBADO else f"Devolución {reembolso.status}.")
 
-    def consultar(self, clave: UUID) -> ResultadoPago | None:
+    def consultar_pago(self, clave: UUID) -> ResultadoPago | None:
         encontrados = self._intents.search(params={"query": f"metadata['clave_idempotencia']:'{clave}'"})
-        return self._resultado(encontrados.data[0]) if encontrados.data else None
+        return self._convertir_resultado(encontrados.data[0]) if encontrados.data else None
 
 
 def obtener_pasarela() -> PasarelaPagos:

@@ -33,15 +33,15 @@ class Reporte:
     generado_por: str = ""
 
 
-def pesos(v) -> str:
+def formatear_pesos(v) -> str:
     return "$" + f"{Decimal(v):,.0f}".replace(",", ".")
 
 
-def _ahora() -> str:
+def _formatear_fecha_generacion() -> str:
     return timezone.localtime().strftime("%d/%m/%Y %H:%M")
 
 
-def pdf(r: Reporte) -> bytes:
+def generar_pdf(r: Reporte) -> bytes:
     buf = io.BytesIO()
     hoja = landscape(A4) if len(r.columnas) > 6 else A4
     doc = SimpleDocTemplate(buf, pagesize=hoja, leftMargin=14 * mm, rightMargin=14 * mm, topMargin=14 * mm, bottomMargin=14 * mm,
@@ -52,7 +52,7 @@ def pdf(r: Reporte) -> bytes:
     contenido = [
         Paragraph("Alojamientos LR", est["Title"].clone("t", alignment=0, textColor=VERDE, fontSize=18)),
         Paragraph(r.titulo, est["Heading2"]),
-        Paragraph(f"Periodo: {r.periodo}<br/>Ordenado por: {r.orden}<br/>Generado por: {r.generado_por} · {_ahora()}", est["BodyText"]),
+        Paragraph(f"Periodo: {r.periodo}<br/>Ordenado por: {r.orden}<br/>Generado por: {r.generado_por} · {_formatear_fecha_generacion()}", est["BodyText"]),
         Spacer(1, 6 * mm),
     ]
     resumen = Table([["Indicador", "Valor"]] + [[k, str(v)] for k, v in r.resumen], colWidths=[95 * mm, 45 * mm], hAlign="LEFT")
@@ -64,7 +64,7 @@ def pdf(r: Reporte) -> bytes:
     contenido += [resumen, Spacer(1, 6 * mm)]
     if r.filas:
         datos = [[Paragraph(c, cabeza) for c in r.columnas]] + [
-            [Paragraph(pesos(v) if i in r.moneda and isinstance(v, (int, Decimal)) else str(v), celda) for i, v in enumerate(f)] for f in r.filas
+            [Paragraph(formatear_pesos(v) if i in r.moneda and isinstance(v, (int, Decimal)) else str(v), celda) for i, v in enumerate(f)] for f in r.filas
         ]
         detalle = Table(datos, repeatRows=1, hAlign="LEFT")
         detalle.setStyle(TableStyle([
@@ -76,16 +76,16 @@ def pdf(r: Reporte) -> bytes:
     else:
         contenido.append(Paragraph("Sin registros en el periodo.", est["BodyText"]))
 
-    def pie(canvas, doc_):
+    def dibujar_pie(canvas, doc_):
         canvas.setFont("Helvetica", 7)
         canvas.setFillColor(colors.grey)
         canvas.drawRightString(hoja[0] - 14 * mm, 8 * mm, f"Página {doc_.page}")
 
-    doc.build(contenido, onFirstPage=pie, onLaterPages=pie)
+    doc.build(contenido, onFirstPage=dibujar_pie, onLaterPages=dibujar_pie)
     return buf.getvalue()
 
 
-def xlsx(r: Reporte) -> bytes:
+def generar_xlsx(r: Reporte) -> bytes:
     wb = Workbook()
     ws = wb.active
     ws.title = "Detalle"
@@ -115,7 +115,7 @@ def xlsx(r: Reporte) -> bytes:
     rs["A1"].font = Font(bold=True, size=14)
     rs.append([f"Periodo: {r.periodo}"])
     rs.append([f"Ordenado por: {r.orden}"])
-    rs.append([f"Generado por: {r.generado_por} · {_ahora()}"])
+    rs.append([f"Generado por: {r.generado_por} · {_formatear_fecha_generacion()}"])
     rs.append([])
     rs.append(["Indicador", "Valor"])
     for c in rs[6]:

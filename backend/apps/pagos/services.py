@@ -31,7 +31,7 @@ class ServicioPagos:
         guardan en esa misma transacción, así si la reserva se revierte no queda un pago a medias
         (RNF-P-FIA-03). La pasarela recibe la clave como llave de idempotencia (RNF-P-FIA-02).
         """
-        resultado = self.pasarela.cobrar(cotizacion.total, clave, medio)
+        resultado = self.pasarela.cobrar_pago(cotizacion.total, clave, medio)
         pago = Pago.objects.create(
             cotizacion_id=cotizacion.id, reserva_id=reserva_id, tipo=TipoPago.COBRO, monto=cotizacion.total,
             estado=resultado.estado, referencia_externa=resultado.referencia, clave_idempotencia=clave,
@@ -60,7 +60,7 @@ class ServicioPagos:
                  .order_by("-fecha").first())
         referencia = cobro.referencia_externa if cobro else None
         pasarela = self.pasarela if referencia and not referencia.startswith("SIM-") else AdaptadorSimulado()
-        resultado = pasarela.devolver(referencia or "", monto)
+        resultado = pasarela.devolver_pago(referencia or "", monto)
         pago = Pago.objects.create(
             cotizacion_id=cotizacion_id, reserva_id=reserva_id, tipo=TipoPago.DEVOLUCION, monto=monto,
             estado=resultado.estado, referencia_externa=resultado.referencia, clave_idempotencia=uuid4(),
@@ -80,7 +80,7 @@ def conciliar_pagos() -> int:
     cambiados = 0
     for pago in Pago.objects.filter(estado=EstadoPago.EN_VERIFICACION):
         try:
-            resultado = pasarela.consultar(pago.clave_idempotencia)
+            resultado = pasarela.consultar_pago(pago.clave_idempotencia)
         except Exception as e:  # noqa: BLE001  la pasarela no respondió por este pago: se reintenta mañana
             auditar_falla(e, entidad="Pago", entidad_id=pago.id, tarea="conciliar_pagos")
             continue

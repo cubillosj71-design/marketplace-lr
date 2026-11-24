@@ -121,7 +121,7 @@ def test_ca_04_3_un_anfitrion_desactivado_sale_de_las_cuentas_visibles(demo, ent
 
 
 def test_ip_toma_el_valor_que_agrega_el_proxy():
-    from apps.comun.eventos import ip_de
+    from apps.comun.eventos import obtener_ip
 
     peticion = type("P", (), {"META": {"HTTP_X_FORWARDED_FOR": "1.1.1.1, 200.1.2.3", "REMOTE_ADDR": "10.0.0.2"}})()
-    assert ip_de(peticion) == "200.1.2.3"
+    assert obtener_ip(peticion) == "200.1.2.3"

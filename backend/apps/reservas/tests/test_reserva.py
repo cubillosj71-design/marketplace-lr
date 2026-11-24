@@ -99,7 +99,7 @@ def test_rnf_p_fia_03_falla_a_la_mitad_no_deja_registros(cotizacion, monkeypatch
     def fallar(*a, **kw):
         raise RuntimeError("Falla después del pago")
 
-    monkeypatch.setattr(services, "publicar", fallar)
+    monkeypatch.setattr(services, "publicar_evento", fallar)
     confirmadas, aprobados = auditoria.consultar_eventos(accion="ReservaConfirmada").count(), auditoria.consultar_eventos(accion="PagoAprobado").count()
     with pytest.raises(RuntimeError):
         services.reservar_alojamiento(apps.get_model("identidad", "Usuario").objects.get(pk=cotizacion.usuario["id"]),
@@ -116,7 +116,7 @@ def test_rnf_p_fia_03_falla_de_la_pasarela_no_deja_registros(cotizacion, monkeyp
     def caida(self, monto, clave, medio):
         raise ConnectionError("La pasarela no respondió")
 
-    monkeypatch.setattr(AdaptadorSimulado, "cobrar", caida)
+    monkeypatch.setattr(AdaptadorSimulado, "cobrar_pago", caida)
     r = _reservar(cotizacion)
     assert r.status_code == 500
     assert not Reserva().objects.filter(cotizacion_id=cotizacion.cot["id"]).exists()

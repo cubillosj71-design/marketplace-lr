@@ -45,7 +45,7 @@ def ejecutar_tareas_diarias(origen: str, ip: str | None = None) -> dict:
     return resultado
 
 
-def token_valido(recibido: str | None) -> bool:
+def es_token_valido(recibido: str | None) -> bool:
     """Compara el encabezado X-Token-Tareas con TOKEN_TAREAS. Sin TOKEN_TAREAS configurado, nada pasa."""
     esperado = getattr(settings, "TOKEN_TAREAS", "") or ""
     return bool(esperado) and bool(recibido) and hmac.compare_digest(recibido.encode(), esperado.encode())

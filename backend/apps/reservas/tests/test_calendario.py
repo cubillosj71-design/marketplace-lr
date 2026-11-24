@@ -7,7 +7,7 @@ import pytest
 from django.apps import apps
 from django.utils import timezone
 
-from apps.comun.fechas import fecha_maxima
+from apps.comun.fechas import calcular_fecha_maxima
 
 pytestmark = pytest.mark.django_db
 
@@ -45,7 +45,7 @@ def test_calendario_solo_del_dueno(demo, entrar):
 
 def test_limite_de_12_meses_en_el_calendario(demo, entrar):
     c = entrar("anfitrion@correo.com")
-    limite = fecha_maxima()
+    limite = calcular_fecha_maxima()
     r = c.post(_url(), {"fecha_inicio": (limite - timedelta(days=2)).isoformat(), "fecha_fin": (limite + timedelta(days=1)).isoformat(),
                         "tipo": "NO_DISPONIBLE"}, format="json")
     assert r.status_code == 400 and r.json()["campo"] == "fecha_fin"

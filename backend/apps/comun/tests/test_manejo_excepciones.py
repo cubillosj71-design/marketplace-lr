@@ -119,7 +119,7 @@ def test_un_pago_que_no_se_puede_consultar_no_detiene_la_conciliacion(alojamient
             raise ConnectionError("timeout")
         return ResultadoPago("APROBADO", "pi_ok")
 
-    monkeypatch.setattr(AdaptadorSimulado, "consultar", consultar)
+    monkeypatch.setattr(AdaptadorSimulado, "consultar_pago", consultar)
     assert services.conciliar_pagos() == 1
     malo.refresh_from_db(); bueno.refresh_from_db()
     assert (malo.estado, bueno.estado) == ("EN_VERIFICACION", "APROBADO")

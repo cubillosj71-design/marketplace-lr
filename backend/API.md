@@ -50,7 +50,7 @@ Manejo de excepciones (`apps/comun/errores.py`, `EXCEPTION_HANDLER` de DRF):
 
 - Un dato que manda el cliente nunca produce un 500. Los cuerpos se validan con serializers (400 con el campo); las
   vistas que leen el cuerpo sin serializer (`token`, `token/renovar`, `salir`, `recuperacion`, `recuperacion/{token}`
-  y `bloqueo`) usan `apps.comun.entrada.texto_de`: si el cuerpo no es un objeto JSON o el campo no es texto, se toma
+  y `bloqueo`) usan `apps.comun.entrada.leer_texto`: si el cuerpo no es un objeto JSON o el campo no es texto, se toma
   como vacío y la regla responde su mensaje de siempre (401, 400 o 404).
 - Una falla no prevista responde `500 {"detalle": "Ocurrió un error inesperado. Intenta de nuevo."}` sin detalles
   internos. El detalle queda en el log JSON y en la auditoría como `ErrorOperacion` (`exitoso = false`).
@@ -184,7 +184,7 @@ anfitrión de la publicación o administrador) y las de una publicación (anfitr
   Reservas (sección 3.3), Auditoría no importa ninguna otra app salvo `apps.comun` (C4 nivel 3, vista b), Búsqueda
   solo lee vistas y `services` (MOD-03), Pagos no depende de Reservas, Notificaciones no importa ninguna otra app de
   negocio (MOD-07: todo le llega en los eventos) y Reportes solo lee vistas (MOD-09: ninguna otra app de negocio).
-- **Eventos de dominio (ADR-007, C4 nivel 3).** `apps/comun/eventos.publicar()` se usa solo para los eventos de
+- **Eventos de dominio (ADR-007, C4 nivel 3).** `apps/comun/eventos.publicar_evento()` se usa solo para los eventos de
   dominio del diagrama: `PublicacionAprobada`, `PublicacionDevuelta`, `PublicacionBloqueada`,
   `PublicacionDesbloqueada`, `PublicacionPausada`, `PublicacionReactivada`, `ReservaConfirmada`, `ReservaCancelada`,
   `ReservaEnRevision` y `ReservaResuelta`. Publicar otro nombre lanza error. Cada evento sale por dos señales:
@@ -202,7 +202,7 @@ anfitrión de la publicación o administrador) y las de una publicación (anfitr
 - **Auditoría de solo inserción (RNF-E-CON-01, CA-23.2).** Un trigger por fila rechaza UPDATE y DELETE, y otro a
   nivel de sentencia (`BEFORE TRUNCATE ... FOR EACH STATEMENT`) rechaza TRUNCATE.
 - **Tablas protegidas y `flush`.** `evento_auditoria`, `reserva`, `pago` y `cancelacion` rechazan TRUNCATE. Django
-  vacía la base con TRUNCATE en `flush`, así que `apps/comun/bd.vaciado_permitido()` apaga esos triggers solo mientras corre:
+  vacía la base con TRUNCATE en `flush`, así que `apps/comun/bd.permitir_vaciado()` apaga esos triggers solo mientras corre:
   lo usan `cargar_demo --reiniciar` (exige `DJANGO_DEBUG=1`) y la limpieza de las pruebas con `transaction=True`
   (`conftest.py`). Ningún flujo de la aplicación los apaga.
 - **Doble reserva (sección 10.1).** Restricción `EXCLUDE USING gist` en `reserva` con la extensión btree_gist.
@@ -222,7 +222,7 @@ anfitrión de la publicación o administrador) y las de una publicación (anfitr
 - **Reportes (ADR-009).** ReportLab y openpyxl en el servidor, con las mismas consultas del tablero (CA-25.1). El
   frontend ya no genera PDF ni Excel: descarga el archivo del servidor.
 - **Reloj inyectable.** Las reglas que dependen del día (cancelación, COMPLETADA, EN_REVISION vencidas, límite de
-  12 meses) leen la fecha en `apps/comun/reloj.py` (hora de Colombia). Las pruebas la fijan con `reloj.fijar()`.
+  12 meses) leen la fecha en `apps/comun/reloj.py` (hora de Colombia). Las pruebas la fijan con `reloj.fijar_fecha_hora()`.
 - **Imágenes.** Se guardan como rutas o URL (`imagen_publicacion.ruta`). La subida de archivos queda para el despliegue.
   Las de `cargar_demo` son rutas locales (`/alojamientos/<nombre>.jpg`) a fotos con licencia libre que sirve el
   frontend desde `frontend/public/alojamientos/` (créditos en `CREDITOS.md` de esa carpeta).
@@ -468,17 +468,19 @@ Tabla `pago`: `id`, `cotizacion_id`, `reserva_id` NULL, `tipo` (`COBRO`, `DEVOLU
 (`APROBADO`, `RECHAZADO`, `EN_VERIFICACION`), `referencia_externa` NULL, `clave_idempotencia` UUID único y `fecha`.
 Un trigger impide DELETE y TRUNCATE, y solo permite cambiar `estado` y `referencia_externa` (RNF-E-CON-01).
 
-- `PasarelaPagos` (`apps/pagos/pasarela.py`) con `cobrar(monto, clave, medio)` y `consultar(clave)`.
+- `PasarelaPagos` (`apps/pagos/pasarela.py`) con `cobrar_pago(monto, clave, medio)`, `devolver_pago(referencia, monto)`
+  y `consultar_pago(clave)`.
   - `AdaptadorStripe`: Stripe en modo prueba. Crea y confirma un PaymentIntent con el `payment_method` que manda el
     frontend desde Stripe Elements e `idempotency_key = clave`. El monto va en centavos de COP.
     `succeeded` → APROBADO, `processing`/`requires_action` → EN_VERIFICACION, el resto → RECHAZADO.
   - `AdaptadorSimulado`: aprueba siempre, salvo que `medio_pago` sea `"rechazar"` (para probar CA-13.3).
   - Se elige por variable de entorno: con `STRIPE_SECRET_KEY` se usa Stripe; sin ella, el simulado. Las pruebas
     usan siempre el simulado.
-- `ServicioPagos.cobrar(cotizacion, clave, medio, reserva_id=...)` guarda el pago y lo registra en la auditoría
-  (`PagoAprobado` o `PagoNoAprobado`) en la misma transacción. `ServicioPagos.devolver(cotizacion_id=..., reserva_id=..., monto=...)` registra una devolución **simulada**
-  (`DEVOLUCION`, APROBADO, referencia `SIM-DEV-...`). Si el valor es 0 no crea pago (`monto > 0`). `PasarelaPagos` no
-  tiene reembolsos, así que la devolución es simulada también cuando el cobro se hizo con Stripe en modo prueba.
+- `ServicioPagos.cobrar_cotizacion(cotizacion, clave, medio, reserva_id=...)` guarda el pago y lo registra en la auditoría
+  (`PagoAprobado` o `PagoNoAprobado`) en la misma transacción. `ServicioPagos.devolver_pago(cotizacion_id=..., reserva_id=..., monto=...)` pide a la pasarela
+  `devolver_pago(referencia, monto)` sobre el cobro aprobado y guarda el pago `DEVOLUCION` con el estado que responda.
+  La devolución va por la misma pasarela del cobro: un cobro simulado (`SIM-...`) se devuelve con el simulado (referencia
+  `SIM-DEV-...`); uno de Stripe, con un reembolso en modo prueba. Si el valor es 0 no crea pago (`monto > 0`).
 - `pagos.services.conciliar_pagos()` (tarea diaria) consulta en la pasarela los pagos EN_VERIFICACION y actualiza
   `estado` y `referencia_externa`.
 

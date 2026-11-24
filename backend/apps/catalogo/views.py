@@ -5,7 +5,7 @@ from rest_framework.generics import ListAPIView
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.comun.entrada import texto_de
+from apps.comun.entrada import leer_texto
 from apps.comun.permisos import RequierePermiso
 
 from . import services
@@ -96,7 +96,7 @@ class PublicacionLista(serializers.ModelSerializer):
         return {"accion": r.accion, "observacion": r.observacion, "fecha": r.fecha} if r else None
 
 
-def _salida(p):
+def _serializar_publicacion(p):
     return PublicacionSalida(Publicacion.objects.get(pk=p.pk)).data
 
 
@@ -110,7 +110,7 @@ class Publicaciones(APIView):
     def post(self, request):
         s = PublicacionEntrada(data=request.data)
         s.is_valid(raise_exception=True)
-        return Response(_salida(services.crear_publicacion(request.user, s.validated_data)), status=status.HTTP_201_CREATED)
+        return Response(_serializar_publicacion(services.crear_publicacion(request.user, s.validated_data)), status=status.HTTP_201_CREATED)
 
 
 class MisPublicaciones(ListAPIView):
@@ -140,12 +140,12 @@ class PublicacionDetalle(APIView):
     permission_classes = [RequierePermiso("publicaciones.gestionar_propias", "publicaciones.moderar")]
 
     def get(self, request, pk):
-        return Response(_salida(services.obtener_publicacion(request.user, pk)))
+        return Response(_serializar_publicacion(services.obtener_publicacion(request.user, pk)))
 
     def patch(self, request, pk):
         s = PublicacionEntrada(data=request.data, partial=True)
         s.is_valid(raise_exception=True)
-        return Response(_salida(services.actualizar_publicacion(request.user, pk, s.validated_data)))
+        return Response(_serializar_publicacion(services.actualizar_publicacion(request.user, pk, s.validated_data)))
 
 
 class _CambioEstado(APIView):
@@ -153,7 +153,7 @@ class _CambioEstado(APIView):
     destino: str = ""
 
     def post(self, request, pk):
-        return Response(_salida(services.cambiar_estado(request.user, pk, self.destino)))
+        return Response(_serializar_publicacion(services.cambiar_estado(request.user, pk, self.destino)))
 
 
 class Pausar(_CambioEstado):
@@ -211,7 +211,7 @@ class RevisionAdmin(APIView):
         s = RevisionEntrada(data=request.data)
         s.is_valid(raise_exception=True)
         p = services.revisar_publicacion(request.user, pk, s.validated_data["accion"], s.validated_data.get("observacion"))
-        return Response(_salida(p))
+        return Response(_serializar_publicacion(p))
 
 
 class BloqueoAdmin(APIView):
@@ -220,7 +220,7 @@ class BloqueoAdmin(APIView):
     permission_classes = [RequierePermiso("publicaciones.moderar")]
 
     def post(self, request, pk):
-        return Response(_salida(services.bloquear_publicacion(request.user, pk, texto_de(request, "motivo"))))
+        return Response(_serializar_publicacion(services.bloquear_publicacion(request.user, pk, leer_texto(request, "motivo"))))
 
     def delete(self, request, pk):
-        return Response(_salida(services.desbloquear_publicacion(request.user, pk)))
+        return Response(_serializar_publicacion(services.desbloquear_publicacion(request.user, pk)))

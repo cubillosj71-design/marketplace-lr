@@ -9,7 +9,7 @@ from apps.notificaciones import views as notificaciones
 from apps.reservas import views as reservas
 
 
-def salud(request):
+def consultar_salud(request):
     """Ruta de salud que consulta el monitor externo (RNF-P-FIA-01)."""
     return JsonResponse({"estado": "ok"})
 
@@ -22,7 +22,7 @@ ADMIN = ["identidad", "catalogo", "reservas", "auditoria", "reportes"]
 urlpatterns = (
     [
         path("admin/", admin.site.urls),
-        path("api/v1/salud", salud),
+        path("api/v1/salud", consultar_salud),
         # POST /api/v1/reservas (RF-D-RES-02.2)
         path("api/v1/reservas", reservas.Reservas.as_view(), name="reservas"),
         # El calendario conserva su ruta de Catálogo para el frontend, pero lo atiende MOD-04 Reservas

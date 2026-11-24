@@ -8,7 +8,7 @@ from rest_framework import serializers, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.comun.eventos import ip_de
+from apps.comun.eventos import obtener_ip
 from apps.comun.permisos import RequierePermiso
 
 from . import services
@@ -43,7 +43,7 @@ class TarifaServicioAdmin(APIView):
     def put(self, request):
         s = TarifaEntrada(data=request.data)
         s.is_valid(raise_exception=True)
-        return Response(services.cambiar_tarifa(request.user, s.validated_data["porcentaje"], ip=ip_de(request)))
+        return Response(services.cambiar_tarifa(request.user, s.validated_data["porcentaje"], ip=obtener_ip(request)))
 
 
 # ---------------------------------------------------------------- calendario (RF-D-ALO-02.2)
@@ -99,7 +99,7 @@ class Cotizaciones(APIView):
         s.is_valid(raise_exception=True)
         d = s.validated_data
         c = services.cotizar_estancia(request.user, d["publicacion"], d["fecha_llegada"], d["fecha_salida"], d["num_huespedes"],
-                             d["adicionales"], ip=ip_de(request))
+                             d["adicionales"], ip=obtener_ip(request))
         return Response(services.convertir_cotizacion_a_dict(c), status=status.HTTP_201_CREATED)
 
 
@@ -130,7 +130,7 @@ class Reservas(APIView):
         s = ReservaEntrada(data=request.data)
         s.is_valid(raise_exception=True)
         d = s.validated_data
-        reserva, creada = services.reservar_alojamiento(request.user, d["cotizacion"], d["clave_idempotencia"], d["medio_pago"], ip=ip_de(request))
+        reserva, creada = services.reservar_alojamiento(request.user, d["cotizacion"], d["clave_idempotencia"], d["medio_pago"], ip=obtener_ip(request))
         return Response(reserva, status=status.HTTP_201_CREATED if creada else status.HTTP_200_OK)
 
 
@@ -180,7 +180,7 @@ class Cancelar(APIView):
     def post(self, request, pk):
         s = CancelacionEntrada(data=request.data)
         s.is_valid(raise_exception=True)
-        return Response(services.cancelar_reserva(request.user, pk, s.validated_data["motivo"], ip=ip_de(request)))
+        return Response(services.cancelar_reserva(request.user, pk, s.validated_data["motivo"], ip=obtener_ip(request)))
 
 
 # ---------------------------------------------------------------- HU-20 Reservas EN_REVISION (Administrador)
@@ -226,4 +226,4 @@ class Resolver(APIView):
         s = ResolucionEntrada(data=request.data)
         s.is_valid(raise_exception=True)
         d = s.validated_data
-        return Response(services.resolver_reserva(request.user, pk, d["mantener"], d.get("motivo"), ip=ip_de(request)))
+        return Response(services.resolver_reserva(request.user, pk, d["mantener"], d.get("motivo"), ip=obtener_ip(request)))

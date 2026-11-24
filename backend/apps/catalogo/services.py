@@ -15,7 +15,7 @@ from django.db.models import Count, OuterRef, ProtectedError, Subquery
 
 from apps.auditoria import services as auditoria
 from apps.comun.errores import Conflicto, ErrorNegocio, NoEncontrado, SinPermiso
-from apps.comun.eventos import EVENTOS_DE_DOMINIO, publicar
+from apps.comun.eventos import EVENTOS_DE_DOMINIO, publicar_evento
 
 from .models import (
     AccionModeracion,
@@ -63,7 +63,7 @@ def es_ciudad_registrada(ciudad_id: int) -> bool:
     return Ciudad.objects.filter(pk=ciudad_id).exists()
 
 
-def clave_alfabetica(texto: str) -> str:
+def calcular_clave_alfabetica(texto: str) -> str:
     """Clave para ordenar en español: sin tildes y sin mayúsculas ("Popayán" va entre "Pereira" y "Salento")."""
     return "".join(c for c in unicodedata.normalize("NFD", texto.casefold()) if unicodedata.category(c) != "Mn")
 
@@ -72,14 +72,14 @@ def listar_catalogos() -> dict:
     return {
         # En orden alfabético en español (sin importar tildes ni la intercalación de la base): San Andrés, San Gil,
         # Santa Fe de Antioquia, Santa Marta
-        "ciudades": sorted(Ciudad.objects.values("id", "nombre", "departamento"), key=lambda c: clave_alfabetica(c["nombre"])),
+        "ciudades": sorted(Ciudad.objects.values("id", "nombre", "departamento"), key=lambda c: calcular_clave_alfabetica(c["nombre"])),
         "tipos": list(TipoAlojamiento.objects.values("id", "nombre")),
         "servicios": list(Servicio.objects.values("id", "nombre")),
-        "politicas": [_politica_dict(p) for p in PoliticaCancelacion.objects.filter(activa=True).prefetch_related("tramos").order_by("id")],
+        "politicas": [_serializar_politica(p) for p in PoliticaCancelacion.objects.filter(activa=True).prefetch_related("tramos").order_by("id")],
     }
 
 
-def _politica_dict(p: PoliticaCancelacion) -> dict:
+def _serializar_politica(p: PoliticaCancelacion) -> dict:
     return {"id": p.id, "nombre": p.nombre, "descripcion": p.descripcion,
             "tramos": [{"dias_minimos": t.dias_minimos, "dias_maximos": t.dias_maximos,
                         "porcentaje_devolucion": f"{t.porcentaje_devolucion:.2f}"}
@@ -89,7 +89,7 @@ def _politica_dict(p: PoliticaCancelacion) -> dict:
 def obtener_politica_con_tramos(politica_id: int) -> dict | None:
     """La política de cancelación con sus tramos, de mayor a menor anticipación (detalle de la reserva)."""
     p = PoliticaCancelacion.objects.prefetch_related("tramos").filter(pk=politica_id).first()
-    return _politica_dict(p) if p else None
+    return _serializar_politica(p) if p else None
 
 
 def obtener_bloqueos_de_publicaciones(ids) -> dict[int, dict]:
@@ -116,7 +116,7 @@ def listar_ids_publicaciones_de(anfitrion_id: int) -> list[int]:
 
 def obtener_resumen_publicacion(publicacion_id: int) -> dict | None:
     p = Publicacion.objects.select_related("ciudad", "tipo_alojamiento").filter(pk=publicacion_id).first()
-    return _resumen(p) if p else None
+    return _resumir_publicacion(p) if p else None
 
 
 def listar_publicaciones_para_reporte(desde=None, hasta=None, estado=None, ciudad_id=None, tipo_id=None) -> list[dict]:
@@ -132,7 +132,7 @@ def listar_publicaciones_para_reporte(desde=None, hasta=None, estado=None, ciuda
         qs = qs.filter(ciudad_id=ciudad_id)
     if tipo_id:
         qs = qs.filter(tipo_alojamiento_id=tipo_id)
-    return [_resumen(p) for p in qs]
+    return [_resumir_publicacion(p) for p in qs]
 
 
 def contar_publicaciones_por_estado() -> dict[str, int]:
@@ -215,7 +215,7 @@ def obtener_nombres_ciudades() -> dict[int, str]:
     return dict(Ciudad.objects.values_list("id", "nombre"))
 
 
-def _resumen(p: Publicacion) -> dict:
+def _resumir_publicacion(p: Publicacion) -> dict:
     return {
         "id": p.id, "titulo": p.titulo, "anfitrion": p.anfitrion_id, "estado": p.estado,
         "ciudad": p.ciudad_id, "ciudad_nombre": p.ciudad.nombre if p.ciudad else None,
@@ -265,12 +265,12 @@ def obtener_publicacion(usuario, publicacion_id: int) -> Publicacion:
     if not p:
         raise NoEncontrado("La publicación no existe.")
     if not es_visible_para(usuario, p):
-        _negar(usuario, p, "Ver o modificar una publicación ajena")
+        _negar_acceso(usuario, p, "Ver o modificar una publicación ajena")
         raise SinPermiso("Solo el anfitrión dueño o un administrador pueden modificarla.")
     return p
 
 
-def _negar(usuario, p: Publicacion, motivo: str) -> None:
+def _negar_acceso(usuario, p: Publicacion, motivo: str) -> None:
     """Acceso negado (CA-05.2): se registra fuera de transaction.atomic para que quede aunque la petición falle."""
     auditoria.registrar_evento(usuario.id, "AccesoDenegado", entidad="Publicacion", entidad_id=p.id, exitoso=False, detalle={"motivo": motivo})
 
@@ -305,7 +305,7 @@ SIMPLES = ("titulo", "descripcion", "ubicacion_textual", "capacidad", "precio_no
            "descuento_porcentaje", "descuento_min_noches")
 
 
-def _aplicar(p: Publicacion, d: dict) -> None:
+def _aplicar_datos(p: Publicacion, d: dict) -> None:
     for c in SIMPLES:
         if c in d:
             setattr(p, c, d[c] if d[c] is not None or c not in ("descripcion", "ubicacion_textual") else "")
@@ -338,7 +338,7 @@ def crear_publicacion(anfitrion, d: dict) -> Publicacion:
     _validar_datos(d)
     with transaction.atomic():
         p = Publicacion(anfitrion=anfitrion, estado=E.BORRADOR)
-        _aplicar(p, d)
+        _aplicar_datos(p, d)
         auditoria.registrar_evento(anfitrion.id, "PublicacionCreada", entidad="Publicacion", entidad_id=p.id)
     return p
 
@@ -351,7 +351,7 @@ def actualizar_publicacion(usuario, publicacion_id: int, d: dict) -> Publicacion
         raise ErrorNegocio("Escribe un título.", campo="titulo")
     _validar_datos({**{c: getattr(p, c) for c in ("descuento_porcentaje", "descuento_min_noches")}, **d})
     with transaction.atomic():
-        _aplicar(p, d)
+        _aplicar_datos(p, d)
         # La publicación conserva su estado (sigue ACTIVA sin volver a revisión). Fuera de BORRADOR debe seguir completa.
         if p.estado != E.BORRADOR and (f := calcular_faltantes(p)):
             raise ErrorNegocio("Falta: " + ", ".join(f) + ".", extra={"faltantes": f})
@@ -365,7 +365,7 @@ def cambiar_estado(usuario, publicacion_id: int, nuevo: str, observacion: str | 
     p = obtener_publicacion(usuario, publicacion_id)
     anterior = p.estado
     if (anterior, nuevo) not in TRANSICIONES.get(usuario.rol, set()):
-        _negar(usuario, p, f"{anterior} → {nuevo}")
+        _negar_acceso(usuario, p, f"{anterior} → {nuevo}")
         raise ErrorNegocio(f"No se puede pasar de «{E(anterior).label}» a «{E(nuevo).label}».", codigo=409)
     if nuevo == E.PENDIENTE_REVISION and (f := calcular_faltantes(p)):
         raise ErrorNegocio("No se puede enviar a revisión. Falta: " + ", ".join(f) + ".", extra={"faltantes": f})
@@ -387,7 +387,7 @@ def cambiar_estado(usuario, publicacion_id: int, nuevo: str, observacion: str | 
         detalle = {"de": anterior, "a": nuevo, **({"observacion": observacion} if observacion else {})}
         auditoria.registrar_evento(usuario.id, nombre, entidad="Publicacion", entidad_id=p.id, detalle=detalle)
         if nombre in EVENTOS_DE_DOMINIO:  # los reciben Reservas y Notificaciones
-            publicar(nombre, usuario_id=usuario.id, entidad="Publicacion", entidad_id=p.id,
+            publicar_evento(nombre, usuario_id=usuario.id, entidad="Publicacion", entidad_id=p.id,
                      detalle={**detalle, "titulo": p.titulo, "anfitrion": p.anfitrion_id,
                               "por_administrador": usuario.rol == "ADMINISTRADOR"})
     return p

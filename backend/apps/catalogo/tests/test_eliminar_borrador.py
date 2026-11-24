@@ -36,7 +36,7 @@ def test_solo_se_elimina_en_borrador(demo, entrar, estado):
 
 
 def test_no_se_elimina_el_borrador_de_otro_anfitrion(demo, entrar):
-    apps.get_model("identidad", "Usuario").registrar("otro.anfitrion@correo.com", "Clave1234", "ANFITRION", nombre_completo="Otro", telefono="300")
+    apps.get_model("identidad", "Usuario").registrar_usuario("otro.anfitrion@correo.com", "Clave1234", "ANFITRION", nombre_completo="Otro", telefono="300")
     pid = _borrador(entrar)
     r = entrar("otro.anfitrion@correo.com", "Clave1234").delete(f"/api/v1/catalogo/mis-publicaciones/{pid}")
     assert r.status_code == 403

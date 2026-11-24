@@ -21,8 +21,8 @@ def test_con_llave_se_usa_stripe(settings):
 
 def test_el_simulado_aprueba_salvo_rechazar():
     clave = uuid.uuid4()
-    assert AdaptadorSimulado().cobrar(Decimal("710000"), clave, "tarjeta").estado == "APROBADO"
-    rechazo = AdaptadorSimulado().cobrar(Decimal("710000"), clave, "rechazar")
+    assert AdaptadorSimulado().cobrar_pago(Decimal("710000"), clave, "tarjeta").estado == "APROBADO"
+    rechazo = AdaptadorSimulado().cobrar_pago(Decimal("710000"), clave, "rechazar")
     assert rechazo.estado == "RECHAZADO" and rechazo.motivo
 
 
@@ -46,7 +46,7 @@ def _stripe(intents):
 def test_stripe_crea_y_confirma_el_payment_intent_con_la_clave_de_idempotencia():
     intents = IntentsFalsos()
     clave = uuid.uuid4()
-    r = _stripe(intents).cobrar(Decimal("740000.00"), clave, "pm_card_visa")
+    r = _stripe(intents).cobrar_pago(Decimal("740000.00"), clave, "pm_card_visa")
     params, options = intents.llamadas[0]
     assert r.estado == "APROBADO" and r.referencia == "pi_prueba"
     assert params["amount"] == 74000000 and params["currency"] == "cop" and params["confirm"] is True
@@ -56,14 +56,14 @@ def test_stripe_crea_y_confirma_el_payment_intent_con_la_clave_de_idempotencia()
 @pytest.mark.parametrize("estado,esperado", [("processing", "EN_VERIFICACION"), ("requires_action", "EN_VERIFICACION"),
                                             ("requires_payment_method", "RECHAZADO"), ("canceled", "RECHAZADO")])
 def test_estados_de_stripe(estado, esperado):
-    assert _stripe(IntentsFalsos(estado)).cobrar(Decimal("1000"), uuid.uuid4(), "pm_x").estado == esperado
+    assert _stripe(IntentsFalsos(estado)).cobrar_pago(Decimal("1000"), uuid.uuid4(), "pm_x").estado == esperado
 
 
 def test_tarjeta_rechazada_por_stripe():
     import stripe
 
     error = stripe.CardError("Your card was declined.", None, "card_declined")
-    r = _stripe(IntentsFalsos(error=error)).cobrar(Decimal("1000"), uuid.uuid4(), "pm_card_chargeDeclined")
+    r = _stripe(IntentsFalsos(error=error)).cobrar_pago(Decimal("1000"), uuid.uuid4(), "pm_card_chargeDeclined")
     assert r.estado == "RECHAZADO" and r.motivo
 
 
@@ -86,13 +86,13 @@ def _stripe_reembolsos(reembolsos):
 
 
 def test_el_simulado_aprueba_la_devolucion():
-    r = AdaptadorSimulado().devolver("SIM-1a2b3c4d", Decimal("370000"))
+    r = AdaptadorSimulado().devolver_pago("SIM-1a2b3c4d", Decimal("370000"))
     assert r.estado == "APROBADO" and r.referencia == "SIM-DEV-1a2b3c4d"
 
 
 def test_stripe_devuelve_sobre_el_payment_intent_con_clave_de_idempotencia():
     reembolsos = ReembolsosFalsos()
-    r = _stripe_reembolsos(reembolsos).devolver("pi_prueba", Decimal("370000.00"))
+    r = _stripe_reembolsos(reembolsos).devolver_pago("pi_prueba", Decimal("370000.00"))
     params, options = reembolsos.llamadas[0]
     assert r.estado == "APROBADO" and r.referencia == "re_prueba"
     assert params == {"payment_intent": "pi_prueba", "amount": 37000000}
@@ -101,12 +101,12 @@ def test_stripe_devuelve_sobre_el_payment_intent_con_clave_de_idempotencia():
 
 @pytest.mark.parametrize("estado,esperado", [("pending", "EN_VERIFICACION"), ("failed", "RECHAZADO"), ("canceled", "RECHAZADO")])
 def test_estados_de_la_devolucion_en_stripe(estado, esperado):
-    assert _stripe_reembolsos(ReembolsosFalsos(estado)).devolver("pi_x", Decimal("1000")).estado == esperado
+    assert _stripe_reembolsos(ReembolsosFalsos(estado)).devolver_pago("pi_x", Decimal("1000")).estado == esperado
 
 
 def test_stripe_rechaza_la_devolucion():
     import stripe
 
-    r = _stripe_reembolsos(ReembolsosFalsos(error=stripe.InvalidRequestError("No such payment_intent", "payment_intent"))).devolver(
+    r = _stripe_reembolsos(ReembolsosFalsos(error=stripe.InvalidRequestError("No such payment_intent", "payment_intent"))).devolver_pago(
         "pi_inexistente", Decimal("1000"))
     assert r.estado == "RECHAZADO" and r.motivo

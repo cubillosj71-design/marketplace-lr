@@ -19,7 +19,7 @@ from apps.auditoria import services as auditoria
 from apps.catalogo import services as catalogo
 from apps.comun import reloj
 from apps.comun.errores import Conflicto, ErrorNegocio, NoEncontrado, SinPermiso, auditar_falla
-from apps.comun.eventos import publicar
+from apps.comun.eventos import publicar_evento
 from apps.comun.fechas import validar_estancia
 from apps.identidad import services as identidad
 from apps.pagos import services as pagos
@@ -69,7 +69,7 @@ def listar_reservas_pendientes(usuario_id: int, es_anfitrion: bool) -> list[dict
     """Reservas CONFIRMADAS o EN_REVISION cuya fecha de salida no ha pasado, como huésped o en los
     alojamientos del anfitrión (RF-D-USU-01.4, CA-04.2, CA-04.5). Impiden desactivar la cuenta."""
     publicaciones_ids = catalogo.listar_ids_publicaciones_de(usuario_id) if es_anfitrion else []
-    hoy = reloj.hoy()
+    hoy = reloj.obtener_fecha_hoy()
     qs = Reserva.objects.filter(estado__in=OCUPAN, fecha_salida__gte=hoy)
     qs = qs.filter(huesped_id=usuario_id) | qs.filter(publicacion_id__in=list(publicaciones_ids))
     return [{"id": r.id, "publicacion": r.publicacion_id, "estado": r.estado, "fecha_llegada": r.fecha_llegada,
@@ -105,21 +105,21 @@ def contar_reservas_por_estado(desde=None, hasta=None) -> dict[str, int]:
 
 # ---------------------------------------------------------------- RF-D-ADM-03.1 Tarifa de servicio
 
-def _filtro_vigente_en(momento) -> Q:
+def _filtrar_vigente_en(momento) -> Q:
     """Tarifas cuyo rango [vigente_desde, vigente_hasta) contiene el momento."""
     return Q(vigente_desde__lte=momento) & (Q(vigente_hasta__isnull=True) | Q(vigente_hasta__gt=momento))
 
 
-def _tarifa_vigente(momento=None) -> TarifaServicio | None:
+def _obtener_tarifa_vigente(momento=None) -> TarifaServicio | None:
     """La tarifa que regía en el momento (por defecto, ahora). Antes de la primera tarifa se usa la primera, para que
     una fecha anterior a la carga inicial no quede sin tarifa."""
-    momento = momento or reloj.ahora()
-    return (TarifaServicio.objects.filter(_filtro_vigente_en(momento)).order_by("-vigente_desde").first()
+    momento = momento or reloj.obtener_fecha_hora()
+    return (TarifaServicio.objects.filter(_filtrar_vigente_en(momento)).order_by("-vigente_desde").first()
             or TarifaServicio.objects.order_by("vigente_desde").first())
 
 
 def consultar_tarifa_vigente(momento=None) -> Decimal:
-    t = _tarifa_vigente(momento)
+    t = _obtener_tarifa_vigente(momento)
     return t.porcentaje if t else Decimal("0")
 
 
@@ -127,18 +127,18 @@ def asegurar_tarifa_inicial(admin) -> None:
     """Tarifa inicial del 10 % desde el 1 de enero (ejemplos del SRS), abierta (vigente_hasta NULL). La usa
     cargar_demo cuando la base no tenía administrador al migrar (tarifa_servicio.administrador_id es NOT NULL)."""
     if not TarifaServicio.objects.exists():
-        inicio = reloj.ahora().replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        inicio = reloj.obtener_fecha_hora().replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
         TarifaServicio.objects.create(administrador=admin, porcentaje=Decimal("10"), vigente_desde=inicio)
 
 
-def _inicio_del_dia(valor) -> datetime:
+def _calcular_inicio_del_dia(valor) -> datetime:
     """Una fecha (date) es el día completo en hora de Colombia; un datetime se usa tal cual."""
     if isinstance(valor, datetime):
         return valor
     return timezone.make_aware(datetime.combine(valor, time.min))
 
 
-def _tarifa_dict(t: TarifaServicio) -> dict:
+def _serializar_tarifa(t: TarifaServicio) -> dict:
     return {"id": t.id, "porcentaje": f"{t.porcentaje:.2f}", "vigente_desde": t.vigente_desde,
             "vigente_hasta": t.vigente_hasta, "administrador": t.administrador_id}
 
@@ -147,20 +147,20 @@ def consultar_tarifas_vigentes(desde, hasta) -> list[dict]:
     """Tarifas que estuvieron vigentes en algún momento entre desde y hasta (ambos incluidos; con fechas, el día
     completo), de la más antigua a la más reciente. Un rango [vigente_desde, vigente_hasta) se cruza con el
     periodo si empieza antes de que el periodo termine y termina (o sigue abierto) después de que el periodo empieza."""
-    inicio = _inicio_del_dia(desde)
-    fin = hasta if isinstance(hasta, datetime) else _inicio_del_dia(hasta + timedelta(days=1))  # exclusivo
+    inicio = _calcular_inicio_del_dia(desde)
+    fin = hasta if isinstance(hasta, datetime) else _calcular_inicio_del_dia(hasta + timedelta(days=1))  # exclusivo
     if fin <= inicio:
         raise ErrorNegocio("La fecha inicial no puede ser posterior a la final.", campo="desde")
     qs = TarifaServicio.objects.filter(Q(vigente_desde__lt=fin) & (Q(vigente_hasta__isnull=True) | Q(vigente_hasta__gt=inicio)))
-    return [_tarifa_dict(t) for t in qs.order_by("vigente_desde", "id")]
+    return [_serializar_tarifa(t) for t in qs.order_by("vigente_desde", "id")]
 
 
 def consultar_historial_tarifa(desde=None, hasta=None) -> list[dict]:
     """Historial completo (de la más reciente a la más antigua) o, con un rango, las tarifas vigentes en él."""
     if desde or hasta:
-        filas = consultar_tarifas_vigentes(desde or date(2000, 1, 1), hasta or reloj.hoy())
+        filas = consultar_tarifas_vigentes(desde or date(2000, 1, 1), hasta or reloj.obtener_fecha_hoy())
         return list(reversed(filas))
-    return [_tarifa_dict(t) for t in TarifaServicio.objects.order_by("-vigente_desde", "-id")]
+    return [_serializar_tarifa(t) for t in TarifaServicio.objects.order_by("-vigente_desde", "-id")]
 
 
 def cambiar_tarifa(admin, porcentaje: Decimal, ip=None) -> dict:
@@ -172,7 +172,7 @@ def cambiar_tarifa(admin, porcentaje: Decimal, ip=None) -> dict:
         abierta = TarifaServicio.objects.select_for_update().filter(vigente_hasta__isnull=True).first()
         if abierta and porcentaje == abierta.porcentaje:
             raise ErrorNegocio("Ese ya es el porcentaje vigente.", campo="porcentaje")
-        ahora = reloj.ahora()
+        ahora = reloj.obtener_fecha_hora()
         if abierta:
             if ahora <= abierta.vigente_desde:
                 raise Conflicto("La tarifa vigente empieza después de este momento; no se puede reemplazar todavía.")
@@ -183,7 +183,7 @@ def cambiar_tarifa(admin, porcentaje: Decimal, ip=None) -> dict:
             "anterior": str(abierta.porcentaje) if abierta else None, "nuevo": str(porcentaje),
             "tarifa_anterior": abierta.id if abierta else None, "vigente_desde": ahora.isoformat(),
         })
-    return _tarifa_dict(t)
+    return _serializar_tarifa(t)
 
 
 # ---------------------------------------------------------------- cálculo de la cotización (CA-12.1, CA-12.2)
@@ -208,14 +208,14 @@ def calcular_cotizacion(publicacion: dict, noches: int, adicionales: list[Decima
 
 # ---------------------------------------------------------------- CU-ALO-06 Calendario (PeriodoCalendario)
 
-def _dias(inicio: date, fin: date):
+def _listar_dias(inicio: date, fin: date):
     d = inicio
     while d < fin:
         yield d
         d += timedelta(days=1)
 
 
-def _rangos(dias: set[date]) -> list[tuple[date, date]]:
+def _agrupar_rangos(dias: set[date]) -> list[tuple[date, date]]:
     out: list[tuple[date, date]] = []
     for d in sorted(dias):
         if out and out[-1][1] == d:
@@ -225,7 +225,7 @@ def _rangos(dias: set[date]) -> list[tuple[date, date]]:
     return out
 
 
-def _publicacion_del_anfitrion(usuario, publicacion_id: int) -> dict:
+def _obtener_publicacion_del_anfitrion(usuario, publicacion_id: int) -> dict:
     p = catalogo.obtener_resumen_publicacion(publicacion_id)
     if not p:
         raise NoEncontrado("La publicación no existe.")
@@ -238,7 +238,7 @@ def _publicacion_del_anfitrion(usuario, publicacion_id: int) -> dict:
 
 
 def consultar_calendario(usuario, publicacion_id: int, desde: date, hasta: date) -> dict:
-    _publicacion_del_anfitrion(usuario, publicacion_id)
+    _obtener_publicacion_del_anfitrion(usuario, publicacion_id)
     periodos = PeriodoCalendario.objects.filter(publicacion_id=publicacion_id, fecha_fin__gt=desde, fecha_inicio__lt=hasta)
     return {
         "publicacion": publicacion_id,
@@ -252,8 +252,8 @@ def modificar_calendario(usuario, publicacion_id: int, inicio: date, fin: date, 
     """NO_DISPONIBLE cierra [inicio, fin); DISPONIBLE lo vuelve a abrir. Los periodos se guardan
     unificados en rangos con disponible = false (RF-D-ALO-02.2). No se bloquean noches con reserva (CA-09.2)."""
     validar_estancia(inicio, fin, permitir_pasado=True, campo_llegada="fecha_inicio", campo_salida="fecha_fin")
-    _publicacion_del_anfitrion(usuario, publicacion_id)
-    nuevas = set(_dias(inicio, fin))
+    _obtener_publicacion_del_anfitrion(usuario, publicacion_id)
+    nuevas = set(_listar_dias(inicio, fin))
     cerrar = tipo == "NO_DISPONIBLE"
     with transaction.atomic():
         catalogo.obtener_datos_para_cotizar(publicacion_id, bloquear=True)  # serializa con las reservas de la publicación
@@ -262,11 +262,11 @@ def modificar_calendario(usuario, publicacion_id: int, inicio: date, fin: date, 
             if choque:  # CA-09.2
                 raise Conflicto("No se pueden bloquear fechas con una reserva confirmada.", extra={"fechas": sorted(choque)})
         periodos = PeriodoCalendario.objects.filter(publicacion_id=publicacion_id)
-        actuales = {d for x in periodos.filter(disponible=False) for d in _dias(x.fecha_inicio, x.fecha_fin)}
+        actuales = {d for x in periodos.filter(disponible=False) for d in _listar_dias(x.fecha_inicio, x.fecha_fin)}
         resultado = actuales | nuevas if cerrar else actuales - nuevas
         periodos.delete()
         PeriodoCalendario.objects.bulk_create(
-            [PeriodoCalendario(publicacion_id=publicacion_id, fecha_inicio=a, fecha_fin=b, disponible=False) for a, b in _rangos(resultado)]
+            [PeriodoCalendario(publicacion_id=publicacion_id, fecha_inicio=a, fecha_fin=b, disponible=False) for a, b in _agrupar_rangos(resultado)]
         )
         auditoria.registrar_evento(usuario.id, "CalendarioActualizado", entidad="Publicacion", entidad_id=publicacion_id,
                             detalle={"tipo": tipo, "desde": inicio.isoformat(), "hasta": fin.isoformat()})
@@ -289,7 +289,7 @@ def _validar_capacidad(pub: dict, num_huespedes: int) -> None:
                            campo="num_huespedes", extra={"capacidad_maxima": pub["capacidad"]})
 
 
-def _adicionales_elegidos(pub: dict, ids) -> list[tuple[int, Decimal]]:
+def _obtener_adicionales_elegidos(pub: dict, ids) -> list[tuple[int, Decimal]]:
     ids = list(dict.fromkeys(ids or []))  # cada adicional una vez por estancia
     faltan = [i for i in ids if i not in pub["adicionales"]]
     if faltan:
@@ -311,8 +311,8 @@ def _crear_cotizacion(huesped_id: int, pub: dict, llegada: date, salida: date, n
     return cot
 
 
-def _tarifa_o_error(momento=None) -> TarifaServicio:
-    t = _tarifa_vigente(momento)
+def _obtener_tarifa_o_error(momento=None) -> TarifaServicio:
+    t = _obtener_tarifa_vigente(momento)
     if not t:
         raise ErrorNegocio("La plataforma todavía no tiene una tarifa de servicio configurada.", codigo=409)
     return t
@@ -324,11 +324,11 @@ def cotizar_estancia(huesped, publicacion_id: int, llegada: date, salida: date, 
     if not pub or not pub["buscable"]:
         raise NoEncontrado("Este alojamiento no está disponible.")
     _validar_capacidad(pub, num_huespedes)
-    elegidos = _adicionales_elegidos(pub, adicionales)
+    elegidos = _obtener_adicionales_elegidos(pub, adicionales)
     _verificar_libres(publicacion_id, llegada, salida, "Las fechas elegidas no están disponibles.")
     # La cotización usa la tarifa que estaba vigente en su fecha (RF-D-ADM-03.1): el mismo instante fija las dos
-    creada = reloj.ahora()
-    tarifa = _tarifa_o_error(creada)
+    creada = reloj.obtener_fecha_hora()
+    tarifa = _obtener_tarifa_o_error(creada)
     with transaction.atomic():
         cot = _crear_cotizacion(huesped.id, pub, llegada, salida, num_huespedes, elegidos, tarifa, creada)
         auditoria.registrar_evento(huesped.id, "CotizacionCreada", entidad="Cotizacion", entidad_id=cot.id, ip=ip,
@@ -364,7 +364,7 @@ def convertir_cotizacion_a_dict(c: Cotizacion) -> dict:
         "id": c.id, "publicacion": c.publicacion_id, "publicacion_titulo": pub.get("titulo"),
         "fecha_llegada": c.fecha_llegada, "fecha_salida": c.fecha_salida, "num_huespedes": c.num_huespedes,
         **convertir_desglose_a_dict(c),
-        "creada": c.creada, "vence": c.vence, "vencida": c.vence <= reloj.ahora(),
+        "creada": c.creada, "vence": c.vence, "vencida": c.vence <= reloj.obtener_fecha_hora(),
         "reserva": Reserva.objects.filter(cotizacion_id=c.id).values_list("id", flat=True).first(),
     }
 
@@ -383,18 +383,18 @@ class _CotizacionCambio(Exception):
         self.pub, self.elegidos, self.tarifa = pub, elegidos, tarifa
 
 
-def _quien_cancelo(c: Cancelacion, huesped_id: int) -> str:
+def _obtener_quien_cancelo(c: Cancelacion, huesped_id: int) -> str:
     """HUESPED (CA-15.3), ADMINISTRADOR al resolver una EN_REVISION (CA-20.3) o AUTOMATICA (cancelada_por NULL, CA-20.5)."""
     if c.cancelada_por_id is None:
         return "AUTOMATICA"
     return "HUESPED" if c.cancelada_por_id == huesped_id else "ADMINISTRADOR"
 
 
-def _cancelacion_dict(c: Cancelacion | None, huesped_id: int | None = None) -> dict | None:
+def _serializar_cancelacion(c: Cancelacion | None, huesped_id: int | None = None) -> dict | None:
     if not c:
         return None
     return {"fecha": c.fecha, "motivo": c.motivo, "cancelada_por": c.cancelada_por_id, "automatica": c.cancelada_por_id is None,
-            "cancelada_por_rol": _quien_cancelo(c, huesped_id),
+            "cancelada_por_rol": _obtener_quien_cancelo(c, huesped_id),
             "dias_anticipacion": c.dias_anticipacion, "porcentaje_devolucion": f"{c.porcentaje_devolucion:.2f}",
             "valor_devolucion": f"{c.valor_devolucion:.2f}"}
 
@@ -404,7 +404,7 @@ def convertir_reserva_a_dict(r: Reserva, publicaciones: dict | None = None, nomb
     pub = (publicaciones or catalogo.obtener_titulos_y_anfitriones([r.publicacion_id])).get(r.publicacion_id, {})
     nombres = nombres if nombres is not None else identidad.obtener_nombres_usuarios([r.huesped_id])
     foto = (portadas if portadas is not None else catalogo.obtener_portadas_y_ciudades([r.publicacion_id])).get(r.publicacion_id, {})
-    hoy = reloj.hoy()
+    hoy = reloj.obtener_fecha_hoy()
     return {
         "id": r.id, "estado": r.estado, "cotizacion": r.cotizacion_id, "publicacion": r.publicacion_id,
         "alojamiento": pub.get("titulo"), "portada": foto.get("portada"), "ciudad": foto.get("ciudad"),
@@ -414,22 +414,22 @@ def convertir_reserva_a_dict(r: Reserva, publicaciones: dict | None = None, nomb
         "total": f"{r.total:.2f}", "clave_idempotencia": str(r.clave_idempotencia), "creada": r.creada,
         # El huésped puede cancelar una reserva CONFIRMADA antes del día de llegada (CA-15.5)
         "cancelable": r.estado == EstadoReserva.CONFIRMADA and r.fecha_llegada > hoy,
-        "cancelacion": _cancelacion_dict(getattr(r, "cancelacion", None) if r.estado == EstadoReserva.CANCELADA else None, r.huesped_id),
+        "cancelacion": _serializar_cancelacion(getattr(r, "cancelacion", None) if r.estado == EstadoReserva.CANCELADA else None, r.huesped_id),
         **({"pagos": pagos.listar_pagos_de_reserva(r.id)} if con_pagos else {}),
     }
 
 
-def _evento_reserva(nombre: str, r: Reserva, actor_id: int | None, **extra) -> None:
+def _publicar_evento_reserva(nombre: str, r: Reserva, actor_id: int | None, **extra) -> None:
     """Publica un evento de dominio de reserva con lo que necesita Notificaciones (destinatarios y textos)."""
     pub = catalogo.obtener_titulos_y_anfitriones([r.publicacion_id]).get(r.publicacion_id, {})
-    publicar(nombre, usuario_id=actor_id, entidad="Reserva", entidad_id=r.id, detalle={
+    publicar_evento(nombre, usuario_id=actor_id, entidad="Reserva", entidad_id=r.id, detalle={
         "huesped": r.huesped_id, "anfitrion": pub.get("anfitrion"), "titulo": pub.get("titulo"),
         "publicacion": r.publicacion_id, "llegada": r.fecha_llegada.isoformat(), "salida": r.fecha_salida.isoformat(),
         **extra,
     })
 
 
-def _misma_reserva(r: Reserva, huesped) -> tuple[dict, bool]:
+def _devolver_misma_reserva(r: Reserva, huesped) -> tuple[dict, bool]:
     """CA-13.4 y RNF-P-FIA-02: la misma clave devuelve la misma reserva, sin cobrar otra vez."""
     if r.huesped_id != huesped.id:
         raise Conflicto("Esa clave de idempotencia ya se usó en otra solicitud.")
@@ -440,7 +440,7 @@ def reservar_alojamiento(huesped, cotizacion_id: int, clave: uuid.UUID, medio: s
     """Devuelve (reserva, creada). creada es False cuando la clave ya tenía una reserva (respuesta 200)."""
     existente = Reserva.objects.filter(clave_idempotencia=clave).first()
     if existente:
-        return _misma_reserva(existente, huesped)
+        return _devolver_misma_reserva(existente, huesped)
     cot = obtener_cotizacion(huesped, cotizacion_id)
     if Reserva.objects.filter(cotizacion_id=cot.id).exists():
         raise Conflicto("Esta cotización ya se usó en una reserva. Cotiza de nuevo.")
@@ -450,7 +450,7 @@ def reservar_alojamiento(huesped, cotizacion_id: int, clave: uuid.UUID, medio: s
             pub = catalogo.obtener_datos_para_cotizar(cot.publicacion_id, bloquear=True)
             existente = Reserva.objects.filter(clave_idempotencia=clave).first()  # llegó mientras esperaba el bloqueo
             if existente:
-                return _misma_reserva(existente, huesped)
+                return _devolver_misma_reserva(existente, huesped)
             if not pub or not pub["buscable"]:
                 raise Conflicto("Este alojamiento ya no está disponible.")
             validar_estancia(cot.fecha_llegada, cot.fecha_salida)
@@ -458,9 +458,9 @@ def reservar_alojamiento(huesped, cotizacion_id: int, clave: uuid.UUID, medio: s
             # 2. Se recalcula con los precios y la tarifa de hoy; si el total cambió no se reserva
             ids = [a.servicio_adicional_id for a in cot.adicionales.all()]
             if any(i not in pub["adicionales"] for i in ids):
-                raise _CotizacionCambio(pub, [(i, Decimal(pub["adicionales"][i]["precio"])) for i in ids if i in pub["adicionales"]], _tarifa_o_error())
-            elegidos = _adicionales_elegidos(pub, ids)
-            tarifa = _tarifa_o_error()
+                raise _CotizacionCambio(pub, [(i, Decimal(pub["adicionales"][i]["precio"])) for i in ids if i in pub["adicionales"]], _obtener_tarifa_o_error())
+            elegidos = _obtener_adicionales_elegidos(pub, ids)
+            tarifa = _obtener_tarifa_o_error()
             if calcular_cotizacion(pub, cot.noches, [p for _, p in elegidos], tarifa.porcentaje)["total"] != cot.total:
                 raise _CotizacionCambio(pub, elegidos, tarifa)
             # 3. Las noches siguen libres
@@ -480,7 +480,7 @@ def reservar_alojamiento(huesped, cotizacion_id: int, clave: uuid.UUID, medio: s
             detalle = {"publicacion": r.publicacion_id, "llegada": r.fecha_llegada.isoformat(),
                        "salida": r.fecha_salida.isoformat(), "total": str(r.total), "pago": pago.id}
             auditoria.registrar_evento(huesped.id, "ReservaConfirmada", entidad="Reserva", entidad_id=r.id, detalle=detalle, ip=ip)
-            _evento_reserva("ReservaConfirmada", r, huesped.id, total=str(r.total))
+            _publicar_evento_reserva("ReservaConfirmada", r, huesped.id, total=str(r.total))
     except _PagoNoAprobado as e:
         # CA-13.3: no queda la reserva; el intento se registra fuera de la transacción que se revirtió
         auditoria.registrar_evento(huesped.id, "ReservaRechazada", entidad="Cotizacion", entidad_id=cot.id, exitoso=False, ip=ip,
@@ -491,7 +491,7 @@ def reservar_alojamiento(huesped, cotizacion_id: int, clave: uuid.UUID, medio: s
     except _CotizacionCambio as e:
         with transaction.atomic():
             nueva = _crear_cotizacion(huesped.id, e.pub, cot.fecha_llegada, cot.fecha_salida, cot.num_huespedes, e.elegidos, e.tarifa,
-                                      reloj.ahora())
+                                      reloj.obtener_fecha_hora())
         raise Conflicto("El precio cambió desde que cotizaste. Revisa la cotización nueva antes de reservar.",
                         extra={"cotizacion": convertir_cotizacion_a_dict(nueva)}) from e
     except IntegrityError as e:
@@ -500,7 +500,7 @@ def reservar_alojamiento(huesped, cotizacion_id: int, clave: uuid.UUID, medio: s
             raise Conflicto(FECHAS_OCUPADAS) from e
         existente = Reserva.objects.filter(clave_idempotencia=clave).first()
         if estado_sql == "23505" and existente:  # la misma clave entró por otra petición
-            return _misma_reserva(existente, huesped)
+            return _devolver_misma_reserva(existente, huesped)
         raise
     return convertir_reserva_a_dict(r), True
 
@@ -514,11 +514,11 @@ def atender_bloqueo_publicacion(sender, nombre, entidad_id=None, usuario_id=None
     Si algo falla aquí, el bloqueo también se revierte."""
     if nombre != "PublicacionBloqueada" or not entidad_id:
         return
-    hoy = reloj.hoy()
+    hoy = reloj.obtener_fecha_hoy()
     for r in Reserva.objects.select_for_update().filter(publicacion_id=entidad_id, estado=EstadoReserva.CONFIRMADA, fecha_llegada__gte=hoy):
         r.pasar_a_revision()
         auditoria.registrar_evento(usuario_id, "ReservaEnRevision", entidad="Reserva", entidad_id=r.id, detalle={"publicacion": entidad_id})
-        _evento_reserva("ReservaEnRevision", r, usuario_id)
+        _publicar_evento_reserva("ReservaEnRevision", r, usuario_id)
 
 
 # ---------------------------------------------------------------- RF-D-RES-02.3 COMPLETADA
@@ -527,7 +527,7 @@ def completar_reservas_vencidas() -> int:
     """Las reservas CONFIRMADAS cuya fecha de salida ya pasó quedan COMPLETADAS (CA-14.2).
     La llama la tarea diaria y también cada consulta, para que nunca se muestre CONFIRMADA una reserva vencida."""
     cambiadas = 0
-    for rid in Reserva.objects.filter(estado=EstadoReserva.CONFIRMADA, fecha_salida__lt=reloj.hoy()).values_list("id", flat=True):
+    for rid in Reserva.objects.filter(estado=EstadoReserva.CONFIRMADA, fecha_salida__lt=reloj.obtener_fecha_hoy()).values_list("id", flat=True):
         try:
             with transaction.atomic():
                 r = Reserva.objects.select_for_update().get(pk=rid)
@@ -545,7 +545,7 @@ def completar_reservas_vencidas() -> int:
 
 # ---------------------------------------------------------------- HU-14, HU-26 Consultar reservas
 
-def _listar(qs) -> list[dict]:
+def _listar_reservas(qs) -> list[dict]:
     lista = list(qs.select_related("cancelacion").order_by("-fecha_llegada", "-id"))
     ids = {r.publicacion_id for r in lista}
     publicaciones = catalogo.obtener_titulos_y_anfitriones(ids)
@@ -557,13 +557,13 @@ def _listar(qs) -> list[dict]:
 def listar_mis_reservas(huesped) -> list[dict]:
     """HU-14: las reservas actuales y pasadas del huésped, solo las suyas (CA-14.3)."""
     completar_reservas_vencidas()
-    return _listar(Reserva.objects.filter(huesped_id=huesped.id))
+    return _listar_reservas(Reserva.objects.filter(huesped_id=huesped.id))
 
 
 def listar_reservas_de_mis_alojamientos(anfitrion) -> list[dict]:
     """HU-26: las reservas de las publicaciones del anfitrión, incluidas las CANCELADAS (CA-26.1, CA-26.2)."""
     completar_reservas_vencidas()
-    return _listar(Reserva.objects.filter(publicacion_id__in=catalogo.listar_ids_publicaciones_de(anfitrion.id)))
+    return _listar_reservas(Reserva.objects.filter(publicacion_id__in=catalogo.listar_ids_publicaciones_de(anfitrion.id)))
 
 
 def listar_reservas_admin(estado: str | None = None) -> list[dict]:
@@ -571,7 +571,7 @@ def listar_reservas_admin(estado: str | None = None) -> list[dict]:
         return listar_reservas_en_revision()
     completar_reservas_vencidas()
     qs = Reserva.objects.all()
-    return _listar(qs.filter(estado=estado) if estado else qs)
+    return _listar_reservas(qs.filter(estado=estado) if estado else qs)
 
 
 # ---------------------------------------------------------------- HU-20 Pantalla "Reservas en revisión" (RF-D-ADM-01.2)
@@ -582,7 +582,7 @@ def _agregar_datos_de_revision(datos: list[dict]) -> list[dict]:
     """Anfitrión, motivo y fecha del bloqueo y días que faltan para la llegada. Una consulta por dato, no por reserva."""
     bloqueos = catalogo.obtener_bloqueos_de_publicaciones({d["publicacion"] for d in datos})
     anfitriones = identidad.obtener_nombres_usuarios({d["anfitrion"] for d in datos} - {None})
-    hoy = reloj.hoy()
+    hoy = reloj.obtener_fecha_hoy()
     for d in datos:
         d["anfitrion_nombre"] = anfitriones.get(d["anfitrion"])
         d["bloqueo"] = bloqueos.get(d["publicacion"])
@@ -590,7 +590,7 @@ def _agregar_datos_de_revision(datos: list[dict]) -> list[dict]:
     return datos
 
 
-def _resolucion(d: dict, resuelta: dict | None) -> dict:
+def _obtener_resolucion(d: dict, resuelta: dict | None) -> dict:
     """Mantenida (volvió a CONFIRMADA), cancelada por el administrador o cancelada automáticamente (CA-20.2, 20.3, 20.5)."""
     c = d["cancelacion"]
     if resuelta and resuelta["detalle"].get("mantener"):
@@ -606,7 +606,7 @@ def _resolucion(d: dict, resuelta: dict | None) -> dict:
 def listar_reservas_en_revision() -> list[dict]:
     """Pendientes: las EN_REVISION, primero la llegada más cercana."""
     completar_reservas_vencidas()
-    datos = _agregar_datos_de_revision(_listar(Reserva.objects.filter(estado=EstadoReserva.EN_REVISION)))
+    datos = _agregar_datos_de_revision(_listar_reservas(Reserva.objects.filter(estado=EstadoReserva.EN_REVISION)))
     return sorted(datos, key=lambda d: (d["fecha_llegada"], d["id"]))
 
 
@@ -619,9 +619,9 @@ def listar_reservas_resueltas_de_revision() -> list[dict]:
     resueltas = {e["entidad_id"]: e for e in eventos if e["accion"] == "ReservaResuelta"}  # la última de cada reserva
     # Orden: el momento en que se resolvió según el registro de acciones (mantener, cancelar o la cancelación automática)
     momento = {e["entidad_id"]: e["fecha"] for e in eventos if e["accion"] in ("ReservaResuelta", "ReservaCancelada")}
-    datos = _agregar_datos_de_revision(_listar(Reserva.objects.filter(pk__in=ids).exclude(estado=EstadoReserva.EN_REVISION)))
+    datos = _agregar_datos_de_revision(_listar_reservas(Reserva.objects.filter(pk__in=ids).exclude(estado=EstadoReserva.EN_REVISION)))
     for d in datos:
-        d["resolucion"] = _resolucion(d, resueltas.get(d["id"]))
+        d["resolucion"] = _obtener_resolucion(d, resueltas.get(d["id"]))
     return sorted(datos, key=lambda d: (d["id"] in momento, momento.get(d["id"]), d["id"]), reverse=True)
 
 
@@ -632,11 +632,11 @@ def obtener_reserva_en_revision(admin, reserva_id: int) -> dict:
     eventos = auditoria.listar_eventos_de_entidades(["ReservaEnRevision", "ReservaResuelta"], "Reserva", [reserva_id])
     estuvo = any(e["accion"] == "ReservaEnRevision" for e in eventos)
     resuelta = next((e for e in reversed(eventos) if e["accion"] == "ReservaResuelta"), None)
-    d["resolucion"] = _resolucion(d, resuelta) if estuvo and d["estado"] != EstadoReserva.EN_REVISION else None
+    d["resolucion"] = _obtener_resolucion(d, resuelta) if estuvo and d["estado"] != EstadoReserva.EN_REVISION else None
     return d
 
 
-def _negar(usuario, reserva_id: int, motivo: str):
+def _negar_acceso(usuario, reserva_id: int, motivo: str):
     # Acceso negado: fuera de transaction.atomic, queda aunque la petición falle (CA-05.2)
     auditoria.registrar_evento(usuario.id, "AccesoDenegado", entidad="Reserva", entidad_id=reserva_id, exitoso=False, detalle={"motivo": motivo})
     raise SinPermiso("No tienes acceso a esta reserva.")
@@ -651,7 +651,7 @@ def obtener_reserva(usuario, reserva_id: int) -> dict:
     publicaciones = catalogo.obtener_titulos_y_anfitriones([r.publicacion_id])
     anfitrion = publicaciones.get(r.publicacion_id, {}).get("anfitrion")
     if not (usuario.rol == "ADMINISTRADOR" or r.huesped_id == usuario.id or anfitrion == usuario.id):
-        _negar(usuario, reserva_id, "Ver una reserva ajena")
+        _negar_acceso(usuario, reserva_id, "Ver una reserva ajena")
     nombres = identidad.obtener_nombres_usuarios({r.huesped_id, anfitrion} - {None})
     cotizacion = Cotizacion.objects.select_related("tarifa_servicio_ref").get(pk=r.cotizacion_id)
     return {
@@ -667,7 +667,7 @@ def obtener_reserva(usuario, reserva_id: int) -> dict:
 
 # ---------------------------------------------------------------- HU-15 Cancelar (RF-D-RES-03.1)
 
-def _tras_cancelar(r: Reserva, c: Cancelacion, ip=None) -> None:
+def _procesar_cancelacion(r: Reserva, c: Cancelacion, ip=None) -> None:
     """Lo que sigue a cancelar_reserva(), resolver_reserva(False) o cancelar_sin_resolucion(), dentro de la transacción del llamador:
     pago DEVOLUCION (si el valor es mayor que 0), auditoría y evento ReservaCancelada. Las noches quedan libres
     (v_noche_no_disponible)."""
@@ -679,7 +679,7 @@ def _tras_cancelar(r: Reserva, c: Cancelacion, ip=None) -> None:
         "porcentaje_devolucion": f"{Decimal(c.porcentaje_devolucion):.2f}", "dias_anticipacion": c.dias_anticipacion,
         "automatica": c.cancelada_por_id is None, "pago_devolucion": pago.id if pago else None,
     })
-    _evento_reserva("ReservaCancelada", r, c.cancelada_por_id, motivo=c.motivo, valor_devolucion=f"{c.valor_devolucion:.2f}")
+    _publicar_evento_reserva("ReservaCancelada", r, c.cancelada_por_id, motivo=c.motivo, valor_devolucion=f"{c.valor_devolucion:.2f}")
 
 
 def cancelar_reserva(huesped, reserva_id: int, motivo: str, ip=None) -> dict:
@@ -692,17 +692,17 @@ def cancelar_reserva(huesped, reserva_id: int, motivo: str, ip=None) -> dict:
     if not r:
         raise NoEncontrado("La reserva no existe.")
     if r.huesped_id != huesped.id:
-        _negar(huesped, reserva_id, "Cancelar una reserva ajena")
+        _negar_acceso(huesped, reserva_id, "Cancelar una reserva ajena")
     completar_reservas_vencidas()
     with transaction.atomic():
         r = Reserva.objects.select_for_update().get(pk=reserva_id)
         if r.estado != EstadoReserva.CONFIRMADA:
             raise Conflicto(f"Solo se puede cancelar una reserva confirmada; esta está {EstadoReserva(r.estado).label.lower()}.")
-        dias = (r.fecha_llegada - reloj.hoy()).days  # días calendario en hora de Colombia
+        dias = (r.fecha_llegada - reloj.obtener_fecha_hoy()).days  # días calendario en hora de Colombia
         if dias < 1:  # CA-15.5
             raise Conflicto("La fecha de llegada ya llegó: la reserva ya no se puede cancelar.")
         c = r.cancelar_reserva(motivo, porcentaje=catalogo.calcular_porcentaje_devolucion(r.politica_id, dias), cancelada_por_id=huesped.id)
-        _tras_cancelar(r, c, ip=ip)
+        _procesar_cancelacion(r, c, ip=ip)
     return convertir_reserva_a_dict(Reserva.objects.select_related("cancelacion").get(pk=reserva_id))
 
 
@@ -712,14 +712,14 @@ def simular_cancelacion(usuario, reserva_id: int) -> dict:
     if not r:
         raise NoEncontrado("La reserva no existe.")
     if r.huesped_id != usuario.id:
-        _negar(usuario, reserva_id, "Simular la cancelación de una reserva ajena")
+        _negar_acceso(usuario, reserva_id, "Simular la cancelación de una reserva ajena")
     return {"reserva": r.id, **calcular_devolucion_hoy(r)}
 
 
 def calcular_devolucion_hoy(r: Reserva) -> dict:
-    """Días que faltan para la llegada (hora de Colombia, reloj.hoy()) y lo que se devolvería si el huésped cancela
+    """Días que faltan para la llegada (hora de Colombia, reloj.obtener_fecha_hoy()) y lo que se devolvería si el huésped cancela
     hoy según la política guardada en la reserva. El día de llegada o después ya no se puede cancelar (CA-15.5)."""
-    dias = (r.fecha_llegada - reloj.hoy()).days
+    dias = (r.fecha_llegada - reloj.obtener_fecha_hoy()).days
     pct = catalogo.calcular_porcentaje_devolucion(r.politica_id, dias) if dias >= 1 else Decimal("0")
     return {"cancelable": r.estado == EstadoReserva.CONFIRMADA and dias >= 1, "dias_anticipacion": dias,
             "porcentaje_devolucion": f"{pct:.2f}",
@@ -743,11 +743,11 @@ def resolver_reserva(admin, reserva_id: int, mantener: bool, motivo: str | None 
         if mantener:
             r.resolver_revision(True)
             auditoria.registrar_evento(admin.id, "ReservaResuelta", entidad="Reserva", entidad_id=r.id, ip=ip, detalle={"mantener": True})
-            _evento_reserva("ReservaResuelta", r, admin.id, mantener=True)
+            _publicar_evento_reserva("ReservaResuelta", r, admin.id, mantener=True)
         else:
             auditoria.registrar_evento(admin.id, "ReservaResuelta", entidad="Reserva", entidad_id=r.id, ip=ip, detalle={"mantener": False, "motivo": motivo})
-            _evento_reserva("ReservaResuelta", r, admin.id, mantener=False, motivo=motivo)
-            _tras_cancelar(r, r.resolver_revision(False, motivo=motivo, administrador_id=admin.id), ip=ip)
+            _publicar_evento_reserva("ReservaResuelta", r, admin.id, mantener=False, motivo=motivo)
+            _procesar_cancelacion(r, r.resolver_revision(False, motivo=motivo, administrador_id=admin.id), ip=ip)
     return convertir_reserva_a_dict(Reserva.objects.select_related("cancelacion").get(pk=reserva_id))
 
 
@@ -756,13 +756,13 @@ def cancelar_en_revision_vencidas() -> int:
     motivo "Sin resolución antes de la llegada" y cancelada_por NULL. ReservaCancelada avisa a huésped y anfitrión
     (CA-20.5)."""
     canceladas = 0
-    for rid in Reserva.objects.filter(estado=EstadoReserva.EN_REVISION, fecha_llegada__lte=reloj.hoy()).values_list("id", flat=True):
+    for rid in Reserva.objects.filter(estado=EstadoReserva.EN_REVISION, fecha_llegada__lte=reloj.obtener_fecha_hoy()).values_list("id", flat=True):
         try:
             with transaction.atomic():
                 r = Reserva.objects.select_for_update().get(pk=rid)
                 if r.estado != EstadoReserva.EN_REVISION:
                     continue
-                _tras_cancelar(r, r.cancelar_sin_resolucion())
+                _procesar_cancelacion(r, r.cancelar_sin_resolucion())
         except Exception as e:  # noqa: BLE001  una reserva que falla se revierte sola y no detiene las demás
             auditar_falla(e, entidad="Reserva", entidad_id=rid, tarea="cancelar_en_revision_vencidas")
             continue

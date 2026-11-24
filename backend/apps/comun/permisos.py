@@ -13,10 +13,10 @@ from django.core.exceptions import ImproperlyConfigured
 from rest_framework.permissions import BasePermission
 
 from . import rbac
-from .eventos import ip_de
+from .eventos import obtener_ip
 
 
-def _negar(request, detalle: dict) -> None:
+def _negar_acceso(request, detalle: dict) -> None:
     from apps.auditoria import services as auditoria  # import tardío: comun se carga antes que las apps
 
     usuario = getattr(request, "user", None)
@@ -25,7 +25,7 @@ def _negar(request, detalle: dict) -> None:
         "AccesoDenegado",
         exitoso=False,
         detalle={"ruta": request.path, "metodo": request.method, **detalle},
-        ip=ip_de(request),
+        ip=obtener_ip(request),
     )
 
 
@@ -51,6 +51,6 @@ class RequierePermiso(BasePermission):
         if rbac.tiene_alguno(usuario, self.permisos):
             return True
         if usuario and usuario.is_authenticated:  # sin sesión: DRF responde 401 y no se registra
-            _negar(request, {"permiso": " o ".join(self.permisos), "rol": usuario.rol})
+            _negar_acceso(request, {"permiso": " o ".join(self.permisos), "rol": usuario.rol})
         return False
 
