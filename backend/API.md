@@ -215,10 +215,15 @@ anfitrión de la publicación o administrador) y las de una publicación (anfitr
 - **Límite de 12 meses (RF-D-ALO-02.2).** Calendario, búsqueda, cotización y reserva rechazan con 400 una fecha de
   salida posterior a hoy + 12 meses (`apps/comun/fechas.py`). Búsqueda, cotización y reserva tampoco aceptan llegadas
   en el pasado.
-- **Recuperación de contraseña.** Se guarda solo el hash SHA-256 del enlace. Como la recuperación es simulada y el
-  MVP no envía correos (AMB-08, AMB-12), la respuesta trae `enlace` para mostrarlo en pantalla, también en producción
-  (CA-03.1). Con un correo no registrado la respuesta es igual, pero sin `enlace`. Pedir un enlace nuevo anula los
-  anteriores sin usar.
+- **Recuperación de contraseña (decisión del PO, 2026-11-23: deja de ser simulada).** El enlace llega **por correo**
+  a la cuenta (texto y HTML, sirve una vez y vence en 20 minutos); la API nunca lo devuelve. `POST /identidad/recuperacion`
+  responde siempre `202` con el mismo mensaje, exista o no la cuenta, y el correo sale en un hilo aparte para que el
+  tiempo de respuesta tampoco lo revele. Se guarda solo el hash SHA-256 del token. Si el servidor de correo falla, el
+  usuario ve lo mismo y queda `CorreoRecuperacionNoEnviado` en la auditoría. Pedir un enlace nuevo anula los anteriores
+  sin usar. Configuración en `backend/.env` (ver `.env.example`): con Gmail, `EMAIL_HOST_USER` (la cuenta) y
+  `EMAIL_HOST_PASSWORD` (una contraseña de aplicación de 16 caracteres, con verificación en dos pasos activa). Sin
+  `EMAIL_HOST_USER`, en desarrollo el correo se imprime en la terminal del backend. **Pendiente del equipo:** actualizar
+  en el SRS RF-D-USU-01.3, AMB-08 y AMB-12, que todavía describen la recuperación simulada.
 - **Reportes (ADR-009).** ReportLab y openpyxl en el servidor, con las mismas consultas del tablero (CA-25.1). El
   frontend ya no genera PDF ni Excel: descarga el archivo del servidor.
 - **Reloj inyectable.** Las reglas que dependen del día (cancelación, COMPLETADA, EN_REVISION vencidas, límite de

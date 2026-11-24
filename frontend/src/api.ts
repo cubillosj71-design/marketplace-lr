@@ -111,7 +111,7 @@ export const identidadApi = {
   registrar: (d: { nombre_completo: string; correo: string; telefono: string; password: string; rol: string; acepta_datos: boolean }) =>
     api.post<UsuarioApi>("/identidad/registro", d),
   solicitarRecuperacion: (correo: string) =>
-    api.post<{ detalle: string; enlace?: string }>("/identidad/recuperacion", { correo }),
+    api.post<{ detalle: string }>("/identidad/recuperacion", { correo }),
   estadoEnlace: (token: string) =>
     api.get<{ estado: "valido" | "vencido" | "usado" | "inexistente" }>(`/identidad/recuperacion/${encodeURIComponent(token)}`),
   restablecer: (token: string, password: string) =>

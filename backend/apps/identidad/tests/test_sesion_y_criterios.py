@@ -1,4 +1,4 @@
-"""SRV-01 Identidad: sesión con cookie httpOnly (C4 nivel 2), enlace en pantalla (AMB-08),
+"""SRV-01 Identidad: sesión con cookie httpOnly (C4 nivel 2), enlace de recuperación por correo,
 límite de intentos y los criterios de aceptación que faltaban (CA-01.1, CA-02.1, CA-03.1,
 CA-04.1, CA-04.3)."""
 
@@ -76,9 +76,11 @@ def test_mas_de_10_intentos_por_minuto_desde_la_misma_ip_se_frenan(demo, cliente
 
 # ---------------- HU-03
 @override_settings(DEBUG=False)
-def test_ca_03_1_el_enlace_se_muestra_en_pantalla_tambien_en_produccion(demo, cliente):
+def test_ca_03_1_el_enlace_llega_al_correo_y_no_se_muestra_en_pantalla(demo, cliente, mailoutbox):
     r = cliente.post(RECUPERACION, {"correo": "huesped@correo.com"}, format="json")
-    assert r.status_code == 202 and "/#/restablecer/" in r.json()["enlace"]
+    assert r.status_code == 202 and "enlace" not in r.json()
+    assert len(mailoutbox) == 1 and mailoutbox[0].to == ["huesped@correo.com"]
+    assert "/#/restablecer/" in mailoutbox[0].body
 
 
 def test_pedir_un_enlace_nuevo_anula_el_anterior(demo):

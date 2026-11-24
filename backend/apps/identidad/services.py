@@ -8,15 +8,19 @@ con import-linter en el pipeline, ADR-001).
 from __future__ import annotations
 
 import hashlib
+import logging
 import secrets
+import threading
 from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
+from django.core.mail import EmailMultiAlternatives
 from django.core.exceptions import ValidationError
-from django.db import transaction
+from django.db import connection, transaction
 from django.db.models import Count, Q
 from django.utils import timezone
+from django.utils.html import escape
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -26,6 +30,7 @@ from apps.comun.errores import Conflicto, ErrorNegocio, NoEncontrado, SinPermiso
 
 from .models import RestriccionUsuario, RolUsuario, TokenRecuperacion, Usuario, validar_telefono
 
+log = logging.getLogger("marketplace")
 ROLES_REGISTRO = (RolUsuario.HUESPED, RolUsuario.ANFITRION)
 
 
@@ -192,8 +197,9 @@ def _calcular_hash(token: str) -> str:
 
 
 def solicitar_recuperacion(correo: str, ip=None) -> str | None:
-    """Crea el enlace de recuperación y devuelve el token en claro (en la base solo queda su hash).
-    Si el correo no existe devuelve None."""
+    """Crea el enlace de recuperación y lo envía al correo de la cuenta (RF-D-USU-01.3). En la base solo queda el hash
+    del token. Devuelve el token en claro solo para las pruebas: la API nunca lo muestra. Si el correo no existe no
+    envía nada y devuelve None; la vista responde igual en los dos casos (no revela qué correos están registrados)."""
     u = Usuario.objects.filter(correo__iexact=(correo or "").strip()).first()
     if not u:
         auditoria.registrar_evento(None, "RecuperacionSolicitada", exitoso=False, detalle={"motivo": "Correo no registrado"}, ip=ip)
@@ -207,9 +213,52 @@ def solicitar_recuperacion(correo: str, ip=None) -> str | None:
             usuario=u, token_hash=_calcular_hash(token), vence=ahora + timedelta(minutes=settings.MINUTOS_ENLACE_RECUPERACION)
         )
         auditoria.registrar_evento(u.id, "RecuperacionSolicitada", entidad="Usuario", entidad_id=u.id, ip=ip)
-    # No se envía correo: la recuperación es simulada y el enlace se muestra en pantalla
-    # (AMB-08, AMB-12, CA-03.1). La vista lo devuelve en la respuesta.
+    enlace = f"{settings.FRONTEND_URL}/#/restablecer/{token}"
+    if settings.CORREO_EN_SEGUNDO_PLANO:
+        # La respuesta no espera al servidor de correo: tarda lo mismo exista o no la cuenta
+        threading.Thread(target=_enviar_correo_recuperacion, args=(u.id, u.correo, u.nombre_completo, enlace, ip),
+                         daemon=True).start()
+    else:
+        _enviar_correo_recuperacion(u.id, u.correo, u.nombre_completo, enlace, ip)
     return token
+
+
+def _enviar_correo_recuperacion(usuario_id: int, correo: str, nombre: str, enlace: str, ip=None) -> None:
+    """Envía el enlace por correo (texto y HTML). Si el servidor de correo falla, el usuario ve la misma respuesta y la
+    falla queda en el log y en la auditoría (CorreoRecuperacionNoEnviado) para que el equipo la revise."""
+    minutos = settings.MINUTOS_ENLACE_RECUPERACION
+    texto = (
+        f"Hola, {nombre}:\n\n"
+        "Recibimos una solicitud para cambiar la contraseña de tu cuenta en Alojamientos LR.\n"
+        f"Abre este enlace para definir una nueva (sirve una sola vez y vence en {minutos} minutos):\n\n{enlace}\n\n"
+        "Si no fuiste tú, ignora este correo: tu contraseña no cambia.\n\nAlojamientos LR · Inversiones LR"
+    )
+    html = (
+        '<div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;color:#1f2b29">'
+        '<h2 style="color:#134e4a;margin-bottom:8px">Cambia tu contraseña</h2>'
+        f"<p>Hola, {escape(nombre)}:</p>"
+        "<p>Recibimos una solicitud para cambiar la contraseña de tu cuenta en <b>Alojamientos LR</b>.</p>"
+        f'<p style="margin:24px 0"><a href="{escape(enlace)}" style="background:#c2410c;color:#fff;padding:12px 20px;'
+        'border-radius:8px;text-decoration:none;font-weight:bold">Definir una nueva contraseña</a></p>'
+        f"<p style=\"color:#57534e;font-size:14px\">El enlace sirve una sola vez y vence en {minutos} minutos. Si el botón no "
+        f'funciona, copia esta dirección en el navegador:<br><span style="word-break:break-all">{escape(enlace)}</span></p>'
+        '<p style="color:#57534e;font-size:14px">Si no fuiste tú, ignora este correo: tu contraseña no cambia.</p>'
+        '<p style="color:#8a8f8d;font-size:12px">Alojamientos LR · Inversiones LR</p></div>'
+    )
+    try:
+        mensaje = EmailMultiAlternatives("Cambia tu contraseña · Alojamientos LR", texto, settings.DEFAULT_FROM_EMAIL, [correo])
+        mensaje.attach_alternative(html, "text/html")
+        mensaje.send(fail_silently=False)
+    except Exception as e:  # noqa: BLE001  el usuario no debe ver el error del servidor de correo
+        log.exception("No se pudo enviar el correo de recuperación", extra={"usuario": usuario_id})
+        try:
+            auditoria.registrar_evento(usuario_id, "CorreoRecuperacionNoEnviado", entidad="Usuario", entidad_id=usuario_id,
+                                       exitoso=False, ip=ip, detalle={"error": type(e).__name__, "mensaje": str(e)[:300]})
+        except Exception:  # noqa: BLE001
+            log.exception("Tampoco se pudo registrar la falla del correo en la auditoría")
+    finally:
+        if settings.CORREO_EN_SEGUNDO_PLANO:
+            connection.close()  # el hilo abrió su propia conexión a la base
 
 
 def consultar_estado_enlace(token: str) -> str:

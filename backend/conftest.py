@@ -15,6 +15,13 @@ def pasarela_simulada(settings):
     settings.STRIPE_SECRET_KEY = ""
 
 
+@pytest.fixture(autouse=True)
+def correo_sin_hilo(settings):
+    """El correo de recuperación se envía en la misma ejecución (sin hilo) para revisarlo en mail.outbox. pytest-django
+    ya cambia el backend de correo por el de memoria: ninguna prueba envía correos de verdad."""
+    settings.CORREO_EN_SEGUNDO_PLANO = False
+
+
 def _es_transaccional(item) -> bool:
     marca = item.get_closest_marker("django_db")
     return bool(marca and (marca.kwargs.get("transaction") or (marca.args and marca.args[0])))

@@ -179,12 +179,27 @@ REST_FRAMEWORK = {
 # Recuperación de contraseña (RNF-P-SEG-03): el enlace apunta a la aplicación web y vence en 20 minutos
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173")
 MINUTOS_ENLACE_RECUPERACION = 20
-DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "no-responder@alojamientoslr.co")
-# En desarrollo los correos se muestran en la consola; en producción se configura SMTP por variables de entorno
+# Correo (RF-D-USU-01.3: el enlace de recuperación llega al correo del usuario). Con Gmail: cuenta del equipo con
+# verificación en dos pasos y una "contraseña de aplicación" de 16 caracteres en EMAIL_HOST_PASSWORD. Las credenciales
+# solo llegan por variables de entorno (.env, Render). Sin EMAIL_HOST_USER, en desarrollo el correo se imprime en la
+# terminal del backend (backend de consola) para poder probar sin cuenta.
+EMAIL_HOST = os.environ.get("EMAIL_HOST", "smtp.gmail.com")
+EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
+EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "1") == "1"
+EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "").replace(" ", "")  # Google la muestra en 4 grupos
+EMAIL_TIMEOUT = 15
 EMAIL_BACKEND = os.environ.get(
     "EMAIL_BACKEND",
-    "django.core.mail.backends.console.EmailBackend" if DEBUG else "django.core.mail.backends.smtp.EmailBackend",
+    "django.core.mail.backends.smtp.EmailBackend" if EMAIL_HOST_USER or not DEBUG else "django.core.mail.backends.console.EmailBackend",
 )
+# Gmail solo envía con la dirección de la cuenta autenticada como remitente
+DEFAULT_FROM_EMAIL = os.environ.get(
+    "DEFAULT_FROM_EMAIL", f"Alojamientos LR <{EMAIL_HOST_USER}>" if EMAIL_HOST_USER else "Alojamientos LR <no-responder@alojamientoslr.co>"
+)
+# El envío va en segundo plano: así la respuesta tarda lo mismo exista o no la cuenta (no revela qué correos están
+# registrados por el tiempo de respuesta). Las pruebas lo apagan para revisar el correo enviado.
+CORREO_EN_SEGUNDO_PLANO = os.environ.get("CORREO_EN_SEGUNDO_PLANO", "1") == "1"
 
 # Reportes (ADR-009): periodo máximo de 12 meses
 MESES_MAXIMOS_REPORTE = 12
