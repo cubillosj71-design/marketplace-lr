@@ -20,6 +20,7 @@ const REPORTES = [
 ] as const;
 type TipoReporte = (typeof REPORTES)[number]["tipo"];
 
+/** Pantalla "Reportes" del Administrador (RF-D-ADM-05.2): elige reporte, periodo, filtros y formato (PDF o Excel) y lo descarga. */
 export function Reportes() {
   const toast = useToast();
   const [busqueda] = useSearchParams();

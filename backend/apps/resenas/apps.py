@@ -1,3 +1,5 @@
+"""Configuración de la app SRV-06 Reseñas (MOD-06) para Django (INSTALLED_APPS)."""
+
 from django.apps import AppConfig
 
 

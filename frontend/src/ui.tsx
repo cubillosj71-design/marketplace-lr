@@ -2,6 +2,7 @@ import { AlertTriangle, CheckCircle2, ImageIcon, Info, X, XCircle } from "lucide
 import { useEffect, type ReactNode } from "react";
 import { ESTADO_TXT, type EstadoPub, type Imagen } from "./data";
 
+/** Campo de formulario con etiqueta, ayuda, marca de opcional y mensaje de error. */
 export function Field({ label, opcional, error, hint, children, className = "" }: {
   label: string; opcional?: boolean; error?: string; hint?: string; children: ReactNode; className?: string;
 }) {
@@ -14,6 +15,7 @@ export function Field({ label, opcional, error, hint, children, className = "" }
   );
 }
 
+/** Mensaje destacado de error, éxito, advertencia o información, con su ícono. */
 export function Alert({ tipo, children }: { tipo: "error" | "ok" | "warn" | "info"; children: ReactNode }) {
   const Icon = { error: XCircle, ok: CheckCircle2, warn: AlertTriangle, info: Info }[tipo];
   return (
@@ -24,10 +26,12 @@ export function Alert({ tipo, children }: { tipo: "error" | "ok" | "warn" | "inf
   );
 }
 
+/** Etiqueta de color con el estado de una publicación en palabras ("En revisión", "Activa"). */
 export const Badge = ({ estado }: { estado: EstadoPub }) => (
   <span className={`badge badge-${estado}`} >{ESTADO_TXT[estado]}</span>
 );
 
+/** Ventana modal: se cierra con Escape o al hacer clic fuera. */
 export function Modal({ onClose, children }: { onClose: () => void; children: ReactNode }) {
   useEffect(() => {
     const k = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -41,6 +45,7 @@ export function Modal({ onClose, children }: { onClose: () => void; children: Re
   );
 }
 
+/** Miniatura de una foto con etiqueta opcional y botón para quitarla; sin foto, muestra un fondo de color con un ícono. */
 export function ImageTile({ img, etiqueta, onRemove, style }: {
   img?: Imagen; etiqueta?: string; onRemove?: () => void; style?: React.CSSProperties;
 }) {
@@ -57,6 +62,7 @@ export function ImageTile({ img, etiqueta, onRemove, style }: {
   );
 }
 
+/** Logo de Alojamientos LR (iniciales LR sobre fondo naranja). */
 export const Logo = () => (
   <span className="logo"><span className="mark">LR</span>Alojamientos LR</span>
 );

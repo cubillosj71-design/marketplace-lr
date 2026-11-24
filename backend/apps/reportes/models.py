@@ -11,6 +11,10 @@ from django.db import models
 
 
 class UsuarioReporte(models.Model):
+    """Fila de la vista v_usuario_reporte (la publica Identidad): datos de un usuario para el reporte.
+
+    Solo lectura (managed = False). Incluye si la cuenta está activa o restringida y el motivo de la restricción.
+    """
     nombre_completo = models.CharField(max_length=120)
     correo = models.CharField(max_length=254)
     telefono = models.CharField(max_length=20)
@@ -32,6 +36,7 @@ class UsuarioReporte(models.Model):
 
 
 class PublicacionReporte(models.Model):
+    """Fila de la vista v_publicacion_reporte (la publica Catálogo): datos de una publicación para el reporte. Solo lectura."""
     titulo = models.CharField(max_length=120)
     anfitrion_id = models.BigIntegerField()
     anfitrion = models.CharField(max_length=120)
@@ -47,6 +52,10 @@ class PublicacionReporte(models.Model):
 
 
 class ReservaReporte(models.Model):
+    """Fila de la vista v_reserva_reporte (la publica Reservas): una reserva con sus montos para reportes y tablero.
+
+    Solo lectura. monto_bruto ya descuenta la devolución; ingreso_plataforma es la tarifa de servicio.
+    """
     publicacion_id = models.BigIntegerField()
     titulo = models.CharField(max_length=120)
     ciudad = models.CharField(max_length=80)

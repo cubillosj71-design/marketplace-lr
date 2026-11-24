@@ -56,6 +56,14 @@ def consultar_reservas_del_periodo(desde: date, hasta: date):
 
 
 def contar_reservas_por_estado(reservas) -> dict[str, int]:
+    """Cuenta las reservas por estado, con 0 en los estados que no aparecen.
+
+    Args:
+        reservas: consulta de ReservaReporte (por ejemplo, las del periodo).
+
+    Returns:
+        {estado: cantidad} con los cuatro estados de reserva.
+    """
     base = {e: 0 for e in ESTADOS_RESERVA}
     base.update(dict(reservas.order_by().values_list("estado").annotate(n=Count("id"))))
     return base
@@ -87,16 +95,26 @@ def calcular_serie_diaria(desde: date, hasta: date) -> list[dict]:
 
 
 def contar_usuarios_por_rol(hasta: date) -> dict[str, int]:
+    """Cuenta los usuarios registrados hasta una fecha, por rol (tablero, RF-D-ADM-05.1).
+
+    Args:
+        hasta: fecha de corte (inclusive).
+
+    Returns:
+        {rol: cantidad} con los tres roles.
+    """
     base = {r: 0 for r in ROL_TXT}
     base.update(dict(UsuarioReporte.objects.filter(fecha_registro__date__lte=hasta).order_by().values_list("rol").annotate(n=Count("id"))))
     return base
 
 
 def contar_publicaciones_activas() -> int:
+    """Cuenta las publicaciones ACTIVAS en este momento (tablero)."""
     return PublicacionReporte.objects.filter(estado="ACTIVA").count()
 
 
 def _formatear_dinero(v) -> str:
+    """Convierte un monto a texto con dos decimales, el formato de dinero de la API."""
     return f"{Decimal(v):.2f}"
 
 
@@ -122,6 +140,14 @@ def consultar_tablero(desde: date, hasta: date) -> dict:
 # ================================================================ contenido de cada reporte
 
 def _generar_reporte_usuarios(desde, hasta, f) -> archivos.Reporte:
+    """Arma el reporte de usuarios registrados en el periodo (RF-D-ADM-05.2).
+
+    Filtros opcionales: rol y estado de la cuenta (ACTIVA, DESACTIVADA, RESTRINGIDA). Orden: fecha de
+    registro ascendente y luego código.
+
+    Raises:
+        ErrorNegocio: si el estado de la cuenta no es uno de los tres válidos.
+    """
     if f.get("estado") and f["estado"] not in FILTRO_ESTADO_CUENTA:
         raise ErrorNegocio("El estado de la cuenta debe ser ACTIVA, DESACTIVADA o RESTRINGIDA.", campo="estado")
     qs = UsuarioReporte.objects.filter(fecha_registro__date__gte=desde, fecha_registro__date__lte=hasta).order_by("fecha_registro", "id")
@@ -145,6 +171,10 @@ def _generar_reporte_usuarios(desde, hasta, f) -> archivos.Reporte:
 
 
 def _generar_reporte_publicaciones(desde, hasta, f) -> archivos.Reporte:
+    """Arma el reporte de publicaciones creadas en el periodo, con sus reservas y montos del periodo.
+
+    Filtros opcionales: estado, ciudad y tipo de alojamiento.
+    """
     qs = PublicacionReporte.objects.filter(creada__date__gte=desde, creada__date__lte=hasta).order_by("creada", "id")
     for campo in ("estado", "ciudad", "tipo"):
         if f.get(campo):
@@ -168,6 +198,7 @@ def _generar_reporte_publicaciones(desde, hasta, f) -> archivos.Reporte:
 
 
 def _generar_reporte_reservas(desde, hasta, f) -> archivos.Reporte:
+    """Arma el reporte de reservas creadas en el periodo: resumen por estado, monto bruto, ingreso y el detalle."""
     rs = consultar_reservas_del_periodo(desde, hasta)
     bruto, plataforma = calcular_ingresos(rs)
     conteo = contar_reservas_por_estado(rs)
@@ -187,6 +218,7 @@ def _generar_reporte_reservas(desde, hasta, f) -> archivos.Reporte:
 
 
 def _generar_reporte_ingresos(desde, hasta, f) -> archivos.Reporte:
+    """Arma el reporte de ingresos del periodo: totales y el desglose por mes (reservas, monto bruto e ingreso de la plataforma)."""
     rs = consultar_reservas_del_periodo(desde, hasta)
     bruto, plataforma = calcular_ingresos(rs)
     por_mes: dict[str, list] = defaultdict(lambda: [0, CERO, CERO])

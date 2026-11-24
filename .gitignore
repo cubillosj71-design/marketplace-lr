@@ -33,3 +33,6 @@ build/
 .DS_Store
 Thumbs.db
 *.tsbuildinfo
+
+# Documentación HTML generada con: python manage.py generar_documentacion
+docs/codigo/

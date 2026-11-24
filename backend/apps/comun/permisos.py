@@ -17,6 +17,14 @@ from .eventos import obtener_ip
 
 
 def _negar_acceso(request, detalle: dict) -> None:
+    """Registra el intento de usar una función sin permiso (AccesoDenegado, CA-05.2).
+
+    Se registra fuera de cualquier transacción para que quede aunque la petición termine en error.
+
+    Args:
+        request: la petición negada.
+        detalle: datos del intento (permiso que faltó y rol de quien llamó).
+    """
     from apps.auditoria import services as auditoria  # import tardío: comun se carga antes que las apps
 
     usuario = getattr(request, "user", None)
@@ -41,12 +49,26 @@ class RequierePermiso(BasePermission):
         self.permisos = permisos
 
     def __call__(self):
+        """DRF instancia cada permission_class; este objeto ya es la instancia, así que se devuelve a sí mismo."""
         return self
 
     def __repr__(self):
+        """Representación legible con los permisos que exige (se ve en errores y en las pruebas)."""
         return f"RequierePermiso({', '.join(map(repr, self.permisos))})"
 
     def has_permission(self, request, view) -> bool:
+        """Decide si la petición pasa según el rol de quien llama y la matriz de apps.comun.rbac.
+
+        Basta con tener uno de los permisos exigidos. Sin sesión, DRF responde 401; con sesión y sin el
+        permiso, responde 403 y el intento queda en la auditoría.
+
+        Args:
+            request: la petición.
+            view: la vista que se va a ejecutar.
+
+        Returns:
+            True si el rol tiene alguno de los permisos.
+        """
         usuario = request.user
         if rbac.tiene_alguno(usuario, self.permisos):
             return True

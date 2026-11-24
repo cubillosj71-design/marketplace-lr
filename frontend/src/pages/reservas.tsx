@@ -52,6 +52,7 @@ function useLista(cargar: () => Promise<{ data: ReservaResumen[] }>) {
 /* ---------------- HU-15 Cancelar: la misma ventana en la tarjeta y en el detalle ---------------- */
 type ParaCancelar = Pick<ReservaResumen, "id" | "alojamiento" | "fecha_llegada" | "fecha_salida" | "total">;
 
+/** Hook con el flujo de cancelación del huésped: abre la confirmación con la devolución que tendría, pide el motivo y cancela (HU-15). */
 function useCancelarReserva(alCancelar: () => void) {
   const toast = useToast();
   const [cancelar, setCancelar] = useState<{ r: ParaCancelar; sim: SimulacionCancelacion | null } | null>(null);
@@ -105,6 +106,7 @@ function useCancelarReserva(alCancelar: () => void) {
 /* ---------------- HU-20 Resolver una reserva EN_REVISION: la misma confirmación en la tarjeta y en el detalle ---------------- */
 type ParaResolver = Pick<ReservaResumen, "id" | "alojamiento" | "fecha_llegada" | "fecha_salida" | "total">;
 
+/** Hook con el flujo del Administrador para resolver una reserva en revisión: mantenerla o cancelarla con devolución del 100 %, con confirmación. */
 function useResolverReserva(alResolver: () => void) {
   const toast = useToast();
   const [pendiente, setPendiente] = useState<{ r: ParaResolver; mantener: boolean } | null>(null);
@@ -243,6 +245,7 @@ const enlacePublicacion = (vista: Vista, id: number) =>
       : { to: `/admin/publicaciones/${id}`, texto: "Ver publicación" };
 const RUTA_DETALLE: Record<Vista, string> = { huesped: "/reservas", anfitrion: "/reservas-alojamientos", admin: "/admin/reservas" };
 
+/** Tarjeta de una reserva con la portada del alojamiento, fechas, estado y acciones; al hacer clic abre su detalle. */
 function TarjetaConPortada({ r, vista, onCancelar, onResolver }: {
   r: ReservaResumen; vista: Vista; onCancelar?: () => void; onResolver?: (mantener: boolean) => void;
 }) {
@@ -299,6 +302,7 @@ function TarjetaConPortada({ r, vista, onCancelar, onResolver }: {
 /** Pestañas con su número y la elegida en la URL (?pestana=; la primera no se escribe), con sus tarjetas. La usan las tres
  *  pantallas de reservas: huésped, anfitrión y Administrador. */
 type PestanaDeReservas = { clave: string; nombre: string; vacia: string; lista: ReservaResumen[] };
+/** Pestañas de una lista de reservas (próximas, pasadas, canceladas...) con su cantidad; la pestaña activa queda en la URL. */
 function PestanasDeReservas({ pestanas, cargada, tarjeta, accionVacia }: {
   pestanas: PestanaDeReservas[]; cargada: boolean; tarjeta: (r: ReservaResumen) => React.ReactNode; accionVacia?: React.ReactNode;
 }) {
@@ -389,6 +393,7 @@ export function ReservasDeMisAlojamientos() {
 const TIPO_PAGO: Record<string, string> = { COBRO: "Cobro", DEVOLUCION: "Devolución" };
 const ESTADO_PAGO: Record<string, string> = { APROBADO: "Aprobado", RECHAZADO: "Rechazado", EN_VERIFICACION: "En verificación" };
 
+/** Describe un tramo de la política de cancelación en palabras: "De 2 a 6 días antes de la llegada". */
 function textoTramo(t: { dias_minimos: number; dias_maximos: number | null }) {
   const d = (n: number) => `${n} ${n === 1 ? "día" : "días"}`;
   if (t.dias_maximos == null) return `${d(t.dias_minimos)} o más antes de la llegada`;
@@ -400,6 +405,7 @@ const Linea = ({ izq, der, fuerte }: { izq: React.ReactNode; der: React.ReactNod
   <div className="row-between" style={{ gap: 12, fontWeight: fuerte ? 700 : undefined }}><span>{izq}</span><span style={{ whiteSpace: "nowrap" }}>{der}</span></div>
 );
 
+/** Detalle de una reserva: alojamiento, fechas, desglose, política, pagos, cancelación y acciones según quién la ve. */
 export function DetalleReserva({ admin = false }: { admin?: boolean }) {
   const { id } = useParams();
   const { usuario, tiene } = useStore();

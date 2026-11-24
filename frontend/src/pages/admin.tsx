@@ -18,6 +18,7 @@ const pesos = (v: string | null | undefined) => (v == null ? "—" : cop(Number(
 const fechaHora = (f: string) => new Date(f).toLocaleString("es-CO", { dateStyle: "medium", timeStyle: "short" }).replace(/\.$/, "");
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
+/** Tarjeta con una cifra clave del tablero o de las listas: ícono, valor y etiqueta. */
 function Stat({ icon: Icon, v, label, bg, fg }: { icon: typeof Users; v: ReactNode; label: string; bg: string; fg: string }) {
   return (
     <div className="card card-tight stat">
@@ -337,6 +338,7 @@ function sobreQue(e: EventoAuditoriaApi): string {
   return "—";
 }
 
+/** Resumen en una línea del detalle de un evento de auditoría (permiso, motivo, valor devuelto, periodo...). */
 function detalleCorto(e: EventoAuditoriaApi): string {
   const d = e.detalle ?? {};
   const partes = ["permiso", "motivo", "observacion", "valor_devolucion", "formato", "estado_pago", "correo"]
@@ -345,6 +347,7 @@ function detalleCorto(e: EventoAuditoriaApi): string {
   return partes.join(" · ");
 }
 
+/** Pantalla "Registro de acciones" del Administrador (RF-D-ADM-04.1): eventos de auditoría con filtros por usuario, tipo, acción y periodo. */
 export function RegistroAcciones() {
   const [f, setF] = useState({ usuario: "", tipo: "", desde: "", hasta: "" });
   const [pagina, setPagina] = useState(1);
@@ -413,6 +416,7 @@ export const ACCION_TXT: Record<AccionModeracion, string> = {
   APROBAR: "Aprobada", DEVOLVER: "Devuelta", PAUSAR: "Pausada", REACTIVAR: "Reactivada", BLOQUEAR: "Bloqueada", DESBLOQUEAR: "Desbloqueada",
 };
 
+/** Historial de las acciones del Administrador sobre una publicación (aprobar, devolver, bloquear...), con su observación. */
 export function HistorialRevisiones({ revisiones }: { revisiones: RevisionApi[] }) {
   return (
     <div className="stack" style={{ gap: 8 }}>
@@ -526,6 +530,7 @@ export function periodosRapidos(): { nombre: string; desde: string; hasta: strin
   ];
 }
 
+/** Selector de periodo (desde y hasta) con atajos: este mes, mes anterior y año en curso. Lo usan el tablero y los reportes. */
 export function SelectorPeriodo({ desde, hasta, onCambio }: { desde: string; hasta: string; onCambio: (desde: string, hasta: string) => void }) {
   return (
     <div className="toolbar" style={{ flexWrap: "wrap" }}>
@@ -577,6 +582,7 @@ function serieDelPeriodo(t: TableroApi, campo: "reservas" | "ingreso_plataforma"
   return { puntos, porMes: true };
 }
 
+/** Pantalla "Tablero" del Administrador (RF-D-ADM-05.1): cifras clave y gráficas del periodo, con los datos también en tabla. */
 export function Tablero() {
   const inicial = periodosRapidos()[0]!;
   const [p, setP] = useState({ desde: inicial.desde, hasta: inicial.hasta });

@@ -81,6 +81,7 @@ function usePendientes(activo: boolean) {
   return n;
 }
 
+/** Arma el menú lateral con solo las opciones cuyo permiso tiene el usuario (RF-D-USU-02.1), agrupadas en Alojamientos y Usuarios. */
 function useNav(): { titulo: string; items: Item[] }[] {
   const { usuario, tiene } = useStore();
   const pendientes = usePendientes(tiene("publicaciones.moderar"));
@@ -155,6 +156,7 @@ function Campana() {
   );
 }
 
+/** Estructura de las pantallas con sesión: menú lateral por permisos, barra superior (migas, avisos, usuario y Salir) y la página. */
 export function AppLayout() {
   const { usuario, cerrarSesion } = useStore();
   const nav = useNav();

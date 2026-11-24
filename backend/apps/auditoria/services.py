@@ -60,6 +60,11 @@ TIPOS_ACCION: dict[str, dict] = {
 
 
 def listar_tipos_accion() -> list[dict]:
+    """Tipos de acción para el filtro del registro de acciones (CA-23.1, CA-23.3).
+
+    Returns:
+        Lista de {"clave", "nombre"} en el orden de TIPOS_ACCION.
+    """
     return [{"clave": k, "nombre": v["nombre"]} for k, v in TIPOS_ACCION.items()]
 
 

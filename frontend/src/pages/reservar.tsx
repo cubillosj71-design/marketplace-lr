@@ -26,6 +26,7 @@ function nuevaClave(): string {
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 }
 
+/** Desglose de la cotización: noches × precio, descuento, limpieza, tarifa de servicio, adicionales y total (CA-12.1). */
 function Desglose({ c }: { c: CotizacionApi }) {
   const fila = (etiqueta: string, valor: string, negativo = false) => (
     <li style={{ display: "flex", justifyContent: "space-between", gap: 12 }}><span>{etiqueta}</span><span>{negativo ? "− " : ""}{pesos(valor)}</span></li>

@@ -9,6 +9,11 @@ from apps.comun.tareas import ejecutar_tareas_diarias
 
 
 class Command(BaseCommand):
+    """Comando `python manage.py tareas_diarias`: corre a mano las tareas programadas.
+
+    Hace lo mismo que POST /api/v1/interno/tareas/diarias y muestra el resumen; si alguna tarea
+    falla, lo informa en rojo y las demás corren igual.
+    """
     help = "Completa reservas vencidas, cancela EN_REVISION sin resolver y concilia pagos EN_VERIFICACION."
 
     def handle(self, *args, **opciones):

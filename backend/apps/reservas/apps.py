@@ -1,3 +1,8 @@
+"""Configuración de la app SRV-04 Reservas (MOD-04) para Django (INSTALLED_APPS).
+
+En ready() conecta su receptor de eventos de dominio (C4 nivel 3).
+"""
+
 from django.apps import AppConfig
 
 

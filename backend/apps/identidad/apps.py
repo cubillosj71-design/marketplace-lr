@@ -1,3 +1,5 @@
+"""Configuración de la app SRV-01 Identidad (MOD-01) para Django (INSTALLED_APPS)."""
+
 from django.apps import AppConfig
 
 

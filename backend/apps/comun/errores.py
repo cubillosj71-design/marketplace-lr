@@ -17,27 +17,57 @@ log = logging.getLogger("marketplace")
 
 
 class ErrorNegocio(Exception):
+    """Regla de negocio que no se cumple: la API responde con el código y el mensaje para el usuario.
+
+    Las lanzan los services; manejar_excepcion() la convierte en {"detalle", "campo"?, ...extra}.
+
+    Attributes:
+        detalle: mensaje en lenguaje claro para mostrar en pantalla.
+        codigo: código HTTP de la respuesta (400 por defecto).
+        campo: campo del formulario al que se refiere el error, si aplica.
+        extra: datos adicionales que se agregan a la respuesta (por ejemplo, las reservas pendientes).
+    """
     def __init__(self, detalle: str, codigo: int = status.HTTP_400_BAD_REQUEST, campo: str | None = None, extra: dict | None = None):
         super().__init__(detalle)
         self.detalle, self.codigo, self.campo, self.extra = detalle, codigo, campo, extra or {}
 
 
 class NoEncontrado(ErrorNegocio):
+    """El recurso pedido no existe: la API responde 404."""
     def __init__(self, detalle: str = "No existe."):
         super().__init__(detalle, status.HTTP_404_NOT_FOUND)
 
 
 class SinPermiso(ErrorNegocio):
+    """Quien llama no puede hacer la acción (por ejemplo, ver una reserva ajena): la API responde 403."""
     def __init__(self, detalle: str = "No tienes permiso para esta acción."):
         super().__init__(detalle, status.HTTP_403_FORBIDDEN)
 
 
 class Conflicto(ErrorNegocio):
+    """La acción choca con el estado actual de los datos: la API responde 409.
+
+    Ejemplos: correo ya registrado, fechas ya ocupadas, publicación que cambió mientras tanto.
+    """
     def __init__(self, detalle: str, extra: dict | None = None):
         super().__init__(detalle, status.HTTP_409_CONFLICT, extra=extra)
 
 
 def manejar_excepcion(exc, contexto):
+    """Manejador de excepciones de DRF (REST_FRAMEWORK["EXCEPTION_HANDLER"]).
+
+    - ErrorNegocio: responde su código y {"detalle", "campo"?, ...extra}.
+    - Errores que DRF ya sabe responder (validación, 401, 403, 404, 429): los deja como DRF los arma.
+    - Cualquier otra excepción: la registra en el log y en la auditoría (ErrorOperacion) y responde
+      500 con un mensaje genérico, sin detalles internos (RNF-O-OPE-01).
+
+    Args:
+        exc: la excepción que se lanzó en la vista.
+        contexto: contexto de DRF con la vista y la petición.
+
+    Returns:
+        La respuesta HTTP que recibe el cliente.
+    """
     if isinstance(exc, ErrorNegocio):
         cuerpo = {"detalle": exc.detalle, **({"campo": exc.campo} if exc.campo else {}), **exc.extra}
         return Response(cuerpo, status=exc.codigo)
@@ -51,6 +81,7 @@ def manejar_excepcion(exc, contexto):
 
 
 def _auditar_falla(exc, contexto) -> None:
+    """Registra en la auditoría una falla no prevista de la API, con el usuario, la IP y la ruta de la petición."""
     request = contexto.get("request")
     usuario = getattr(request, "user", None)
     auditar_falla(exc, actor_id=getattr(usuario, "id", None), ip=obtener_ip(request), ruta=getattr(request, "path", None))

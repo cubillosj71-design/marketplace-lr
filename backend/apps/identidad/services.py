@@ -37,11 +37,27 @@ ROLES_REGISTRO = (RolUsuario.HUESPED, RolUsuario.ANFITRION)
 # ---------------------------------------------------------------- consultas para otros servicios
 
 def obtener_datos_usuario(usuario_id: int) -> dict | None:
+    """Datos públicos de un usuario para otros módulos (nunca la contraseña).
+
+    Args:
+        usuario_id: id del usuario.
+
+    Returns:
+        El diccionario del usuario, o None si no existe.
+    """
     u = Usuario.objects.filter(pk=usuario_id).first()
     return _serializar_usuario(u) if u else None
 
 
 def obtener_nombres_usuarios(ids) -> dict[int, str]:
+    """Nombres completos de varios usuarios en una sola consulta (para listas y reportes).
+
+    Args:
+        ids: ids de los usuarios.
+
+    Returns:
+        {id: nombre_completo}.
+    """
     return dict(Usuario.objects.filter(pk__in=set(ids)).values_list("id", "nombre_completo"))
 
 
@@ -75,6 +91,14 @@ def listar_usuarios_registrados(desde=None, hasta=None, rol=None, activa=None, r
 
 
 def contar_usuarios_por_rol(hasta=None) -> dict[str, int]:
+    """Cuenta las cuentas por rol, opcionalmente hasta una fecha de registro.
+
+    Args:
+        hasta: fecha de corte (inclusive); sin ella, todas.
+
+    Returns:
+        {rol: cantidad} con los tres roles.
+    """
     qs = Usuario.objects.all()
     if hasta:
         qs = qs.filter(fecha_registro__date__lte=hasta)
@@ -106,6 +130,26 @@ def listar_usuarios_para_admin(rol: str | None = None, q: str | None = None) -> 
 # ---------------------------------------------------------------- CU-USU-01 Registrarse
 
 def registrar_usuario(*, nombre_completo, correo, telefono, password, rol, acepta_datos, ciudad=None, ip=None) -> Usuario:
+    """Registra una cuenta de Huésped o Anfitrión (RF-D-USU-01.1, HU-01).
+
+    Valida la autorización de datos, el rol, que el correo no esté registrado, el teléfono y la
+    contraseña (8 o más caracteres y validadores de Django). Guarda la fecha de la autorización
+    (Ley 1581) y registra UsuarioRegistrado en la auditoría.
+
+    Args:
+        nombre_completo, correo, telefono, password: datos del formulario.
+        rol: HUESPED o ANFITRION (el Administrador no se crea por registro).
+        acepta_datos: si aceptó el tratamiento de sus datos personales.
+        ciudad: texto opcional.
+        ip: IP del cliente, para la auditoría.
+
+    Returns:
+        El usuario creado.
+
+    Raises:
+        ErrorNegocio: sin autorización de datos, rol no permitido, teléfono o contraseña inválidos.
+        Conflicto: el correo ya está registrado (CA-01.2).
+    """
     if not acepta_datos:
         raise ErrorNegocio("La autorización de tratamiento de datos es obligatoria.", campo="acepta_datos")
     if rol not in ROLES_REGISTRO:
@@ -126,6 +170,24 @@ def registrar_usuario(*, nombre_completo, correo, telefono, password, rol, acept
 # ---------------------------------------------------------------- CU-USU-02 Iniciar sesión
 
 def iniciar_sesion(correo: str, password: str, ip=None) -> dict:
+    """Inicia sesión con correo y contraseña (RF-D-USU-01.2, HU-02).
+
+    Rechaza credenciales incorrectas con un mensaje que no dice cuál de los dos falló, y una cuenta
+    restringida con el motivo (CA-02.3). Si la cuenta estaba desactivada, la reactiva (CA-04.4).
+    Cada intento, exitoso o no, queda en la auditoría.
+
+    Args:
+        correo: correo de la cuenta (sin distinguir mayúsculas).
+        password: contraseña.
+        ip: IP del cliente.
+
+    Returns:
+        {"access", "refresh", "usuario"} y, si se reactivó la cuenta, un "aviso". La vista pone el
+        refresh en una cookie httpOnly (ADR-005).
+
+    Raises:
+        ErrorNegocio: 401 si las credenciales no coinciden; 403 si la cuenta está restringida.
+    """
     u = Usuario.objects.filter(correo__iexact=(correo or "").strip()).first()
     # Los intentos fallidos se registran fuera de transaction.atomic ("transacción propia"):
     # quedan en la auditoría aunque la petición termine en error.
@@ -186,6 +248,7 @@ def cerrar_sesion(refresh: str, ip=None) -> None:
 
 
 def _cerrar_todas_las_sesiones(u: Usuario) -> None:
+    """Pone en la lista negra todos los tokens de renovación del usuario: ninguna sesión abierta podrá renovarse."""
     for t in OutstandingToken.objects.filter(user=u):
         BlacklistedToken.objects.get_or_create(token=t)
 
@@ -193,6 +256,7 @@ def _cerrar_todas_las_sesiones(u: Usuario) -> None:
 # ---------------------------------------------------------------- CU-USU-03 Recuperar contraseña
 
 def _calcular_hash(token: str) -> str:
+    """SHA-256 del token de recuperación: en la base solo se guarda el hash, nunca el enlace (RNF-P-SEG-03)."""
     return hashlib.sha256(token.encode()).hexdigest()
 
 
@@ -262,6 +326,14 @@ def _enviar_correo_recuperacion(usuario_id: int, correo: str, nombre: str, enlac
 
 
 def consultar_estado_enlace(token: str) -> str:
+    """Estado de un enlace de recuperación, para avisar apenas se abre (CA-03.2, CA-03.3).
+
+    Args:
+        token: el token del enlace.
+
+    Returns:
+        "valido", "usado", "vencido" o "inexistente".
+    """
     t = TokenRecuperacion.objects.filter(token_hash=_calcular_hash(token)).first()
     if not t:
         return "inexistente"
@@ -271,6 +343,19 @@ def consultar_estado_enlace(token: str) -> str:
 
 
 def restablecer_clave(token: str, password: str, ip=None) -> None:
+    """Define la nueva contraseña con un enlace de recuperación (RF-D-USU-01.3).
+
+    Marca el enlace como usado, cierra todas las sesiones abiertas de la cuenta y registra
+    ContrasenaRestablecida en la auditoría, todo en una transacción.
+
+    Args:
+        token: el token del enlace.
+        password: la nueva contraseña.
+        ip: IP del cliente.
+
+    Raises:
+        ErrorNegocio: 404 si el enlace no existe; 410 si ya se usó o venció; 400 si la contraseña no es válida.
+    """
     with transaction.atomic():
         t = TokenRecuperacion.objects.select_for_update().filter(token_hash=_calcular_hash(token)).first()
         if not t:
@@ -292,6 +377,22 @@ def restablecer_clave(token: str, password: str, ip=None) -> None:
 # ---------------------------------------------------------------- CU-USU-04 Perfil
 
 def actualizar_perfil(u: Usuario, datos: dict, ip=None) -> Usuario:
+    """Actualiza el perfil del usuario (RF-D-USU-01.4, CA-04.1).
+
+    Cambia solo los datos que llegan: nombre, teléfono, ciudad y, si se pide, la contraseña (exige la
+    actual). Registra PerfilActualizado con los campos cambiados, sin valores.
+
+    Args:
+        u: el usuario que llama.
+        datos: nombre_completo, telefono, ciudad, password_actual y password_nueva (todos opcionales).
+        ip: IP del cliente.
+
+    Returns:
+        El usuario actualizado.
+
+    Raises:
+        ErrorNegocio: dato vacío, teléfono inválido, contraseña actual incorrecta o nueva contraseña no válida.
+    """
     campos = u.actualizar_perfil(**{arg: datos[campo] for arg, campo in (("nombre", "nombre_completo"), ("telefono", "telefono"))
                                     if campo in datos})
     if "ciudad" in datos:  # texto opcional: vacío o null la quita (CA-04.1)
@@ -314,6 +415,20 @@ def actualizar_perfil(u: Usuario, datos: dict, ip=None) -> Usuario:
 # ---------------------------------------------------------------- CU-USU-05 Desactivar cuenta
 
 def desactivar_cuenta(u: Usuario, ip=None) -> None:
+    """Desactiva la cuenta del usuario (RF-D-USU-01.4, HU-04).
+
+    No se permite si es Administrador ni si tiene reservas confirmadas o en revisión pendientes, como
+    huésped o en sus alojamientos (CA-04.2, CA-04.5). Al desactivar se cierran todas sus sesiones;
+    la cuenta se reactiva al volver a iniciar sesión.
+
+    Args:
+        u: el usuario que llama.
+        ip: IP del cliente.
+
+    Raises:
+        SinPermiso: si es una cuenta de Administrador.
+        Conflicto: si tiene reservas pendientes (la respuesta trae cuáles son).
+    """
     from apps.reservas import services as reservas
 
     if u.rol == RolUsuario.ADMINISTRADOR:
@@ -333,6 +448,26 @@ def desactivar_cuenta(u: Usuario, ip=None) -> None:
 # ---------------------------------------------------------------- RF-D-ADM-02.1 Restringir
 
 def restringir_usuario(admin: Usuario, usuario_id: int, motivo: str, fecha_fin=None, ip=None) -> RestriccionUsuario:
+    """El Administrador restringe una cuenta (RF-D-ADM-02.1, HU-21).
+
+    No modifica la cuenta ni sus reservas: solo crea la restricción, y el acceso se corta desde la
+    siguiente petición porque is_active la tiene en cuenta (ADR-005).
+
+    Args:
+        admin: el Administrador que restringe.
+        usuario_id: cuenta a restringir.
+        motivo: motivo obligatorio; el usuario lo ve al intentar entrar.
+        fecha_fin: fin opcional (debe ser futura); sin ella, la restricción es indefinida.
+        ip: IP del cliente.
+
+    Returns:
+        La restricción creada.
+
+    Raises:
+        NoEncontrado: si la cuenta no existe.
+        ErrorNegocio: cuenta de Administrador, motivo vacío o fecha de fin pasada.
+        Conflicto: si ya tiene una restricción vigente.
+    """
     u = Usuario.objects.filter(pk=usuario_id).first()
     if not u:
         raise NoEncontrado("El usuario no existe.")
@@ -354,6 +489,11 @@ def restringir_usuario(admin: Usuario, usuario_id: int, motivo: str, fecha_fin=N
 
 
 def levantar_restriccion(admin: Usuario, usuario_id: int, ip=None) -> None:
+    """El Administrador levanta la restricción vigente de una cuenta (pone su fecha de fin en este momento).
+
+    Raises:
+        NoEncontrado: si la cuenta no tiene una restricción vigente.
+    """
     r = obtener_restriccion_vigente(usuario_id)
     if not r:
         raise NoEncontrado("La cuenta no tiene una restricción vigente.")
@@ -374,6 +514,11 @@ def _limpiar_ciudad(ciudad) -> str | None:
 
 
 def _validar_clave(password: str, usuario: Usuario) -> None:
+    """Valida una contraseña: al menos 8 caracteres (RF-D-USU-01.1) y los validadores de Django.
+
+    Raises:
+        ErrorNegocio: con el motivo y campo "password".
+    """
     if not password or len(password) < 8:
         raise ErrorNegocio("La contraseña debe tener al menos 8 caracteres.", campo="password")
     try:
@@ -383,6 +528,12 @@ def _validar_clave(password: str, usuario: Usuario) -> None:
 
 
 def _serializar_usuario(u: Usuario, restringida: bool | None = None) -> dict:
+    """Convierte un usuario en el diccionario que devuelve la API (sin la contraseña).
+
+    Args:
+        u: el usuario.
+        restringida: si ya se calculó, se usa ese valor para no volver a consultar las restricciones.
+    """
     return {
         "id": u.id, "correo": u.correo, "nombre_completo": u.nombre_completo, "telefono": u.telefono,
         "ciudad": u.ciudad, "rol": u.rol, "activa": u.activa,
@@ -393,4 +544,5 @@ def _serializar_usuario(u: Usuario, restringida: bool | None = None) -> dict:
 
 
 def convertir_usuario_a_dict(u: Usuario) -> dict:
+    """Interfaz pública de _serializar_usuario para las vistas: el usuario como lo devuelve la API."""
     return _serializar_usuario(u)

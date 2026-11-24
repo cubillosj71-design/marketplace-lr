@@ -24,10 +24,12 @@ from apps.reservas import services as reservas
 
 
 def _formatear_dinero(v) -> str | None:
+    """Convierte un valor a texto con dos decimales (formato de montos de la API) o deja None."""
     return None if v is None else f"{Decimal(v):.2f}"
 
 
 def _obtener_calificacion(c: dict) -> dict:
+    """Arma {promedio, total} de las reseñas de una publicación, con el promedio como texto o None si no hay reseñas."""
     return {"promedio": _formatear_dinero(c["promedio"]) if c["promedio"] is not None else None, "total": c["total"]}
 
 

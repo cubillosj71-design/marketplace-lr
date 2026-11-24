@@ -1,3 +1,5 @@
+"""Configuración de la app SRV-05 Pagos (MOD-05) para Django (INSTALLED_APPS)."""
+
 from django.apps import AppConfig
 
 

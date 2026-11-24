@@ -13,6 +13,11 @@ from . import services
 
 
 class Periodo(serializers.Serializer):
+    """Parámetros del tablero y de los reportes: periodo (desde y hasta), formato y filtros opcionales.
+
+    Sin periodo se usa el año en curso. El formato es pdf o xlsx; los filtros dependen del reporte
+    (rol y estado de la cuenta; estado, ciudad y tipo de alojamiento).
+    """
     desde = serializers.DateField(required=False)
     hasta = serializers.DateField(required=False)
     formato = serializers.ChoiceField(choices=services.FORMATOS, required=False)
@@ -22,6 +27,7 @@ class Periodo(serializers.Serializer):
     tipo = serializers.CharField(required=False)
 
     def validate(self, d):
+        """Completa el periodo con el año en curso cuando no llega desde o hasta."""
         hoy = timezone.localdate()
         d.setdefault("desde", hoy.replace(month=1, day=1))  # por defecto, el año en curso
         d.setdefault("hasta", hoy.replace(month=12, day=31))

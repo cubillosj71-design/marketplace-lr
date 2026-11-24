@@ -23,6 +23,17 @@ FILA_CABECERA = 4
 
 @dataclass
 class Reporte:
+    """Contenido de un reporte, independiente del formato (PDF o Excel, ADR-009).
+
+    Attributes:
+        titulo: título del documento.
+        resumen: pares (concepto, valor) que van antes del detalle.
+        columnas: encabezados de la tabla de detalle.
+        filas: filas del detalle.
+        moneda: índices de las columnas en pesos (número en Excel, formato COP en PDF).
+        orden: criterio de orden que se imprime en el encabezado (RF-D-ADM-05.2).
+        periodo: periodo del reporte, para el encabezado.
+    """
     titulo: str
     resumen: list[tuple[str, object]]
     columnas: list[str]
@@ -34,14 +45,27 @@ class Reporte:
 
 
 def formatear_pesos(v) -> str:
+    """Formatea un valor en pesos colombianos sin decimales: $1.234.000."""
     return "$" + f"{Decimal(v):,.0f}".replace(",", ".")
 
 
 def _formatear_fecha_generacion() -> str:
+    """Fecha y hora de generación del reporte (hora de Colombia), para el encabezado."""
     return timezone.localtime().strftime("%d/%m/%Y %H:%M")
 
 
 def generar_pdf(r: Reporte) -> bytes:
+    """Genera el reporte en PDF con ReportLab (ADR-009).
+
+    Usa hoja horizontal si hay más de 6 columnas e imprime título, periodo, orden, quién lo generó,
+    el resumen, la tabla de detalle y el número de página.
+
+    Args:
+        r: contenido del reporte.
+
+    Returns:
+        Los bytes del archivo PDF.
+    """
     buf = io.BytesIO()
     hoja = landscape(A4) if len(r.columnas) > 6 else A4
     doc = SimpleDocTemplate(buf, pagesize=hoja, leftMargin=14 * mm, rightMargin=14 * mm, topMargin=14 * mm, bottomMargin=14 * mm,
@@ -77,6 +101,7 @@ def generar_pdf(r: Reporte) -> bytes:
         contenido.append(Paragraph("Sin registros en el periodo.", est["BodyText"]))
 
     def dibujar_pie(canvas, doc_):
+        """Dibuja el número de página en el pie de cada hoja."""
         canvas.setFont("Helvetica", 7)
         canvas.setFillColor(colors.grey)
         canvas.drawRightString(hoja[0] - 14 * mm, 8 * mm, f"Página {doc_.page}")
@@ -86,6 +111,16 @@ def generar_pdf(r: Reporte) -> bytes:
 
 
 def generar_xlsx(r: Reporte) -> bytes:
+    """Genera el reporte en Excel con openpyxl (ADR-009).
+
+    Hoja "Detalle" con la tabla (montos como números para poder sumarlos) y hoja "Resumen".
+
+    Args:
+        r: contenido del reporte.
+
+    Returns:
+        Los bytes del archivo .xlsx.
+    """
     wb = Workbook()
     ws = wb.active
     ws.title = "Detalle"

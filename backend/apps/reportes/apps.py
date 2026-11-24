@@ -1,3 +1,5 @@
+"""Configuración de la app SRV-09 Reportes (MOD-09) para Django (INSTALLED_APPS)."""
+
 from django.apps import AppConfig
 
 
