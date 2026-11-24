@@ -15,14 +15,17 @@ from . import services
 
 
 class TarifaEntrada(serializers.Serializer):
+    """Nuevo porcentaje de la tarifa de servicio que fija el Administrador (de 0 % a 30 %, CA-22.2)."""
     porcentaje = serializers.DecimalField(max_digits=5, decimal_places=2)
 
 
 class RangoTarifas(serializers.Serializer):
+    """Rango de fechas opcional para consultar el historial de tarifas."""
     desde = serializers.DateField(required=False)
     hasta = serializers.DateField(required=False)
 
     def validate(self, d):
+        """Rechaza un rango con la fecha inicial posterior a la final."""
         if d.get("desde") and d.get("hasta") and d["desde"] > d["hasta"]:
             raise serializers.ValidationError({"desde": "La fecha inicial no puede ser posterior a la final."})
         return d
@@ -49,12 +52,14 @@ class TarifaServicioAdmin(APIView):
 # ---------------------------------------------------------------- calendario (RF-D-ALO-02.2)
 
 class CalendarioEntrada(serializers.Serializer):
+    """Cambio en el calendario del anfitrión: rango de fechas y si queda DISPONIBLE o NO_DISPONIBLE (CU-ALO-06)."""
     fecha_inicio = serializers.DateField()
     fecha_fin = serializers.DateField()
     tipo = serializers.ChoiceField(choices=["DISPONIBLE", "NO_DISPONIBLE"])
 
 
 class RangoCalendario(serializers.Serializer):
+    """Rango de fechas del calendario que se consulta (opcional)."""
     desde = serializers.DateField(required=False)
     hasta = serializers.DateField(required=False)
 
@@ -82,6 +87,7 @@ class Calendario(APIView):
 # ---------------------------------------------------------------- HU-12 Cotizar
 
 class CotizacionEntrada(serializers.Serializer):
+    """Datos para cotizar: publicación, llegada, salida, número de huéspedes (1 o más) y servicios adicionales elegidos."""
     publicacion = serializers.IntegerField()
     fecha_llegada = serializers.DateField()
     fecha_salida = serializers.DateField()
@@ -115,6 +121,10 @@ class CotizacionDetalle(APIView):
 # ---------------------------------------------------------------- HU-13 Reservar y pagar
 
 class ReservaEntrada(serializers.Serializer):
+    """Datos para reservar y pagar: cotización, clave de idempotencia (la genera el navegador) y medio de pago.
+
+    En Stripe, el medio de pago es el payment_method que tokeniza el frontend; en el simulado, cualquier texto.
+    """
     cotizacion = serializers.IntegerField()
     clave_idempotencia = serializers.UUIDField()
     medio_pago = serializers.CharField(max_length=255)
@@ -166,6 +176,7 @@ class ReservaDetalle(APIView):
 # ---------------------------------------------------------------- HU-15 Cancelar
 
 class CancelacionEntrada(serializers.Serializer):
+    """Motivo de la cancelación que escribe el huésped (obligatorio; el servicio rechaza un motivo vacío)."""
     motivo = serializers.CharField(allow_blank=True)
 
 
@@ -213,6 +224,7 @@ class ReservaEnRevisionAdmin(APIView):
 
 
 class ResolucionEntrada(serializers.Serializer):
+    """Decisión del Administrador sobre una reserva en revisión: mantenerla o cancelarla (con motivo)."""
     mantener = serializers.BooleanField()
     motivo = serializers.CharField(required=False, allow_blank=True)
 

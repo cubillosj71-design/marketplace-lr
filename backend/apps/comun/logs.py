@@ -5,6 +5,10 @@ import logging
 
 
 class FormatoJSON(logging.Formatter):
+    """Formateador del log en JSON, una línea por registro (RNF-O-OPE-01).
+
+    Cada línea trae fecha, nivel, mensaje, módulo y, si existen, la vista, el evento y la traza de la excepción.
+    """
     def format(self, registro: logging.LogRecord) -> str:
         datos = {
             "fecha": self.formatTime(registro), "nivel": registro.levelname, "mensaje": registro.getMessage(),

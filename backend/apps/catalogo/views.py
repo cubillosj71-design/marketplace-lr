@@ -14,11 +14,16 @@ from .models import EstadoPublicacion, Publicacion
 # ---------------------------------------------------------------- serializadores
 
 class AdicionalSerializer(serializers.Serializer):
+    """Servicio adicional que escribe el anfitrión: nombre y precio."""
     nombre = serializers.CharField(max_length=60, allow_blank=True)
     precio = serializers.DecimalField(max_digits=12, decimal_places=2)
 
 
 class PublicacionEntrada(serializers.Serializer):
+    """Datos para crear o editar una publicación (POST y PATCH).
+
+    Todos los campos menos el título son opcionales mientras es BORRADOR; los catálogos llegan por id.
+    """
     titulo = serializers.CharField(max_length=120, allow_blank=True)
     descripcion = serializers.CharField(allow_blank=True, required=False)
     ciudad = serializers.IntegerField(allow_null=True, required=False)
@@ -37,6 +42,9 @@ class PublicacionEntrada(serializers.Serializer):
 
 
 class PublicacionSalida(serializers.ModelSerializer):
+    """Publicación completa como la devuelve la API: datos, nombres de los catálogos, servicios, adicionales
+    activos, reglas, imágenes, historial de revisiones y, si es BORRADOR, lo que le falta para enviarla a revisión.
+    """
     ciudad_nombre = serializers.CharField(source="ciudad.nombre", default=None)
     tipo_nombre = serializers.CharField(source="tipo_alojamiento.nombre", default=None)
     politica_nombre = serializers.CharField(source="politica.nombre", default=None)
@@ -57,26 +65,33 @@ class PublicacionSalida(serializers.ModelSerializer):
         ]
 
     def get_servicios(self, p):
+        """Servicios incluidos de la publicación ({id, nombre})."""
         return list(p.servicios.values("id", "nombre"))
 
     def get_servicios_adicionales(self, p):
+        """Servicios adicionales activos con su precio."""
         return [{"id": a.id, "nombre": a.nombre, "precio": a.precio} for a in p.servicios_adicionales.filter(activo=True)]
 
     def get_reglas(self, p):
+        """Reglas del alojamiento en orden."""
         return [{"descripcion": r.descripcion, "orden": r.orden} for r in p.reglas.all()]
 
     def get_imagenes(self, p):
+        """Fotos en orden (la primera es la portada)."""
         return [{"ruta": i.ruta, "orden": i.orden} for i in p.imagenes.all()]
 
     def get_revisiones(self, p):
+        """Historial de revisiones del Administrador, con su nombre."""
         return [{"accion": r.accion, "observacion": r.observacion, "fecha": r.fecha, "administrador": r.administrador_id,
                  "administrador_nombre": r.administrador.nombre_completo} for r in p.revisiones.select_related("administrador")]
 
     def get_faltantes(self, p):
+        """Datos que faltan para enviarla a revisión (solo en BORRADOR, RF-D-ALO-01.2)."""
         return services.calcular_faltantes(p) if p.estado == EstadoPublicacion.BORRADOR else []
 
 
 class PublicacionLista(serializers.ModelSerializer):
+    """Fila de las listas de publicaciones (Mis publicaciones y la del Administrador): datos principales, portada y última revisión."""
     ciudad_nombre = serializers.CharField(source="ciudad.nombre", default=None)
     tipo_nombre = serializers.CharField(source="tipo_alojamiento.nombre", default=None)
     imagen = serializers.SerializerMethodField()
@@ -88,15 +103,18 @@ class PublicacionLista(serializers.ModelSerializer):
                   "actualizada", "imagen", "ultima_revision"]
 
     def get_imagen(self, p):
+        """Dirección de la portada (primera foto) o None si no tiene fotos."""
         primera = p.imagenes.order_by("orden").first()
         return primera.ruta if primera else None
 
     def get_ultima_revision(self, p):
+        """Última acción del Administrador sobre la publicación, si la hay."""
         r = p.revisiones.order_by("-fecha", "-id").first()
         return {"accion": r.accion, "observacion": r.observacion, "fecha": r.fecha} if r else None
 
 
 def _serializar_publicacion(p):
+    """Vuelve a leer la publicación de la base y la devuelve completa, como la responde la API."""
     return PublicacionSalida(Publicacion.objects.get(pk=p.pk)).data
 
 
@@ -149,6 +167,10 @@ class PublicacionDetalle(APIView):
 
 
 class _CambioEstado(APIView):
+    """Base de las rutas de cambio de estado: llama a services.cambiar_estado con el estado `destino`.
+
+    Los permisos y las transiciones válidas los decide el servicio según el rol (anfitrión dueño o Administrador).
+    """
     permission_classes = [RequierePermiso("publicaciones.gestionar_propias", "publicaciones.moderar")]
     destino: str = ""
 
@@ -157,10 +179,12 @@ class _CambioEstado(APIView):
 
 
 class Pausar(_CambioEstado):
+    """POST /catalogo/publicaciones/{id}/pausar: ACTIVA → PAUSADA (deja de aparecer en las búsquedas)."""
     destino = EstadoPublicacion.PAUSADA
 
 
 class Reactivar(_CambioEstado):
+    """POST /catalogo/publicaciones/{id}/reactivar: PAUSADA → ACTIVA."""
     destino = EstadoPublicacion.ACTIVA
 
 
@@ -198,6 +222,7 @@ class PublicacionesAdmin(ListAPIView):
 
 
 class RevisionEntrada(serializers.Serializer):
+    """Decisión del Administrador sobre una publicación en revisión: APROBAR o DEVOLVER, con observación (obligatoria al devolver)."""
     accion = serializers.ChoiceField(choices=["APROBAR", "DEVOLVER"])
     observacion = serializers.CharField(required=False, allow_blank=True)
 

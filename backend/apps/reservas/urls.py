@@ -1,3 +1,9 @@
+"""Rutas de la API de SRV-04 Reservas (MOD-04): cotización, reserva, cancelación y tarifa.
+
+Se montan en /api/v1/reservas/ desde config/urls.py. Cada vista declara el permiso que exige
+(apps.comun.permisos.RequierePermiso), según la matriz de apps/comun/rbac.py.
+"""
+
 from django.urls import path
 
 from . import views

@@ -9,6 +9,7 @@ import { Alert, Field } from "../ui";
 
 const correoValido = (c: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c.trim());
 
+/** Campo de contraseña con botón para mostrarla u ocultarla. */
 function ClaveInput({ value, onChange, placeholder, autoComplete }: {
   value: string; onChange: (v: string) => void; placeholder?: string; autoComplete?: string;
 }) {
@@ -100,6 +101,7 @@ async function registrar({ nombre, correo, telefono, clave, rol, acepta }: {
   }
 }
 
+/** Pantalla "Regístrate" (RF-D-USU-01.1): datos, rol Huésped o Anfitrión y autorización de datos personales obligatoria. */
 export function Registro() {
   const go = useNavigate();
   const [f, setF] = useState({ nombre: "", correo: "", telefono: "", clave: "", rol: "HUESPED" as Rol, acepta: false });
@@ -189,6 +191,7 @@ async function solicitarEnlace(correo: string): Promise<{ ok: true; detalle: str
   }
 }
 
+/** Pantalla "¿Olvidaste tu contraseña?" (RF-D-USU-01.3): pide el correo y avisa que el enlace llega por correo, exista o no la cuenta. */
 export function Recuperar() {
   const [correo, setCorreo] = useState("");
   const [error, setError] = useState("");

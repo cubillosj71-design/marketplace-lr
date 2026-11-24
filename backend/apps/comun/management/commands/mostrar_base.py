@@ -11,6 +11,12 @@ from django.utils import timezone
 
 
 class Command(BaseCommand):
+    """Comando `python manage.py mostrar_base`: muestra a qué base está conectado el backend.
+
+    Imprime servidor, puerto, nombre de la base, versión de PostgreSQL, cuántos usuarios,
+    publicaciones y reservas tiene y la fecha del primer evento de auditoría (si es muy reciente,
+    la base se vació en ese momento).
+    """
     help = "Muestra el servidor, el puerto y el nombre de la base que usa el backend, con cuántos datos tiene."
 
     def handle(self, *args, **_):

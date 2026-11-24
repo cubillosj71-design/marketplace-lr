@@ -1,3 +1,5 @@
+"""Configuración de la app SRV-03 Búsqueda (MOD-03) para Django (INSTALLED_APPS)."""
+
 from django.apps import AppConfig
 
 

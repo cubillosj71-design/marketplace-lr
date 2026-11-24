@@ -1,3 +1,9 @@
+"""Rutas de la API de SRV-03 Búsqueda (MOD-03): búsqueda pública de alojamientos.
+
+Se montan en /api/v1/busqueda/ desde config/urls.py. Cada vista declara el permiso que exige
+(apps.comun.permisos.RequierePermiso), según la matriz de apps/comun/rbac.py.
+"""
+
 from django.urls import path
 
 from . import views

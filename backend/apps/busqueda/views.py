@@ -21,6 +21,11 @@ class ListaDeEnteros(serializers.Field):
 
 
 class FiltrosBusqueda(serializers.Serializer):
+    """Filtros de GET /busqueda/publicaciones (RF-D-RES-01.1).
+
+    Ciudad, fechas de llegada y salida, número de huéspedes (1 por defecto), tipo de alojamiento,
+    rango de precio por noche y servicios incluidos (ids). Todos son opcionales.
+    """
     ciudad = serializers.IntegerField(required=False)
     llegada = serializers.DateField(required=False)
     salida = serializers.DateField(required=False)
@@ -46,6 +51,7 @@ class Publicaciones(APIView):
 
 
 class RangoDetalle(serializers.Serializer):
+    """Rango de fechas del calendario que se muestra en el detalle de un alojamiento (opcional)."""
     desde = serializers.DateField(required=False)
     hasta = serializers.DateField(required=False)
 

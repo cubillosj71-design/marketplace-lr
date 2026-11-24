@@ -1,7 +1,7 @@
-"""Operaciones del diagrama de clases (MOD-01 y MOD-04) que viven en las clases del dominio: calcularTotal,
-calcularDevolucion, cancelar(motivo): Cancelacion, cancelarSinResolucion(): Cancelacion, y en Usuario
-registrar, iniciarSesion, actualizarPerfil, desactivar y reactivar. Los flujos completos se prueban por la API
-en los demás archivos; aquí se fija que cada operación existe y hace lo que dice el diagrama."""
+"""Operaciones del dominio que viven en las clases (MOD-01 y MOD-04): Cotizacion.calcular_total,
+Cancelacion.calcular_devolucion, Reserva.cancelar_reserva y cancelar_sin_resolucion (devuelven la Cancelacion), y en
+Usuario registrar_usuario, iniciar_sesion, actualizar_perfil, desactivar_cuenta y reactivar_cuenta. Los flujos
+completos se prueban por la API en los demás archivos; aquí se fija que cada operación existe y hace lo que dice."""
 
 from decimal import Decimal
 

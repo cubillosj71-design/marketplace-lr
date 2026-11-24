@@ -15,6 +15,7 @@ const TINTA = "var(--text)";
 const TINTA_SUAVE = "var(--muted)";
 const REJILLA = "#e8ecea";
 
+/** Hook que mide el ancho disponible del contenedor y lo actualiza al cambiar el tamaño de la pantalla (para dibujar el SVG). */
 function useAncho<T extends HTMLElement>(): [React.RefObject<T>, number] {
   const ref = useRef<T>(null);
   const [ancho, setAncho] = useState(0);
@@ -40,6 +41,7 @@ function marcasEje(maximo: number, enteros: boolean, cuantas = 4): number[] {
   return marcas;
 }
 
+/** Cuadro con el detalle de la barra bajo el mouse; se posiciona sobre el punto (x, y) de la gráfica. */
 function Tooltip({ x, y, children }: { x: number; y: number; children: ReactNode }) {
   return (
     <div role="status" style={{

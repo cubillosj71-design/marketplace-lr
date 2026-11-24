@@ -35,10 +35,12 @@ interface Sesion {
 
 const Ctx = createContext<Sesion | null>(null);
 
+/** Pide a la API los permisos del usuario (GET /identidad/permisos); si falla, ninguno. */
 async function cargarPermisos(): Promise<Set<string>> {
   try { return new Set((await identidadApi.permisos()).data.permisos); } catch { return new Set(); }
 }
 
+/** Proveedor de la sesión: usuario, permisos, ingresar, salir y recuperar la sesión al recargar con la cookie de renovación. */
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [usuario, setUsuario] = useState<UsuarioApi | null>(null);
   const [permisos, setPermisos] = useState<ReadonlySet<string>>(new Set());
@@ -113,6 +115,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   );
 }
 
+/** Hook para leer la sesión actual (usuario, permisos y acciones) desde cualquier pantalla. */
 export const useStore = () => {
   const s = useContext(Ctx);
   if (!s) throw new Error("StoreProvider ausente");
@@ -123,6 +126,7 @@ export const useStore = () => {
 type Toast = { id: number; text: string; tipo: "ok" | "err" };
 const ToastCtx = createContext<(text: string, tipo?: "ok" | "err") => void>(() => {});
 
+/** Proveedor de los avisos breves (toasts) que aparecen y se ocultan solos. */
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<Toast[]>([]);
   const push = useCallback((text: string, tipo: "ok" | "err" = "ok") => {
@@ -146,4 +150,5 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     </ToastCtx.Provider>
   );
 }
+/** Hook para mostrar un aviso breve: toast("Mensaje") o toast("Error", "err"). */
 export const useToast = () => useContext(ToastCtx);

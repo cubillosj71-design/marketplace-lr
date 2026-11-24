@@ -65,6 +65,7 @@ export const imagenDe = (ruta: string | null | undefined, i = 0, nombre = ""): I
 export const cop = (n: number | string | null | undefined) =>
   n == null || n === "" ? "—" : "$" + Math.round(Number(n)).toLocaleString("es-CO").replace(/,/g, ".");
 
+/** Iniciales del nombre para el avatar (máximo dos letras): "Carlos Ruiz" → "CR". */
 export const iniciales = (nombre: string) =>
   nombre.split(" ").filter(Boolean).slice(0, 2).map((s) => s[0]!.toUpperCase()).join("");
 
@@ -73,6 +74,7 @@ export const soloNumeros = (texto: string) => texto.replace(/[^0-9 ]/g, "").repl
 /** Entre 7 y 15 números, la misma regla que valida el backend (identidad.models.validar_telefono). */
 export const TELEFONO_VALIDO = (texto: string) => /^[0-9]{7,15}$/.test(texto.replace(/ /g, ""));
 
+/** Fecha local en formato AAAA-MM-DD, sin convertir a UTC (evita que de noche cambie de día). */
 export function isoDia(d: Date) {
   const z = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`;

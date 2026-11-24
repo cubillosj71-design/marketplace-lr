@@ -1,3 +1,5 @@
+"""Configuración de la app SRV-08 Auditoría (MOD-08) para Django (INSTALLED_APPS)."""
+
 from django.apps import AppConfig
 
 

@@ -9,6 +9,18 @@ from django.db import models
 
 
 class Notificacion(models.Model):
+    """Aviso dentro de la plataforma para un usuario (tabla notificacion, MOD-07).
+
+    Se crea a partir de un evento de dominio después de confirmar la transacción que lo produjo.
+
+    Attributes:
+        destinatario: usuario que recibe el aviso.
+        tipo: evento que lo originó (por ejemplo, ReservaConfirmada).
+        mensaje: texto que ve el usuario (máximo 300 caracteres).
+        entidad, entidad_id: objeto al que se refiere, para enlazarlo.
+        leida: si el usuario ya lo vio.
+        fecha: momento en que se creó.
+    """
     destinatario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+")
     tipo = models.CharField(max_length=40)
     mensaje = models.CharField(max_length=300)
@@ -23,7 +35,7 @@ class Notificacion(models.Model):
         indexes = [models.Index(fields=["destinatario", "leida", "fecha"], name="notificacion_bandeja")]
 
     def marcar_leida(self) -> None:
-        """marcarLeida() del diagrama."""
+        """Marca el aviso como leído (no hace nada si ya lo estaba)."""
         if not self.leida:
             self.leida = True
             self.save(update_fields=["leida"])

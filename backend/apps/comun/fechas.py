@@ -15,6 +15,17 @@ MESES_MAXIMOS = 12
 
 
 def sumar_meses(d: date, meses: int) -> date:
+    """Suma meses a una fecha sin pasarse del último día del mes de llegada.
+
+    Ejemplo: 31 de enero + 1 mes = 28 (o 29) de febrero.
+
+    Args:
+        d: fecha de partida.
+        meses: meses que se suman.
+
+    Returns:
+        La fecha resultante.
+    """
     m = d.month - 1 + meses
     anio, mes = d.year + m // 12, m % 12 + 1
     return date(anio, mes, min(d.day, calendar.monthrange(anio, mes)[1]))

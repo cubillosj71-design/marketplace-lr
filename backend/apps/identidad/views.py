@@ -23,6 +23,7 @@ from . import services
 
 
 class RegistroSerializer(serializers.Serializer):
+    """Datos del formulario de registro (POST /identidad/registro). El rol solo puede ser HUESPED o ANFITRION."""
     nombre_completo = serializers.CharField(max_length=120)
     correo = serializers.EmailField(max_length=254)
     telefono = serializers.CharField(max_length=20)
@@ -65,12 +66,14 @@ def _responder_con_sesion(sesion: dict) -> Response:
 
 
 def _quitar_cookie(respuesta: Response) -> Response:
+    """Borra la cookie httpOnly con el token de renovación (al cerrar sesión o si ya no sirve)."""
     respuesta.delete_cookie(COOKIE["nombre"], path=COOKIE["ruta"], samesite="Strict")
     return respuesta
 
 
 def _obtener_refresh(request) -> str:
     # La cookie es la vía normal. El cuerpo se acepta para clientes sin navegador (pruebas, Postman).
+    """Token de renovación de la petición: de la cookie httpOnly o, para clientes sin navegador (pruebas, Postman), del cuerpo."""
     return request.COOKIES.get(COOKIE["nombre"]) or leer_texto(request, "refresh")
 
 
@@ -176,6 +179,10 @@ class Roles(APIView):
 
 
 class PerfilSerializer(serializers.Serializer):
+    """Datos que se pueden cambiar en Mi perfil (PATCH /identidad/perfil). Todos son opcionales.
+
+    Para cambiar la contraseña hay que mandar password_actual y password_nueva.
+    """
     nombre_completo = serializers.CharField(max_length=120, required=False)
     telefono = serializers.CharField(max_length=20, required=False)
     ciudad = serializers.CharField(max_length=80, required=False, allow_null=True, allow_blank=True)  # texto opcional
@@ -209,6 +216,7 @@ class Desactivar(APIView):
 
 
 class RestriccionSerializer(serializers.Serializer):
+    """Datos para restringir una cuenta: motivo obligatorio y fecha de fin opcional."""
     motivo = serializers.CharField()
     fecha_fin = serializers.DateTimeField(required=False, allow_null=True)
 

@@ -24,6 +24,7 @@ export const api = axios.create({
 let tokenAcceso: string | null = null;
 let alPerderSesion: () => void = () => {};
 
+/** Guarda el token de acceso en memoria (nunca en localStorage, ADR-005). Con null se olvida al cerrar sesión. */
 export function guardarTokenAcceso(token: string | null) {
   tokenAcceso = token;
 }

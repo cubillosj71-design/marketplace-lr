@@ -20,6 +20,14 @@ from .pasarela import AdaptadorSimulado, PasarelaPagos, obtener_pasarela
 
 
 class ServicioPagos:
+    """Interfaz pública de pagos para los demás módulos (MOD-05).
+
+    Cobra y devuelve a través de una PasarelaPagos y guarda cada movimiento en la tabla pago y en
+    la auditoría, dentro de la transacción de quien llama.
+
+    Args:
+        pasarela: pasarela a usar; por defecto la que indique la configuración (obtener_pasarela).
+    """
     def __init__(self, pasarela: PasarelaPagos | None = None):
         self.pasarela = pasarela or obtener_pasarela()
 
@@ -97,6 +105,14 @@ def conciliar_pagos() -> int:
 
 
 def listar_pagos_de_reserva(reserva_id: int) -> list[dict]:
+    """Cobros y devoluciones de una reserva, en orden de fecha, como los muestra el detalle de la reserva.
+
+    Args:
+        reserva_id: id de la reserva.
+
+    Returns:
+        Lista de {id, tipo, monto, estado, referencia_externa, fecha}.
+    """
     return [{"id": p.id, "tipo": p.tipo, "monto": f"{p.monto:.2f}", "estado": p.estado,
              "referencia_externa": p.referencia_externa, "fecha": p.fecha}
             for p in Pago.objects.filter(reserva_id=reserva_id).order_by("fecha")]

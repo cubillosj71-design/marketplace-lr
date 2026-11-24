@@ -62,8 +62,25 @@ def obtener_rol(usuario) -> str:
 
 
 def obtener_permisos(usuario) -> frozenset[str]:
+    """Permisos del rol del usuario según la matriz PERMISOS (RF-D-USU-02.1).
+
+    Args:
+        usuario: el usuario de la petición; sin sesión se toman los del VISITANTE.
+
+    Returns:
+        El conjunto de permisos del rol (vacío si el rol no está en la matriz).
+    """
     return PERMISOS.get(obtener_rol(usuario), frozenset())
 
 
 def tiene_alguno(usuario, permisos) -> bool:
+    """Indica si el usuario tiene al menos uno de los permisos dados.
+
+    Args:
+        usuario: el usuario de la petición.
+        permisos: permisos aceptados (basta uno).
+
+    Returns:
+        True si su rol tiene alguno.
+    """
     return not obtener_permisos(usuario).isdisjoint(permisos)

@@ -139,6 +139,24 @@ npm run dev
 
 La aplicación queda en http://localhost:5173 y muestra si la API responde.
 
+## Documentación del código fuente
+
+- **Backend:** cada módulo, clase y función tiene su docstring en español con formato Google (`Args:`, `Returns:`,
+  `Raises:` y el requisito del SRS que cumple). En VS Code se ve al pasar el mouse sobre cualquier función.
+- **Frontend:** cada componente y función exportada tiene un comentario JSDoc (`/** ... */`).
+- **Página web de la documentación** (clases, métodos, parámetros y buscador), generada con pdoc a partir de los
+  docstrings:
+
+```
+cd backend
+pip install -r requirements-dev.txt
+python manage.py generar_documentacion
+```
+
+Queda en `docs/codigo/index.html` (se abre en el navegador). No se sube al repositorio porque se genera desde el código:
+vuelve a correr el comando después de cambiarlo. `config/settings.py` no se incluye para no publicar valores de la
+configuración.
+
 ## Forma de trabajo
 
 - Toda tarea nace en Jira con la clave `MAL` (por ejemplo, `MAL-13`).

@@ -35,13 +35,31 @@ def validar_telefono(valor) -> str:
 
 
 class RolUsuario(models.TextChoices):
+    """Rol de una cuenta (RF-D-USU-02.1). Cada cuenta tiene un único rol.
+
+    El Visitante no es un rol de cuenta: es el nivel de acceso de quien no inició sesión.
+    """
     HUESPED = "HUESPED", "Huésped"
     ANFITRION = "ANFITRION", "Anfitrión"
     ADMINISTRADOR = "ADMINISTRADOR", "Administrador"
 
 
 class UsuarioManager(BaseUserManager):
+    """Manager de Usuario: crea cuentas con el correo como identificador (en lugar del username de Django)."""
     def create_user(self, correo, password=None, **campos):
+        """Crea una cuenta con la contraseña guardada como hash (RNF-P-SEG-01).
+
+        Args:
+            correo: correo de la cuenta (se normaliza el dominio).
+            password: contraseña en claro; Django guarda solo su hash PBKDF2.
+            **campos: el resto de los datos (nombre, teléfono, rol, autorizacion_datos...).
+
+        Returns:
+            El usuario creado.
+
+        Raises:
+            ValueError: si no llega el correo.
+        """
         if not correo:
             raise ValueError("El correo es obligatorio")
         usuario = self.model(correo=self.normalize_email(correo), **campos)
@@ -50,11 +68,31 @@ class UsuarioManager(BaseUserManager):
         return usuario
 
     def create_superuser(self, correo, password=None, **campos):
+        """Crea una cuenta de Administrador (python manage.py createsuperuser).
+
+        Las cuentas de Administrador no se crean por registro: la primera la carga el equipo al poner en
+        marcha la plataforma (nota de RF-D-USU-01).
+        """
         campos.setdefault("rol", RolUsuario.ADMINISTRADOR)
         return self.create_user(correo, password, **campos)
 
 
 class Usuario(AbstractBaseUser):
+    """Cuenta de la plataforma (tabla usuario, MOD-01). Hereda de AbstractBaseUser: password y last_login.
+
+    No usa PermissionsMixin: el acceso se decide por el rol con la matriz de apps.comun.rbac.
+
+    Attributes:
+        correo: identificador único para iniciar sesión.
+        nombre_completo: nombre que se muestra (máximo 120 caracteres).
+        telefono: solo números, de 7 a 15 dígitos (validar_telefono).
+        ciudad: texto opcional.
+        rol: HUESPED, ANFITRION o ADMINISTRADOR.
+        activa: False solo cuando el usuario desactivó su cuenta. "Restringida" no es una columna: se
+            deriva de una RestriccionUsuario vigente (esta_restringida).
+        autorizacion_datos: fecha en que aceptó el tratamiento de datos (Ley 1581 de 2012).
+        fecha_registro: fecha de creación de la cuenta.
+    """
     correo = models.EmailField(max_length=254, unique=True)
     nombre_completo = models.CharField(max_length=120)
     telefono = models.CharField(max_length=20)
@@ -97,22 +135,22 @@ class Usuario(AbstractBaseUser):
         acceso en la siguiente petición (ADR-005)."""
         return self.activa and not self.esta_restringida
 
-    # ---- operaciones del diagrama de clases (MOD-01). Cambian el estado de la cuenta; los permisos, los
+    # ---- operaciones del dominio (MOD-01). Cambian el estado de la cuenta; los permisos, los
     # mensajes, la auditoría y los tokens los orquesta identidad.services en la misma transacción.
     @classmethod
     def registrar_usuario(cls, correo: str, clave: str, rol: str, **datos) -> "Usuario":
-        """registrar(correo, clave, rol) del diagrama: crea la cuenta con la contraseña cifrada y la fecha de la
+        """Crea la cuenta con la contraseña cifrada y la fecha de la
         autorización de tratamiento de datos (Ley 1581). Las validaciones previas las hace identidad.services."""
         return cls.objects.create_user(correo=correo, password=clave, rol=rol, autorizacion_datos=timezone.now(), **datos)
 
     def iniciar_sesion(self, correo: str, clave: str) -> bool:
-        """iniciarSesion(correo, clave) del diagrama: True si el correo y la contraseña son de esta cuenta."""
+        """Verifica las credenciales: True si el correo y la contraseña son de esta cuenta."""
         return (correo or "").strip().lower() == self.correo.lower() and self.check_password(clave or "")
 
     _SIN_CAMBIO = object()
 
     def actualizar_perfil(self, nombre=_SIN_CAMBIO, telefono=_SIN_CAMBIO) -> list[str]:
-        """actualizarPerfil(nombre, telefono) del diagrama: cambia los datos que llegan (ninguno puede quedar vacío,
+        """Cambia el nombre y el teléfono que lleguen (ninguno puede quedar vacío,
         CA-04.1) y devuelve los campos cambiados para guardarlos. El correo y el rol no se cambian aquí."""
         cambiados = []
         if nombre is not self._SIN_CAMBIO:
@@ -127,13 +165,13 @@ class Usuario(AbstractBaseUser):
         return cambiados
 
     def desactivar_cuenta(self) -> None:
-        """desactivar() del diagrama: la cuenta queda inactiva (CA-04.2). Las reglas previas (no ser administrador,
+        """Deja la cuenta inactiva (CA-04.2). Las reglas previas (no ser administrador,
         no tener reservas pendientes) las revisa identidad.services.desactivar_cuenta."""
         self.activa = False
         self.save(update_fields=["activa"])
 
     def reactivar_cuenta(self) -> None:
-        """reactivar() del diagrama: la cuenta desactivada vuelve a estar activa al ingresar de nuevo (CA-04.4)."""
+        """Vuelve a activar la cuenta desactivada al ingresar de nuevo (CA-04.4)."""
         self.activa = True
         self.save(update_fields=["activa"])
 
@@ -164,6 +202,14 @@ class RestriccionUsuario(models.Model):
         ]
 
     def esta_vigente(self, ahora=None) -> bool:
+        """Indica si la restricción está vigente en un momento dado.
+
+        Args:
+            ahora: momento a evaluar; por defecto, el actual.
+
+        Returns:
+            True si ya empezó y no ha terminado (sin fecha de fin es indefinida).
+        """
         ahora = ahora or timezone.now()
         return self.fecha_inicio <= ahora and (self.fecha_fin is None or self.fecha_fin > ahora)
 
@@ -183,5 +229,13 @@ class TokenRecuperacion(models.Model):
         constraints = [models.CheckConstraint(condition=Q(vence__gt=models.F("creado")), name="token_vence_despues_de_creado")]
 
     def es_valido(self, ahora=None) -> bool:
+        """Indica si el enlace de recuperación todavía sirve (RNF-P-SEG-03).
+
+        Args:
+            ahora: momento a evaluar; por defecto, el actual.
+
+        Returns:
+            True si no se ha usado y no ha vencido (20 minutos).
+        """
         ahora = ahora or timezone.now()
         return self.usado_en is None and ahora < self.vence

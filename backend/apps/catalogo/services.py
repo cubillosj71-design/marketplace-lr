@@ -60,6 +60,7 @@ EDITABLE_POR_ANFITRION = {E.BORRADOR, E.ACTIVA, E.PAUSADA}
 # ================================================================ consultas para otros servicios
 
 def es_ciudad_registrada(ciudad_id: int) -> bool:
+    """Indica si existe una ciudad con ese id (la usa Búsqueda para validar el filtro)."""
     return Ciudad.objects.filter(pk=ciudad_id).exists()
 
 
@@ -69,6 +70,11 @@ def calcular_clave_alfabetica(texto: str) -> str:
 
 
 def listar_catalogos() -> dict:
+    """Catálogos fijos para formularios y filtros.
+
+    Returns:
+        {"ciudades" (en orden alfabético en español), "tipos", "servicios", "politicas" (activas, con sus tramos)}.
+    """
     return {
         # En orden alfabético en español (sin importar tildes ni la intercalación de la base): San Andrés, San Gil,
         # Santa Fe de Antioquia, Santa Marta
@@ -80,6 +86,7 @@ def listar_catalogos() -> dict:
 
 
 def _serializar_politica(p: PoliticaCancelacion) -> dict:
+    """Convierte una política en {id, nombre, descripcion, tramos}, con los tramos de mayor a menor anticipación."""
     return {"id": p.id, "nombre": p.nombre, "descripcion": p.descripcion,
             "tramos": [{"dias_minimos": t.dias_minimos, "dias_maximos": t.dias_maximos,
                         "porcentaje_devolucion": f"{t.porcentaje_devolucion:.2f}"}
@@ -111,10 +118,17 @@ def obtener_portadas_y_ciudades(ids) -> dict[int, dict]:
 
 
 def listar_ids_publicaciones_de(anfitrion_id: int) -> list[int]:
+    """Ids de todas las publicaciones de un anfitrión (para sus reservas y su calendario)."""
     return list(Publicacion.objects.filter(anfitrion_id=anfitrion_id).values_list("id", flat=True))
 
 
 def obtener_resumen_publicacion(publicacion_id: int) -> dict | None:
+    """Resumen de una publicación para otros módulos (Reservas, Reportes).
+
+    Returns:
+        Título, anfitrión, estado, ciudad, tipo, política, precios, descuento, capacidad y fecha de
+        creación, o None si no existe.
+    """
     p = Publicacion.objects.select_related("ciudad", "tipo_alojamiento").filter(pk=publicacion_id).first()
     return _resumir_publicacion(p) if p else None
 
@@ -136,6 +150,7 @@ def listar_publicaciones_para_reporte(desde=None, hasta=None, estado=None, ciuda
 
 
 def contar_publicaciones_por_estado() -> dict[str, int]:
+    """Cuenta las publicaciones por estado, con 0 en los estados sin publicaciones (tablero)."""
     base = {e: 0 for e in E.values}
     base.update(dict(Publicacion.objects.values_list("estado").annotate(n=Count("id"))))
     return base
@@ -148,6 +163,7 @@ def listar_publicaciones_buscables():
 
 
 def es_buscable(publicacion_id: int) -> bool:
+    """Indica si la publicación aparece en las búsquedas: ACTIVA y de un anfitrión activo sin restricción (vista v_publicacion_buscable)."""
     return PublicacionBuscable.objects.filter(pk=publicacion_id).exists()
 
 
@@ -208,14 +224,17 @@ def obtener_titulos_y_anfitriones(ids) -> dict[int, dict]:
 
 
 def obtener_nombres_adicionales(ids) -> dict[int, str]:
+    """Nombres de varios servicios adicionales en una sola consulta ({id: nombre})."""
     return dict(ServicioAdicional.objects.filter(pk__in=list(ids)).values_list("id", "nombre"))
 
 
 def obtener_nombres_ciudades() -> dict[int, str]:
+    """Nombres de todas las ciudades ({id: nombre})."""
     return dict(Ciudad.objects.values_list("id", "nombre"))
 
 
 def _resumir_publicacion(p: Publicacion) -> dict:
+    """Convierte una publicación en el diccionario de resumen que comparte Catálogo con los demás módulos."""
     return {
         "id": p.id, "titulo": p.titulo, "anfitrion": p.anfitrion_id, "estado": p.estado,
         "ciudad": p.ciudad_id, "ciudad_nombre": p.ciudad.nombre if p.ciudad else None,
@@ -257,10 +276,24 @@ def calcular_faltantes(p: Publicacion) -> list[str]:
 
 
 def es_visible_para(usuario, p: Publicacion) -> bool:
+    """Indica si el usuario puede ver o modificar la publicación: el Administrador cualquiera; el anfitrión, solo las suyas."""
     return usuario.rol == "ADMINISTRADOR" or (usuario.rol == "ANFITRION" and p.anfitrion_id == usuario.id)
 
 
 def obtener_publicacion(usuario, publicacion_id: int) -> Publicacion:
+    """Publicación que el usuario puede ver o modificar (CA-05.3).
+
+    Args:
+        usuario: quien llama.
+        publicacion_id: id de la publicación.
+
+    Returns:
+        La publicación.
+
+    Raises:
+        NoEncontrado: si no existe.
+        SinPermiso: si es de otro anfitrión (el intento queda en la auditoría).
+    """
     p = Publicacion.objects.filter(pk=publicacion_id).first()
     if not p:
         raise NoEncontrado("La publicación no existe.")
@@ -276,6 +309,14 @@ def _negar_acceso(usuario, p: Publicacion, motivo: str) -> None:
 
 
 def _validar_datos(d: dict) -> None:
+    """Valida las reglas de los datos de una publicación (RF-D-ALO-01.1).
+
+    Capacidad y precio por noche mayores que 0, limpieza no negativa, descuento entre 0 y 100 % y
+    completo (porcentaje y noches, o ninguno), catálogos que existan.
+
+    Raises:
+        ErrorNegocio: con el campo que no cumple.
+    """
     if "capacidad" in d and d["capacidad"] is not None and d["capacidad"] <= 0:
         raise ErrorNegocio("La capacidad debe ser mayor que cero.", campo="capacidad")
     if "precio_noche" in d and d["precio_noche"] is not None and d["precio_noche"] <= 0:
@@ -306,6 +347,7 @@ SIMPLES = ("titulo", "descripcion", "ubicacion_textual", "capacidad", "precio_no
 
 
 def _aplicar_datos(p: Publicacion, d: dict) -> None:
+    """Copia en la publicación los datos que llegaron y reemplaza servicios, adicionales, reglas e imágenes si vienen en la petición."""
     for c in SIMPLES:
         if c in d:
             setattr(p, c, d[c] if d[c] is not None or c not in ("descripcion", "ubicacion_textual") else "")
@@ -333,6 +375,20 @@ def _aplicar_datos(p: Publicacion, d: dict) -> None:
 # ================================================================ CU-ALO-01 Crear · CU-ALO-04 Editar
 
 def crear_publicacion(anfitrion, d: dict) -> Publicacion:
+    """Crea una publicación en BORRADOR para el anfitrión (RF-D-ALO-01.1, CU-ALO-01).
+
+    Solo el título es obligatorio en el borrador; el resto se exige al enviarla a revisión.
+
+    Args:
+        anfitrion: el anfitrión que la crea.
+        d: datos de la publicación.
+
+    Returns:
+        La publicación creada.
+
+    Raises:
+        ErrorNegocio: sin título o con datos inválidos.
+    """
     if not (d.get("titulo") or "").strip():
         raise ErrorNegocio("Escribe un título.", campo="titulo")
     _validar_datos(d)
@@ -344,6 +400,16 @@ def crear_publicacion(anfitrion, d: dict) -> Publicacion:
 
 
 def actualizar_publicacion(usuario, publicacion_id: int, d: dict) -> Publicacion:
+    """Edita una publicación (RF-D-ALO-02.1).
+
+    El anfitrión edita las suyas en BORRADOR, ACTIVA o PAUSADA; el Administrador, cualquiera. La
+    publicación conserva su estado (una ACTIVA no vuelve a revisión) y fuera de BORRADOR debe seguir
+    completa. Los cambios no afectan las reservas ya confirmadas.
+
+    Raises:
+        SinPermiso: publicación ajena.
+        ErrorNegocio: estado que no permite editar o datos inválidos.
+    """
     p = obtener_publicacion(usuario, publicacion_id)
     if usuario.rol == "ANFITRION" and p.estado not in EDITABLE_POR_ANFITRION:
         raise ErrorNegocio(f"No puedes editar una publicación {E(p.estado).label.lower()}.", codigo=409)
@@ -362,6 +428,27 @@ def actualizar_publicacion(usuario, publicacion_id: int, d: dict) -> Publicacion
 # ================================================================ cambios de estado
 
 def cambiar_estado(usuario, publicacion_id: int, nuevo: str, observacion: str | None = None) -> Publicacion:
+    """Cambia el estado de una publicación según el rol de quien llama (sección 3.6 del SRS).
+
+    Solo acepta las transiciones de TRANSICIONES para ese rol. Al enviar a revisión exige los datos
+    completos y al menos una imagen. Las acciones del Administrador quedan en el historial de
+    revisiones (devolver y bloquear exigen observación o motivo). Registra el cambio en la auditoría
+    y publica el evento de dominio que corresponda (avisos; al bloquear, las reservas futuras pasan a
+    EN_REVISION en la misma transacción).
+
+    Args:
+        usuario: quien cambia el estado.
+        publicacion_id: id de la publicación.
+        nuevo: estado de destino.
+        observacion: observación o motivo, cuando aplica.
+
+    Returns:
+        La publicación con su nuevo estado.
+
+    Raises:
+        ErrorNegocio: transición no permitida (409), datos faltantes u observación vacía.
+        Conflicto: la publicación cambió mientras tanto.
+    """
     p = obtener_publicacion(usuario, publicacion_id)
     anterior = p.estado
     if (anterior, nuevo) not in TRANSICIONES.get(usuario.rol, set()):
@@ -416,6 +503,12 @@ def eliminar_borrador(anfitrion, publicacion_id: int) -> None:
 
 
 def revisar_publicacion(admin, publicacion_id: int, accion: str, observacion: str | None) -> Publicacion:
+    """El Administrador aprueba (→ ACTIVA) o devuelve (→ BORRADOR, con observación) una publicación pendiente (RF-D-ADM-01.1).
+
+    Raises:
+        ErrorNegocio: acción distinta de APROBAR o DEVOLVER.
+        Conflicto: la publicación ya no está pendiente de revisión.
+    """
     destino = {AccionModeracion.APROBAR: E.ACTIVA, AccionModeracion.DEVOLVER: E.BORRADOR}.get(accion)
     if not destino:
         raise ErrorNegocio("La acción debe ser APROBAR o DEVOLVER.", campo="accion")
@@ -426,18 +519,22 @@ def revisar_publicacion(admin, publicacion_id: int, accion: str, observacion: st
 
 
 def bloquear_publicacion(admin, publicacion_id: int, motivo: str) -> Publicacion:
+    """El Administrador bloquea una publicación por información engañosa, con motivo (RF-D-ADM-01.2). Ver cambiar_estado."""
     return cambiar_estado(admin, publicacion_id, E.BLOQUEADA, motivo)
 
 
 def desbloquear_publicacion(admin, publicacion_id: int) -> Publicacion:
+    """El Administrador desbloquea una publicación: queda PAUSADA para que el anfitrión la reactive."""
     return cambiar_estado(admin, publicacion_id, E.PAUSADA)
 
 
 def listar_publicaciones_admin(estado: str | None = None):
+    """Publicaciones que ve el Administrador (todas menos los borradores), opcionalmente de un estado."""
     qs = Publicacion.objects.exclude(estado=E.BORRADOR).select_related("ciudad", "tipo_alojamiento")
     return qs.filter(estado=estado) if estado else qs
 
 
 def listar_mis_publicaciones(anfitrion, estado=None):
+    """Publicaciones de un anfitrión, opcionalmente de un estado (Mis publicaciones, CU-ALO-03)."""
     qs = Publicacion.objects.filter(anfitrion=anfitrion).select_related("ciudad", "tipo_alojamiento")
     return qs.filter(estado=estado) if estado else qs

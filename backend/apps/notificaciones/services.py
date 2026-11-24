@@ -24,20 +24,29 @@ log = logging.getLogger("marketplace")
 
 
 def _formatear_pesos(valor) -> str:
+    """Formatea un monto en pesos colombianos para un aviso: $370.000."""
     return "$" + f"{int(Decimal(valor)):,}".replace(",", ".")
 
 
 def _formatear_fecha(iso: str) -> str:
+    """Convierte una fecha ISO (AAAA-MM-DD) al formato DD/MM/AAAA de los avisos."""
     anio, mes, dia = iso[:10].split("-")
     return f"{dia}/{mes}/{anio}"
 
 
 def _describir_reserva(d: dict, texto: str) -> str:
+    """Arma el texto base de un aviso de reserva: «título» y fechas de llegada y salida.
+
+    Args:
+        d: detalle del evento (titulo, llegada, salida).
+        texto: comienzo del mensaje (por ejemplo, "Reserva confirmada").
+    """
     fechas = f" del {_formatear_fecha(d['llegada'])} al {_formatear_fecha(d['salida'])}" if d.get("llegada") and d.get("salida") else ""
     return f"{texto}: «{d.get('titulo') or 'alojamiento'}»{fechas}."
 
 
 def _describir_cancelacion(d: dict) -> str:
+    """Arma el aviso de una reserva cancelada, con el valor devuelto y el motivo si los hay."""
     texto = _describir_reserva(d, "Reserva cancelada")
     if d.get("valor_devolucion") is not None:
         texto += f" Devolución: {_formatear_pesos(d['valor_devolucion'])}."
@@ -47,6 +56,7 @@ def _describir_cancelacion(d: dict) -> str:
 
 
 def _describir_resolucion(d: dict) -> str:
+    """Arma el aviso del resultado de una reserva en revisión: se mantiene o se cancela."""
     if d.get("mantener"):
         return _describir_reserva(d, "Tu reserva se mantiene CONFIRMADA")
     return _describir_reserva(d, "La revisión de tu reserva terminó con su cancelación")
@@ -70,6 +80,16 @@ SOLO_SI_ADMINISTRADOR = {"PublicacionPausada", "PublicacionReactivada"}
 
 
 def obtener_destinatarios(nombre: str, detalle: dict) -> list[int]:
+    """Usuarios que deben recibir el aviso de un evento.
+
+    Args:
+        nombre: nombre del evento de dominio.
+        detalle: detalle del evento, con los ids de huésped, anfitrión, etc.
+
+    Returns:
+        Ids de los destinatarios sin repetir. Vacío si el evento no genera aviso o si solo avisa cuando
+        lo provocó el Administrador y no fue así.
+    """
     if nombre not in AVISOS or (nombre in SOLO_SI_ADMINISTRADOR and not detalle.get("por_administrador")):
         return []
     ids = [detalle.get(clave) for clave in AVISOS[nombre][0]]
@@ -103,6 +123,7 @@ def recibir_evento_dominio(sender, nombre, entidad=None, entidad_id=None, detall
 # ---------------------------------------------------------------- bandeja (CA-16.2)
 
 def _serializar_notificacion(n: Notificacion) -> dict:
+    """Convierte un aviso en el diccionario que devuelve la API de la bandeja."""
     return {"id": n.id, "tipo": n.tipo, "mensaje": n.mensaje, "entidad": n.entidad, "entidad_id": n.entidad_id,
             "leida": n.leida, "fecha": n.fecha}
 
@@ -115,6 +136,18 @@ def consultar_bandeja(usuario, limite: int = 100) -> dict:
 
 
 def marcar_leida(usuario, notificacion_id: int) -> dict:
+    """Marca como leído un aviso del usuario (CA-16.3).
+
+    Args:
+        usuario: quien llama; solo puede marcar sus propios avisos.
+        notificacion_id: id del aviso.
+
+    Returns:
+        El aviso actualizado.
+
+    Raises:
+        NoEncontrado: si el aviso no existe o es de otro usuario.
+    """
     n = Notificacion.objects.filter(pk=notificacion_id, destinatario_id=usuario.id).first()
     if not n:
         raise NoEncontrado("La notificación no existe.")
@@ -123,4 +156,9 @@ def marcar_leida(usuario, notificacion_id: int) -> dict:
 
 
 def marcar_todas_leidas(usuario) -> int:
+    """Marca como leídos todos los avisos pendientes del usuario.
+
+    Returns:
+        Cuántos avisos cambiaron.
+    """
     return Notificacion.objects.filter(destinatario_id=usuario.id, leida=False).update(leida=True)

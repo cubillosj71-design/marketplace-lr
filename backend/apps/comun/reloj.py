@@ -15,6 +15,11 @@ _fijo: datetime | None = None
 
 
 def obtener_fecha_hora() -> datetime:
+    """Fecha y hora actuales de la aplicación.
+
+    Returns:
+        La hora fijada por las pruebas (fijar_fecha_hora) o, si no hay, timezone.now().
+    """
     return _fijo if _fijo is not None else timezone.now()
 
 

@@ -67,7 +67,7 @@ def test_tarjeta_rechazada_por_stripe():
     assert r.estado == "RECHAZADO" and r.motivo
 
 
-# ---------------- devolver(referencia, monto) del diagrama (RF-D-RES-03.1)
+# ---------------- devolver_pago(referencia, monto) (RF-D-RES-03.1)
 class ReembolsosFalsos:
     def __init__(self, estado="succeeded", error=None):
         self.estado, self.error, self.llamadas = estado, error, []

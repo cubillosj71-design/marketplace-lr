@@ -9,6 +9,7 @@ from . import services
 
 
 class EventoSerializer(serializers.Serializer):
+    """Un evento del registro de acciones como lo ve el Administrador, con el nombre, correo y rol de quien lo hizo."""
     id = serializers.IntegerField()
     fecha = serializers.DateTimeField()
     actor_id = serializers.IntegerField(allow_null=True)
@@ -24,6 +25,10 @@ class EventoSerializer(serializers.Serializer):
 
 
 class FiltrosSerializer(serializers.Serializer):
+    """Filtros de GET /admin/auditoria: usuario (actor), tipo de acción, acción, resultado y periodo.
+
+    Todos son opcionales; el tipo debe ser una de las claves de auditoria.services.TIPOS_ACCION.
+    """
     usuario = serializers.IntegerField(required=False)  # actor_id
     tipo = serializers.ChoiceField(choices=list(services.TIPOS_ACCION), required=False)
     accion = serializers.CharField(required=False)

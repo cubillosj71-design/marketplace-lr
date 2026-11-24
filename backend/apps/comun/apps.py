@@ -1,3 +1,5 @@
+"""Configuración de la app piezas transversales para Django (INSTALLED_APPS)."""
+
 from django.apps import AppConfig
 
 

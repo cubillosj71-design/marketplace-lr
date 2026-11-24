@@ -50,6 +50,19 @@ def consultar_noches_no_disponibles():
 
 
 def consultar_noches_no_disponibles_de(publicacion_id: int, desde: date, hasta: date) -> list[date]:
+    """Noches no disponibles de una publicación entre dos fechas (vista v_noche_no_disponible).
+
+    Una noche no está disponible si la ocupa una reserva CONFIRMADA o EN_REVISION, o si el anfitrión
+    la cerró en su calendario.
+
+    Args:
+        publicacion_id: id de la publicación.
+        desde: primera noche (inclusive).
+        hasta: última fecha (exclusive).
+
+    Returns:
+        Las fechas no disponibles, en orden.
+    """
     return list(NocheNoDisponible.objects.filter(publicacion_id=publicacion_id, fecha__gte=desde, fecha__lt=hasta)
                 .order_by("fecha").values_list("fecha", flat=True))
 
@@ -93,6 +106,7 @@ def listar_reservas_para_reporte(desde=None, hasta=None, publicaciones_ids=None)
 
 
 def contar_reservas_por_estado(desde=None, hasta=None) -> dict[str, int]:
+    """Cuenta las reservas por estado, opcionalmente con llegada en un rango; 0 en los estados sin reservas."""
     qs = Reserva.objects.all()
     if desde:
         qs = qs.filter(fecha_llegada__gte=desde)
@@ -119,6 +133,14 @@ def _obtener_tarifa_vigente(momento=None) -> TarifaServicio | None:
 
 
 def consultar_tarifa_vigente(momento=None) -> Decimal:
+    """Porcentaje de la tarifa de servicio vigente en un momento (RF-D-ADM-03.1).
+
+    Args:
+        momento: fecha y hora a consultar; por defecto, ahora.
+
+    Returns:
+        El porcentaje, o 0 si todavía no hay tarifa configurada.
+    """
     t = _obtener_tarifa_vigente(momento)
     return t.porcentaje if t else Decimal("0")
 
@@ -139,6 +161,7 @@ def _calcular_inicio_del_dia(valor) -> datetime:
 
 
 def _serializar_tarifa(t: TarifaServicio) -> dict:
+    """Convierte una tarifa en {id, porcentaje, vigente_desde, vigente_hasta, administrador}."""
     return {"id": t.id, "porcentaje": f"{t.porcentaje:.2f}", "vigente_desde": t.vigente_desde,
             "vigente_hasta": t.vigente_hasta, "administrador": t.administrador_id}
 
@@ -209,6 +232,7 @@ def calcular_cotizacion(publicacion: dict, noches: int, adicionales: list[Decima
 # ---------------------------------------------------------------- CU-ALO-06 Calendario (PeriodoCalendario)
 
 def _listar_dias(inicio: date, fin: date):
+    """Genera cada fecha desde inicio (inclusive) hasta fin (exclusive)."""
     d = inicio
     while d < fin:
         yield d
@@ -216,6 +240,7 @@ def _listar_dias(inicio: date, fin: date):
 
 
 def _agrupar_rangos(dias: set[date]) -> list[tuple[date, date]]:
+    """Une fechas consecutivas en rangos [inicio, fin) para guardar el calendario sin traslapes."""
     out: list[tuple[date, date]] = []
     for d in sorted(dias):
         if out and out[-1][1] == d:
@@ -226,6 +251,12 @@ def _agrupar_rangos(dias: set[date]) -> list[tuple[date, date]]:
 
 
 def _obtener_publicacion_del_anfitrion(usuario, publicacion_id: int) -> dict:
+    """Resumen de la publicación si es del anfitrión que llama (calendario, CA-05.3).
+
+    Raises:
+        NoEncontrado: si no existe.
+        SinPermiso: si es de otro anfitrión (el intento queda en la auditoría).
+    """
     p = catalogo.obtener_resumen_publicacion(publicacion_id)
     if not p:
         raise NoEncontrado("La publicación no existe.")
@@ -238,6 +269,14 @@ def _obtener_publicacion_del_anfitrion(usuario, publicacion_id: int) -> dict:
 
 
 def consultar_calendario(usuario, publicacion_id: int, desde: date, hasta: date) -> dict:
+    """Calendario de una publicación del anfitrión entre dos fechas (CU-ALO-06).
+
+    Returns:
+        {"publicacion", "periodos" (cerrados o abiertos por el anfitrión), "noches_reservadas"}.
+
+    Raises:
+        SinPermiso: si la publicación no es del anfitrión que llama.
+    """
     _obtener_publicacion_del_anfitrion(usuario, publicacion_id)
     periodos = PeriodoCalendario.objects.filter(publicacion_id=publicacion_id, fecha_fin__gt=desde, fecha_inicio__lt=hasta)
     return {
@@ -276,12 +315,22 @@ def modificar_calendario(usuario, publicacion_id: int, inicio: date, fin: date, 
 # ---------------------------------------------------------------- HU-12 Cotizar (RF-D-RES-02.1)
 
 def _verificar_libres(publicacion_id: int, llegada: date, salida: date, mensaje: str = FECHAS_OCUPADAS) -> None:
+    """Comprueba que todas las noches de la estancia sigan libres.
+
+    Raises:
+        Conflicto: con las fechas que ya no están disponibles.
+    """
     ocupadas = consultar_noches_no_disponibles_de(publicacion_id, llegada, salida)
     if ocupadas:
         raise Conflicto(mensaje, extra={"fechas": ocupadas})
 
 
 def _validar_capacidad(pub: dict, num_huespedes: int) -> None:
+    """Comprueba que el número de huéspedes esté entre 1 y la capacidad del alojamiento (CA-12.3).
+
+    Raises:
+        ErrorNegocio: con la capacidad máxima en la respuesta.
+    """
     if num_huespedes < 1:
         raise ErrorNegocio("Debe haber al menos un huésped.", campo="num_huespedes")
     if num_huespedes > pub["capacidad"]:  # CA-12.3
@@ -290,6 +339,11 @@ def _validar_capacidad(pub: dict, num_huespedes: int) -> None:
 
 
 def _obtener_adicionales_elegidos(pub: dict, ids) -> list[tuple[int, Decimal]]:
+    """Servicios adicionales elegidos con su precio actual; cada uno se cobra una vez por estancia.
+
+    Raises:
+        ErrorNegocio: si alguno no pertenece al alojamiento o ya no está activo.
+    """
     ids = list(dict.fromkeys(ids or []))  # cada adicional una vez por estancia
     faltan = [i for i in ids if i not in pub["adicionales"]]
     if faltan:
@@ -299,6 +353,10 @@ def _obtener_adicionales_elegidos(pub: dict, ids) -> list[tuple[int, Decimal]]:
 
 def _crear_cotizacion(huesped_id: int, pub: dict, llegada: date, salida: date, num_huespedes: int,
                       elegidos: list[tuple[int, Decimal]], tarifa: TarifaServicio, creada: datetime) -> Cotizacion:
+    """Calcula y guarda la cotización con sus adicionales; vence a los MINUTOS_COTIZACION minutos.
+
+    Los valores quedan fijos: la reserva cobra exactamente lo cotizado (CA-22.1).
+    """
     c = calcular_cotizacion(pub, (salida - llegada).days, [p for _, p in elegidos], tarifa.porcentaje)
     cot = Cotizacion.objects.create(
         huesped_id=huesped_id, publicacion_id=pub["id"], tarifa_servicio_ref=tarifa, fecha_llegada=llegada,
@@ -312,6 +370,11 @@ def _crear_cotizacion(huesped_id: int, pub: dict, llegada: date, salida: date, n
 
 
 def _obtener_tarifa_o_error(momento=None) -> TarifaServicio:
+    """Tarifa de servicio vigente en un momento.
+
+    Raises:
+        ErrorNegocio: 409 si la plataforma todavía no tiene una tarifa configurada.
+    """
     t = _obtener_tarifa_vigente(momento)
     if not t:
         raise ErrorNegocio("La plataforma todavía no tiene una tarifa de servicio configurada.", codigo=409)
@@ -319,6 +382,28 @@ def _obtener_tarifa_o_error(momento=None) -> TarifaServicio:
 
 
 def cotizar_estancia(huesped, publicacion_id: int, llegada: date, salida: date, num_huespedes: int, adicionales=(), ip=None) -> Cotizacion:
+    """Cotiza una estancia para el huésped (RF-D-RES-02.1, HU-12).
+
+    Valida las fechas, que el alojamiento aparezca en las búsquedas, la capacidad, los adicionales y
+    que las noches estén libres. Calcula noches × precio, descuento por estancia larga, limpieza,
+    tarifa de servicio vigente y adicionales (ejemplo del SRS: $740.000).
+
+    Args:
+        huesped: quien cotiza.
+        publicacion_id: alojamiento.
+        llegada, salida: fechas de la estancia.
+        num_huespedes: número de huéspedes.
+        adicionales: ids de los servicios adicionales elegidos.
+        ip: IP del cliente.
+
+    Returns:
+        La cotización guardada, con el desglose fijo.
+
+    Raises:
+        NoEncontrado: el alojamiento no está disponible.
+        ErrorNegocio: fechas, capacidad o adicionales inválidos; sin tarifa configurada.
+        Conflicto: las fechas no están disponibles.
+    """
     validar_estancia(llegada, salida)
     pub = catalogo.obtener_datos_para_cotizar(publicacion_id)
     if not pub or not pub["buscable"]:
@@ -337,6 +422,11 @@ def cotizar_estancia(huesped, publicacion_id: int, llegada: date, salida: date, 
 
 
 def obtener_cotizacion(huesped, cotizacion_id: int) -> Cotizacion:
+    """Cotización del huésped que llama.
+
+    Raises:
+        NoEncontrado: si no existe o es de otro huésped.
+    """
     cot = Cotizacion.objects.select_related("tarifa_servicio_ref").filter(pk=cotizacion_id, huesped_id=huesped.id).first()
     if not cot:
         raise NoEncontrado("La cotización no existe.")
@@ -359,6 +449,7 @@ def convertir_desglose_a_dict(c: Cotizacion) -> dict:
 
 
 def convertir_cotizacion_a_dict(c: Cotizacion) -> dict:
+    """Cotización como la devuelve la API: fechas, desglose, si ya venció y la reserva creada con ella, si la hay."""
     pub = catalogo.obtener_resumen_publicacion(c.publicacion_id) or {}
     return {
         "id": c.id, "publicacion": c.publicacion_id, "publicacion_titulo": pub.get("titulo"),
@@ -372,12 +463,14 @@ def convertir_cotizacion_a_dict(c: Cotizacion) -> dict:
 # ---------------------------------------------------------------- HU-13 Reservar y pagar (RF-D-RES-02.2)
 
 class _PagoNoAprobado(Exception):
+    """Excepción interna: el pago no quedó APROBADO; hace que se revierta la transacción de la reserva (CA-13.3)."""
     def __init__(self, estado: str, motivo: str | None):
         super().__init__(motivo)
         self.estado, self.motivo = estado, motivo
 
 
 class _CotizacionCambio(Exception):
+    """Excepción interna: el precio cambió desde que se cotizó; se responde 409 con una cotización nueva."""
     def __init__(self, pub: dict, elegidos, tarifa: TarifaServicio):
         super().__init__("La cotización cambió")
         self.pub, self.elegidos, self.tarifa = pub, elegidos, tarifa
@@ -391,6 +484,9 @@ def _obtener_quien_cancelo(c: Cancelacion, huesped_id: int) -> str:
 
 
 def _serializar_cancelacion(c: Cancelacion | None, huesped_id: int | None = None) -> dict | None:
+    """Datos de la cancelación para la API: fecha, motivo, quién canceló (huésped, Administrador o
+    automática), días de anticipación, porcentaje y valor devuelto. None si no hay cancelación.
+    """
     if not c:
         return None
     return {"fecha": c.fecha, "motivo": c.motivo, "cancelada_por": c.cancelada_por_id, "automatica": c.cancelada_por_id is None,
@@ -401,6 +497,14 @@ def _serializar_cancelacion(c: Cancelacion | None, huesped_id: int | None = None
 
 def convertir_reserva_a_dict(r: Reserva, publicaciones: dict | None = None, nombres: dict | None = None, con_pagos: bool = True,
                              portadas: dict | None = None) -> dict:
+    """Reserva como la devuelve la API, con alojamiento, portada, ciudad, huésped, si se puede cancelar
+    y la cancelación y los pagos si los hay.
+
+    Args:
+        r: la reserva.
+        publicaciones, nombres, portadas: datos ya consultados de varias reservas (para no repetir consultas en listas).
+        con_pagos: si incluye los cobros y devoluciones (solo en el detalle).
+    """
     pub = (publicaciones or catalogo.obtener_titulos_y_anfitriones([r.publicacion_id])).get(r.publicacion_id, {})
     nombres = nombres if nombres is not None else identidad.obtener_nombres_usuarios([r.huesped_id])
     foto = (portadas if portadas is not None else catalogo.obtener_portadas_y_ciudades([r.publicacion_id])).get(r.publicacion_id, {})
@@ -546,6 +650,7 @@ def completar_reservas_vencidas() -> int:
 # ---------------------------------------------------------------- HU-14, HU-26 Consultar reservas
 
 def _listar_reservas(qs) -> list[dict]:
+    """Convierte una consulta de reservas en la lista de la API, con una sola consulta por módulo para toda la lista (sin N+1)."""
     lista = list(qs.select_related("cancelacion").order_by("-fecha_llegada", "-id"))
     ids = {r.publicacion_id for r in lista}
     publicaciones = catalogo.obtener_titulos_y_anfitriones(ids)
@@ -567,6 +672,7 @@ def listar_reservas_de_mis_alojamientos(anfitrion) -> list[dict]:
 
 
 def listar_reservas_admin(estado: str | None = None) -> list[dict]:
+    """Reservas para el Administrador, opcionalmente de un estado; EN_REVISION trae además el contexto del bloqueo."""
     if estado == EstadoReserva.EN_REVISION:
         return listar_reservas_en_revision()
     completar_reservas_vencidas()
@@ -638,6 +744,11 @@ def obtener_reserva_en_revision(admin, reserva_id: int) -> dict:
 
 def _negar_acceso(usuario, reserva_id: int, motivo: str):
     # Acceso negado: fuera de transaction.atomic, queda aunque la petición falle (CA-05.2)
+    """Registra el intento de ver o cambiar una reserva ajena (CA-05.2) y niega el acceso.
+
+    Raises:
+        SinPermiso: siempre.
+    """
     auditoria.registrar_evento(usuario.id, "AccesoDenegado", entidad="Reserva", entidad_id=reserva_id, exitoso=False, detalle={"motivo": motivo})
     raise SinPermiso("No tienes acceso a esta reserva.")
 
@@ -729,7 +840,7 @@ def calcular_devolucion_hoy(r: Reserva) -> dict:
 # ---------------------------------------------------------------- HU-20 Reservas EN_REVISION (RF-D-ADM-01.2)
 
 def resolver_reserva(admin, reserva_id: int, mantener: bool, motivo: str | None = None, ip=None) -> dict:
-    """resolver_reserva(mantener) del diagrama: mantener -> CONFIRMADA (CA-20.2); si no, CANCELADA con devolución del
+    """El Administrador resuelve una reserva EN_REVISION: mantener -> CONFIRMADA (CA-20.2); si no, CANCELADA con devolución del
     100 % y Cancelacion con cancelada_por = el administrador (CA-20.3)."""
     motivo = (motivo or "").strip()
     if not mantener and not motivo:
@@ -752,7 +863,7 @@ def resolver_reserva(admin, reserva_id: int, mantener: bool, motivo: str | None 
 
 
 def cancelar_en_revision_vencidas() -> int:
-    """cancelarSinResolucion() del diagrama: las EN_REVISION cuya fecha de llegada llegó se cancelan con 100 %,
+    """Tarea diaria: las EN_REVISION cuya fecha de llegada llegó se cancelan con 100 %,
     motivo "Sin resolución antes de la llegada" y cancelada_por NULL. ReservaCancelada avisa a huésped y anfitrión
     (CA-20.5)."""
     canceladas = 0

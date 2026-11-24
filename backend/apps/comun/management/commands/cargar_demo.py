@@ -52,6 +52,19 @@ IMG = "/alojamientos/"
 
 
 def definir_publicacion(titulo, tipo, ciudad, ubicacion, descripcion, capacidad, precio, limpieza, servicios, reglas, imagenes, **extra):
+    """Arma los datos de una publicación de demostración en el formato de catalogo.services.
+
+    Args:
+        titulo, tipo, ciudad, ubicacion, descripcion: textos de la publicación (tipo y ciudad por nombre).
+        capacidad: número máximo de huéspedes.
+        precio, limpieza: precio por noche y tarifa de limpieza en pesos.
+        servicios, reglas: nombres de servicios incluidos y reglas del alojamiento.
+        imagenes: nombres de las fotos en frontend/public/alojamientos/ (sin .jpg).
+        **extra: datos opcionales (servicios adicionales, descuento, política).
+
+    Returns:
+        Un diccionario listo para crear la publicación.
+    """
     return dict(titulo=titulo, tipo=tipo, ciudad=ciudad, ubicacion_textual=ubicacion, descripcion=descripcion, capacidad=capacidad,
                 precio_noche=Decimal(precio), tarifa_limpieza=Decimal(limpieza), servicios=servicios, reglas=reglas,
                 imagenes=[f"{IMG}{i}.jpg" for i in imagenes], **extra)
@@ -342,6 +355,12 @@ def contar_datos_ajenos() -> dict[str, int]:
 
 
 class Command(BaseCommand):
+    """Comando `python manage.py cargar_demo`: carga los datos de demostración.
+
+    Crea las cuentas (contraseña Clave1234), publicaciones en todos los estados, revisiones, una
+    restricción y reservas pasadas, próximas, canceladas y en revisión. Sin --reiniciar nunca borra
+    datos; con --reiniciar vacía la base (solo con DJANGO_DEBUG=1) y pide escribir REINICIAR.
+    """
     help = "Carga cuentas, publicaciones, revisiones, una restricción y reservas de demostración."
 
     def add_arguments(self, parser):
@@ -389,9 +408,11 @@ class Command(BaseCommand):
 
     @staticmethod
     def leer_respuesta(pregunta: str) -> str:
+        """Lee la confirmación del usuario en la terminal (se separa para poder reemplazarla en las pruebas)."""
         return input(pregunta)
 
     def _cargar_datos(self):
+        """Crea todos los datos de demostración por las interfaces públicas de cada servicio, dentro de una transacción."""
         Usuario = apps.get_model("identidad", "Usuario")
         Publicacion = apps.get_model("catalogo", "Publicacion")
         Revision = apps.get_model("catalogo", "RevisionPublicacion")

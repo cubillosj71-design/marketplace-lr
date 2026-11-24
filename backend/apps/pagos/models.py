@@ -10,17 +10,34 @@ from django.db.models import Q
 
 
 class TipoPago(models.TextChoices):
+    """Tipo de movimiento de dinero: COBRO al reservar o DEVOLUCION al cancelar."""
     COBRO = "COBRO", "Cobro"
     DEVOLUCION = "DEVOLUCION", "Devolución"
 
 
 class EstadoPago(models.TextChoices):
+    """Resultado de la pasarela: APROBADO, RECHAZADO o EN_VERIFICACION (pendiente de confirmar)."""
     APROBADO = "APROBADO", "Aprobado"
     RECHAZADO = "RECHAZADO", "Rechazado"
     EN_VERIFICACION = "EN_VERIFICACION", "En verificación"
 
 
 class Pago(models.Model):
+    """Movimiento de dinero de una reserva (tabla pago, MOD-05).
+
+    Registro de solo inserción: un trigger solo deja cambiar estado y referencia_externa (la
+    conciliación) y rechaza DELETE y TRUNCATE (RNF-E-CON-01).
+
+    Attributes:
+        cotizacion: cotización cobrada (de ella sale el monto).
+        reserva: reserva a la que pertenece (nula solo si el cobro no llegó a crear la reserva).
+        tipo: COBRO o DEVOLUCION.
+        monto: valor en pesos, mayor que 0.
+        estado: resultado de la pasarela.
+        referencia_externa: id en la pasarela (pi_..., re_... o SIM-...).
+        clave_idempotencia: evita registrar dos veces el mismo movimiento.
+        fecha: momento del registro.
+    """
     cotizacion = models.ForeignKey("reservas.Cotizacion", on_delete=models.PROTECT, related_name="+")
     reserva = models.ForeignKey("reservas.Reserva", on_delete=models.PROTECT, null=True, blank=True, related_name="+")
     tipo = models.CharField(max_length=10, choices=TipoPago.choices)

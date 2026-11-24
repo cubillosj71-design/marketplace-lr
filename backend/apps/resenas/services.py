@@ -14,5 +14,13 @@ def consultar_calificaciones():
 
 
 def consultar_calificacion(publicacion_id: int) -> dict:
+    """Promedio y total de reseñas visibles de una publicación (vista v_calificacion_publicacion).
+
+    Args:
+        publicacion_id: id de la publicación.
+
+    Returns:
+        {"promedio": Decimal | None, "total": int}; sin reseñas, promedio None y total 0.
+    """
     c = CalificacionPublicacion.objects.filter(pk=publicacion_id).first()
     return {"promedio": c.promedio if c else None, "total": c.total if c else 0}

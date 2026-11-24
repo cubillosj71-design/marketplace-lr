@@ -12,7 +12,9 @@ import { Alert, Field, Logo } from "../ui";
 
 /* ---------------- utilidades de fechas (RF-D-ALO-02.2: hasta hoy + 12 meses) ---------------- */
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+/** Fecha de hoy en formato AAAA-MM-DD (mínimo para la fecha de llegada). */
 export const hoyIso = () => iso(new Date());
+/** Fecha de hoy más 12 meses (máximo para la fecha de salida). */
 export const maximoIso = () => { const d = new Date(); d.setMonth(d.getMonth() + 12); return iso(d); };
 const fechaCorta = (f: string) => new Date(f + "T12:00:00").toLocaleDateString("es-CO", { day: "numeric", month: "short" });
 const pesos = (v: string | null | undefined) => (v == null ? "—" : cop(Number(v)));
@@ -36,6 +38,7 @@ const textoTramo = (t: Tramo) =>
     : t.dias_minimos === 0 ? `Menos de ${t.dias_maximos + 1} días antes`
       : `Entre ${t.dias_minimos} y ${t.dias_maximos} días antes`;
 
+/** Calificación promedio con estrella y número de reseñas; "Sin reseñas" si no hay. */
 function Estrellas({ promedio, total }: { promedio: string | null; total: number }) {
   if (!total || promedio == null) return <span className="subtle">Sin reseñas todavía</span>;
   return <span className="row" style={{ gap: 4 }}><Star size={14} /> {Number(promedio).toFixed(1).replace(".", ",")} ({total})</span>;
@@ -336,7 +339,11 @@ function Detalle({ base }: { base: string }) {
   );
 }
 
+/** Explorar alojamientos con sesión (Huésped, RF-D-RES-01.1). */
 export const Explorar = () => <Explorador base="/explorar" />;
+/** Detalle de un alojamiento con sesión: galería, servicios, política y cotización. */
 export const ExplorarDetalle = () => <Detalle base="/explorar" />;
+/** Explorar alojamientos sin sesión (Visitante). */
 export const ExplorarPublico = () => <PublicShell><Explorador base="/explorar-publico" /></PublicShell>;
+/** Detalle de un alojamiento sin sesión; para cotizar pide ingresar o registrarse. */
 export const ExplorarPublicoDetalle = () => <PublicShell><Detalle base="/explorar-publico" /></PublicShell>;

@@ -19,6 +19,11 @@ TRIGGERS_SIN_VACIAR = (
 
 
 def _cambiar_triggers(accion: str) -> None:
+    """Activa o desactiva los triggers que impiden vaciar las tablas de solo inserción.
+
+    Args:
+        accion: "ENABLE" o "DISABLE".
+    """
     with connection.cursor() as c:
         for tabla, trigger in TRIGGERS_SIN_VACIAR:
             c.execute(f"ALTER TABLE {tabla} {accion} TRIGGER {trigger}")
@@ -26,6 +31,11 @@ def _cambiar_triggers(accion: str) -> None:
 
 @contextmanager
 def permitir_vaciado():
+    """Context manager que permite vaciar la base solo mientras corre el bloque.
+
+    Apaga los triggers que rechazan TRUNCATE en evento_auditoria, reserva, pago y cancelación, y los
+    vuelve a encender al salir, aunque haya un error. Lo usa cargar_demo --reiniciar, solo en desarrollo.
+    """
     _cambiar_triggers("DISABLE")
     try:
         yield

@@ -1,3 +1,9 @@
+"""Rutas de la API de SRV-01 Identidad (MOD-01): usuarios, sesión y permisos.
+
+Se montan en /api/v1/identidad/ desde config/urls.py. Cada vista declara el permiso que exige
+(apps.comun.permisos.RequierePermiso), según la matriz de apps/comun/rbac.py.
+"""
+
 from django.urls import path
 
 from . import views

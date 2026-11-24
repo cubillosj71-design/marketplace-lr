@@ -334,6 +334,7 @@ const desdeApi = (p: PublicacionCompleta): Formulario => ({
 const num = (v: string) => (v.trim() === "" ? null : Number(v.replace(/\D/g, "")));
 const esUrl = (t: string) => /^https?:\/\/\S+$/i.test(t.trim());
 
+/** Formulario para crear o editar una publicación en dos pasos (RF-D-ALO-01.1 y 02.1). Avisa si los cambios no afectan reservas confirmadas. */
 export function FormPublicacion() {
   const { id } = useParams();
   const { tiene } = useStore();

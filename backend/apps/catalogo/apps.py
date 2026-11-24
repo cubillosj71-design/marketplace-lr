@@ -1,3 +1,5 @@
+"""Configuración de la app SRV-02 Catálogo (MOD-02) para Django (INSTALLED_APPS)."""
+
 from django.apps import AppConfig
 
 
