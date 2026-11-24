@@ -168,6 +168,12 @@ def _borrador_nuevo(ctx) -> int:
     return catalogo.crear_publicacion(ctx["usuarios"][A], {"titulo": "Borrador para eliminar"}).id
 
 
+def _tarifa_programada(ctx) -> int:
+    from apps.reservas import services as reservas
+
+    return reservas.programar_tarifa(ctx["usuarios"][ADM], Decimal("9"), _dias(60), _dias(62))["id"]
+
+
 def _fija(ruta, cuerpo=None):
     return lambda ctx, rol: (ruta, cuerpo)
 
@@ -252,6 +258,11 @@ CASOS = [
          lambda c, r: (f"/api/v1/admin/usuarios/{c['restringido']}/restriccion", None), 204),
     Caso("GET", "api/v1/admin/tarifa-servicio", frozenset({ADM}), _fija("/api/v1/admin/tarifa-servicio")),
     Caso("PUT", "api/v1/admin/tarifa-servicio", frozenset({ADM}), _fija("/api/v1/admin/tarifa-servicio", {"porcentaje": "12.00"})),
+    Caso("POST", "api/v1/admin/tarifa-servicio/programadas", frozenset({ADM}),
+         lambda c, r: ("/api/v1/admin/tarifa-servicio/programadas",
+                       {"porcentaje": "8.00", "desde": _dias(40).isoformat(), "hasta": _dias(45).isoformat()}), 201),
+    Caso("DELETE", "api/v1/admin/tarifa-servicio/programadas/<int:pk>", frozenset({ADM}),
+         lambda c, r: (f"/api/v1/admin/tarifa-servicio/programadas/{_tarifa_programada(c)}", None), 204),
     Caso("GET", "api/v1/admin/reservas", frozenset({ADM}), _fija("/api/v1/admin/reservas")),
     Caso("GET", "api/v1/admin/reservas/resueltas", frozenset({ADM}), _fija("/api/v1/admin/reservas/resueltas")),
     Caso("GET", "api/v1/admin/reservas/<int:pk>", frozenset({ADM}), lambda c, r: (f"/api/v1/admin/reservas/{c['en_revision']}", None)),

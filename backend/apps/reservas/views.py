@@ -15,8 +15,15 @@ from . import services
 
 
 class TarifaEntrada(serializers.Serializer):
-    """Nuevo porcentaje de la tarifa de servicio que fija el Administrador (de 0 % a 30 %, CA-22.2)."""
+    """Nuevo porcentaje de la tarifa base que fija el Administrador (de 0 % a 30 %, CA-22.2)."""
     porcentaje = serializers.DecimalField(max_digits=5, decimal_places=2)
+
+
+class TarifaProgramadaEntrada(serializers.Serializer):
+    """Tarifa para un rango de días: porcentaje (0 % a 30 %), primer día (desde) y último día (hasta), ambos incluidos."""
+    porcentaje = serializers.DecimalField(max_digits=5, decimal_places=2)
+    desde = serializers.DateField()
+    hasta = serializers.DateField()
 
 
 class RangoTarifas(serializers.Serializer):
@@ -32,8 +39,9 @@ class RangoTarifas(serializers.Serializer):
 
 
 class TarifaServicioAdmin(APIView):
-    """GET /admin/tarifa-servicio?desde&hasta: la vigente y el historial (con rango, solo las tarifas vigentes en él).
-    PUT: nueva tarifa; cierra la anterior en la misma transacción (HU-22, CA-22.1, RF-D-ADM-03.1)."""
+    """GET /admin/tarifa-servicio?desde&hasta: el porcentaje que rige hoy, el de la tarifa base y el historial (con
+    rango, solo las tarifas vigentes en él). PUT: nueva tarifa base; cierra la anterior en la misma transacción
+    (HU-22, CA-22.1, RF-D-ADM-03.1)."""
 
     permission_classes = [RequierePermiso("tarifa.configurar")]
 
@@ -41,12 +49,40 @@ class TarifaServicioAdmin(APIView):
         f = RangoTarifas(data=request.query_params)
         f.is_valid(raise_exception=True)
         historial = services.consultar_historial_tarifa(f.validated_data.get("desde"), f.validated_data.get("hasta"))
-        return Response({"porcentaje": f"{services.consultar_tarifa_vigente():.2f}", "historial": historial})
+        return Response({"porcentaje": f"{services.consultar_tarifa_vigente():.2f}",
+                         "base": services.consultar_porcentaje_base(), "historial": historial})
 
     def put(self, request):
         s = TarifaEntrada(data=request.data)
         s.is_valid(raise_exception=True)
         return Response(services.cambiar_tarifa(request.user, s.validated_data["porcentaje"], ip=obtener_ip(request)))
+
+
+class TarifasProgramadasAdmin(APIView):
+    """POST /admin/tarifa-servicio/programadas: programa una tarifa para un rango de días (RF-D-ADM-03.1).
+
+    Responde 201 con la tarifa; 400 si el porcentaje o las fechas no son válidos; 409 si se cruza con otra programada."""
+
+    permission_classes = [RequierePermiso("tarifa.configurar")]
+
+    def post(self, request):
+        s = TarifaProgramadaEntrada(data=request.data)
+        s.is_valid(raise_exception=True)
+        d = s.validated_data
+        t = services.programar_tarifa(request.user, d["porcentaje"], d["desde"], d["hasta"], ip=obtener_ip(request))
+        return Response(t, status=status.HTTP_201_CREATED)
+
+
+class TarifaProgramadaAdmin(APIView):
+    """DELETE /admin/tarifa-servicio/programadas/{id}: cancela una tarifa programada que todavía no empieza (204).
+
+    Responde 404 si no existe y 409 si ya empezó a regir."""
+
+    permission_classes = [RequierePermiso("tarifa.configurar")]
+
+    def delete(self, request, pk):
+        services.cancelar_tarifa_programada(request.user, pk, ip=obtener_ip(request))
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 # ---------------------------------------------------------------- calendario (RF-D-ALO-02.2)

@@ -111,7 +111,7 @@ Registro, sesión (`usuario`) y perfil devuelven:
 | Reservas | `GET /reservas/{id}` | Huésped dueño, anfitrión de la publicación, Administrador | HU-14, HU-26 |
 | Reservas | `GET /reservas/{id}/cancelar` (simula la devolución) · `POST /reservas/{id}/cancelar` | Huésped dueño | RF-D-RES-03.1 |
 | Reservas | `GET /admin/reservas?estado=EN_REVISION` · `POST /admin/reservas/{id}/resolver` | Administrador | RF-D-ADM-01.2 |
-| Reservas | `GET /admin/tarifa-servicio?desde&hasta` y `PUT /admin/tarifa-servicio` | Administrador | RF-D-ADM-03.1, CA-22 |
+| Reservas | `GET /admin/tarifa-servicio?desde&hasta`, `PUT /admin/tarifa-servicio`, `POST /admin/tarifa-servicio/programadas` y `DELETE /admin/tarifa-servicio/programadas/{id}` | Administrador | RF-D-ADM-03.1, CA-22 |
 | Notificaciones | `GET /notificaciones` · `POST /notificaciones/{id}/leida` · `POST /notificaciones/leidas` | Huésped, Anfitrión, Administrador | RF-D-RES-04.1 |
 | Interno | `POST /interno/tareas/diarias` (encabezado `X-Token-Tareas`) | Tarea programada | RF-D-RES-02.3, CA-20.5 |
 | Identidad | `GET /admin/usuarios?rol&q` | Administrador | RF-D-ADM-02.1, HU-21 |
@@ -169,7 +169,7 @@ permisos basta tener uno.
 | `reservas.resolver` | Administrador | `GET /admin/reservas` · `POST /admin/reservas/{id}/resolver` · `GET /reservas/{id}` | RF-D-ADM-01.2 |
 | `usuarios.ver` | Administrador | `GET /admin/usuarios` | RF-D-ADM-02.1, HU-21 |
 | `usuarios.restringir` | Administrador | `POST y DELETE /admin/usuarios/{id}/restriccion` | RF-D-ADM-02.1 |
-| `tarifa.configurar` | Administrador | `GET y PUT /admin/tarifa-servicio` | RF-D-ADM-03.1 |
+| `tarifa.configurar` | Administrador | `GET y PUT /admin/tarifa-servicio` · `POST /admin/tarifa-servicio/programadas` · `DELETE /admin/tarifa-servicio/programadas/{id}` | RF-D-ADM-03.1 |
 | `auditoria.consultar` | Administrador | `GET /admin/auditoria` | RF-D-ADM-04.1 |
 | `tablero.ver` | Administrador | `GET /admin/tablero` | RF-D-ADM-05.1 |
 | `reportes.descargar` | Administrador | `GET /admin/reportes/{tipo}` | RF-D-ADM-05.2 |
@@ -431,17 +431,32 @@ En el Excel, la hoja "Detalle" lleva el título y la línea "Periodo · Ordenado
 
 ## Tarifa de servicio (RF-D-ADM-03.1, CA-22)
 
-Tabla `tarifa_servicio`: `porcentaje` (0 % a 30 %), `vigente_desde` y `vigente_hasta` (TIMESTAMPTZ, NULL = la vigente
-hoy). Cada tarifa rige en `[vigente_desde, vigente_hasta)`.
+**Cambio pedido por el profesor (2026-11-23): la tarifa puede tener fecha de fin.** En la pantalla hay un solo
+formulario: porcentaje (0 % a 30 %) y fecha de fin opcional. La tarifa rige desde el momento en que se guarda y **lo
+último que se guarda es lo que se cobra**.
 
-- `PUT /admin/tarifa-servicio` crea la nueva desde ahora y, **en la misma transacción**, cierra la abierta con
-  `vigente_hasta` = `vigente_desde` de la nueva. Queda en la auditoría como `TarifaActualizada`.
-- `CHECK (vigente_hasta IS NULL OR vigente_hasta > vigente_desde)` y un índice único parcial
-  (`WHERE vigente_hasta IS NULL`, `NULLS NOT DISTINCT`) que impide dos tarifas abiertas a la vez.
-- Cada cotización usa la tarifa vigente en su fecha de creación (`cotizacion.tarifa_servicio_id`).
-- `GET /admin/tarifa-servicio?desde&hasta` (fechas AAAA-MM-DD, ambas incluidas) trae en `historial` solo las tarifas
-  vigentes en algún momento del rango, cada una con `vigente_desde` y `vigente_hasta`. Si `desde > hasta`, 400. En el
-  código: `reservas.services.consultar_tarifas_vigentes(desde, hasta)`.
+- **Sin fecha de fin:** `PUT /admin/tarifa-servicio {"porcentaje"}`. Rige hasta que se cambie. En la misma transacción
+  cierra la anterior sin fecha de fin y termina en ese momento la tarifa con fecha de fin que estuviera en curso
+  (`TarifaActualizada`).
+- **Con fecha de fin:** `POST /admin/tarifa-servicio/programadas {"porcentaje", "desde", "hasta"}` (la pantalla manda
+  `desde` = hoy). Rige hasta el final del día `hasta` (hora de Colombia) y, al terminar, vuelve a cobrarse la tarifa sin
+  fecha de fin, así que ningún día queda sin tarifa. También termina en ese momento la que tuviera fecha de fin y
+  estuviera en curso (`TarifaProgramada`). `desde` no puede ser anterior a hoy ni `hasta` anterior a `desde` (400); dos
+  tarifas con fecha de fin no pueden cruzarse en el futuro (409).
+- `DELETE /admin/tarifa-servicio/programadas/{id}` cancela una tarifa con fecha de fin que todavía no empieza (204; si
+  ya empezó, 409). La pantalla actual no lo usa porque siempre empieza ahora.
+- Tabla `tarifa_servicio`: `porcentaje`, `vigente_desde`, `vigente_hasta` (NULL = sin fecha de fin) y `programada`
+  (true = tiene fecha de fin y reemplaza a la otra en su rango). Cada tarifa rige en `[vigente_desde, vigente_hasta)`.
+  Base de datos: `CHECK (vigente_hasta IS NULL OR vigente_hasta > vigente_desde)`, índice único parcial (una sola sin
+  fecha de fin), `CHECK` de que `programada` siempre tiene fin y restricción `EXCLUDE` (`tstzrange &&`) para que dos
+  con fecha de fin no se crucen (migración `reservas/0009`).
+- Cada cotización usa la tarifa que rige en su fecha de creación y la guarda en `cotizacion.tarifa_servicio_id`: las
+  reservas confirmadas conservan su valor (CA-22.1).
+- `GET /admin/tarifa-servicio?desde&hasta` responde `{"porcentaje"` (el que rige hoy)`, "base"` (el de la tarifa sin
+  fecha de fin)`, "historial"}`. Cada tarifa trae `estado`: `VIGENTE`, `PROGRAMADA` (empieza después), `TERMINADA` o
+  `EN_ESPERA` (la tarifa sin fecha de fin mientras rige una con fecha de fin; en pantalla, "Vuelve al terminar la
+  actual"). Con `desde` y `hasta`, solo las tarifas vigentes en algún momento del rango; si `desde > hasta`, 400.
+- **Pendiente del equipo:** actualizar RF-D-ADM-03.1, HU-22 y CA-22.x en el SRS.
 
 ## Administración de usuarios y registro de acciones
 

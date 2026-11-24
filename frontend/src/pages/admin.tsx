@@ -8,7 +8,7 @@ import {
   adminApi, leerError,
   type EventoAuditoriaApi, type PublicacionAdmin, type PublicacionCompleta, type RevisionApi, type TarifaApi, type TableroApi, type UsuarioAdmin,
 } from "../api";
-import { ESTADO_TXT, RESERVA_TXT, ROL_TXT, cop, fechaLarga, type AccionModeracion, type EstadoPub, type Rol } from "../data";
+import { ESTADO_TXT, RESERVA_TXT, ROL_TXT, cop, fechaLarga, isoDia, type AccionModeracion, type EstadoPub, type Rol } from "../data";
 import { Page } from "../layout";
 import { useToast } from "../store";
 import { Alert, Badge, Field, Modal } from "../ui";
@@ -440,18 +440,32 @@ export function HistorialRevisiones({ revisiones }: { revisiones: RevisionApi[] 
 }
 
 /* ---------------- HU-22 Tarifa de servicio ---------------- */
+/** Estado de una tarifa como lo ve el Administrador: texto y color del distintivo. */
+const ESTADO_TARIFA: Record<TarifaApi["estado"], [string, string]> = {
+  VIGENTE: ["Vigente", "badge-ACTIVA"],
+  PROGRAMADA: ["Programada", "badge-PENDIENTE_REVISION"],
+  EN_ESPERA: ["Vuelve al terminar la actual", "badge-PAUSADA"],
+  TERMINADA: ["Terminada", "badge-BORRADOR"],
+};
+
+/** Último día de una tarifa programada: rige hasta el final de ese día (vigente_hasta es el inicio del día siguiente). */
+const ultimoDia = (vigenteHasta: string) =>
+  new Date(new Date(vigenteHasta).getTime() - 1).toLocaleDateString("es-CO", { dateStyle: "medium" }).replace(/\.$/, "");
+
+/** Pantalla "Tarifa de servicio" del Administrador (RF-D-ADM-03.1, HU-22): cambia el porcentaje desde ahora, con
+ *  fecha de fin opcional (al terminar vuelve a cobrarse la tarifa anterior), e historial con el estado de cada una. */
 export function TarifaServicioPage() {
   const toast = useToast();
-  const [datos, setDatos] = useState<{ porcentaje: string; historial: TarifaApi[] } | null>(null);
+  const [datos, setDatos] = useState<{ porcentaje: string; base: string | null; historial: TarifaApi[] } | null>(null);
   const [nuevo, setNuevo] = useState("");
-  const [error, setError] = useState("");
+  const [fin, setFin] = useState("");
+  const [error, setError] = useState<{ campo?: string; error: string } | null>(null);
   const [rango, setRango] = useState({ desde: "", hasta: "" });
   const [errorRango, setErrorRango] = useState("");
   const nombres = useNombres();
+  const hoy = isoDia(new Date());
   const cargar = useCallback(() => {
-    // El porcentaje vigente solo llena el campo si está vacío: una respuesta que llega tarde no pisa lo que se escribió
-    adminApi.tarifa().then((r) => { setDatos(r.data); setNuevo((v) => (v === "" ? String(Number(r.data.porcentaje)) : v)); })
-      .catch((e) => setError(leerError(e).error));
+    adminApi.tarifa().then((r) => setDatos(r.data)).catch((e) => setError(leerError(e)));
   }, []);
   useEffect(cargar, [cargar]);
   // Historial filtrado por rango (RF-D-ADM-03.1): tarifas vigentes en algún momento entre desde y hasta
@@ -466,24 +480,39 @@ export function TarifaServicioPage() {
     return () => { vigente = false; };
   }, [rango, datos]);
 
+  // Rige desde ahora. Sin fecha de fin, hasta que se cambie; con fecha de fin, hasta ese día (completo) y después
+  // vuelve a cobrarse la tarifa anterior, para que nunca falte una tarifa.
   const guardar = async () => {
-    setError("");
-    try { await adminApi.cambiarTarifa(nuevo); toast("Tarifa actualizada: aplica a las cotizaciones nuevas"); cargar(); }
-    catch (e) { setError(leerError(e).error); }  // CA-22.2: fuera de 0 % a 30 %
+    setError(null);
+    if (nuevo === "") return setError({ campo: "porcentaje", error: "Escribe el porcentaje." });
+    try {
+      if (fin) await adminApi.programarTarifa(nuevo, hoy, fin);
+      else await adminApi.cambiarTarifa(nuevo);
+      toast(fin ? `Tarifa del ${Number(nuevo)} % hasta el ${fechaLarga(fin)}` : `Tarifa del ${Number(nuevo)} % sin fecha de fin`);
+      setNuevo(""); setFin("");
+      cargar();
+    } catch (e) { setError(leerError(e)); }  // CA-22.2: fuera de 0 % a 30 %
   };
 
   return (
     <Page req="RF-D-ADM-03.1 · HU-22">
       <div className="page-head"><div><h1>Tarifa de servicio</h1><p>Porcentaje que cobra la plataforma sobre el precio de la estancia. Solo cambia las cotizaciones nuevas.</p></div></div>
-      <div className="detail-grid" style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1.4fr)", gap: 20, alignItems: "start" }}>
-        <section className="card stack">
-          <div className="card-title"><span className="ico"><Percent /></span><h3>Tarifa vigente: {datos ? `${Number(datos.porcentaje)} %` : "…"}</h3></div>
-          <Field label="Nuevo porcentaje" hint="Entre 0 % y 30 %." error={error}>
-            <input className="input" type="number" step="0.5" min={0} max={30} value={nuevo} onChange={(e) => setNuevo(e.target.value)} />
-          </Field>
-          <button className="btn btn-primary" disabled={!datos || nuevo === "" || Number(nuevo) === Number(datos?.porcentaje)} onClick={guardar}>Guardar</button>
-          <Alert tipo="info">Las reservas ya confirmadas conservan los valores con los que se cotizaron.</Alert>
+      <div style={{ display: "grid", gap: 20 }}>
+        <section className="card stack" style={{ maxWidth: 560 }}>
+          <div className="card-title"><span className="ico"><Percent /></span><h3>Hoy se cobra: {datos ? `${Number(datos.porcentaje)} %` : "…"}</h3></div>
+          <div className="grid-2">
+            <Field label="Nuevo porcentaje" hint="Entre 0 % y 30 %. Rige desde ahora." error={error?.campo === "porcentaje" ? error.error : undefined}>
+              <input className="input" type="number" step="0.5" min={0} max={30} value={nuevo} onChange={(e) => setNuevo(e.target.value)} />
+            </Field>
+            <Field label="Fecha de fin" opcional hint="Vacía: rige hasta que la cambies." error={["desde", "hasta"].includes(error?.campo ?? "") ? error?.error : undefined}>
+              <input className="input" type="date" min={hoy} value={fin} onChange={(e) => setFin(e.target.value)} />
+            </Field>
+          </div>
+          {fin && <p className="subtle" style={{ margin: 0 }}>Rige hasta el {fechaLarga(fin)} (todo el día). Después vuelve a cobrarse la tarifa actual.</p>}
+          {error && !["porcentaje", "desde", "hasta"].includes(error.campo ?? "") && <Alert tipo="error">{error.error}</Alert>}
+          <button className="btn btn-primary" disabled={!datos || nuevo === ""} onClick={guardar}>Guardar</button>
         </section>
+        <Alert tipo="info">Las reservas ya confirmadas conservan los valores con los que se cotizaron.</Alert>
         <section className="card stack">
           <h3 className="row" style={{ gap: 8 }}><History size={18} /> Historial</h3>
           <div className="grid-2">
@@ -504,13 +533,11 @@ export function TarifaServicioPage() {
                 {(historial ?? []).map((t) => (
                   <tr key={t.id}>
                     <td><b>{Number(t.porcentaje)} %</b></td>
-                    <td>{fechaHora(t.vigente_desde)}</td>
-                    {/* La tarifa vigente no tiene fecha de fin: rige hasta que el Administrador fije otra; en ese
-                        momento se cierra con la fecha y hora del cambio (vigente_hasta). */}
-                    <td>{t.vigente_hasta ? fechaHora(t.vigente_hasta) : <span className="muted" style={{ whiteSpace: "nowrap" }}>Sin fecha de fin</span>}</td>
-                    <td>{t.vigente_hasta
-                      ? <span className="badge badge-BORRADOR">Terminada</span>
-                      : <span className="badge badge-ACTIVA">Vigente</span>}</td>
+                    <td style={{ whiteSpace: "nowrap" }}>{fechaHora(t.vigente_desde)}</td>
+                    {/* Con fecha de fin: hasta ese día completo. Sin fecha de fin: se cierra con la fecha y hora en que se cambió. */}
+                    <td style={{ whiteSpace: "nowrap" }}>{!t.vigente_hasta ? <span className="muted">Sin fecha de fin</span>
+                      : t.programada ? `${ultimoDia(t.vigente_hasta)} (todo el día)` : fechaHora(t.vigente_hasta)}</td>
+                    <td><span className={`badge ${ESTADO_TARIFA[t.estado][1]}`}>{ESTADO_TARIFA[t.estado][0]}</span></td>
                     <td>{nombres[t.administrador] ?? `#${t.administrador}`}</td>
                   </tr>
                 ))}
@@ -518,7 +545,7 @@ export function TarifaServicioPage() {
               </tbody>
             </table>
           </div>
-          <p className="subtle" style={{ margin: 0 }}>La tarifa vigente no tiene fecha de fin: rige hasta que se fije una nueva, y en ese momento queda terminada con la fecha y hora del cambio.</p>
+          <p className="subtle" style={{ margin: 0 }}>Una tarifa sin fecha de fin rige hasta que se cambie. Cuando una tarifa con fecha de fin termina, vuelve a cobrarse la que estaba antes.</p>
         </section>
       </div>
     </Page>

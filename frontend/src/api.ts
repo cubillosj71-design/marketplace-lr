@@ -370,8 +370,13 @@ async function todas<T>(ruta: string, params: Record<string, unknown>): Promise<
   }
 }
 
-/** Una tarifa rige en [vigente_desde, vigente_hasta); vigente_hasta null es la vigente hoy. */
-export interface TarifaApi { id: number; porcentaje: string; vigente_desde: string; vigente_hasta: string | null; administrador: number }
+/** Una tarifa rige en [vigente_desde, vigente_hasta). La base (programada false) puede no tener fin; una programada
+ *  reemplaza a la base en su rango. estado: la que se cobra ahora (VIGENTE), futura (PROGRAMADA), pasada (TERMINADA)
+ *  o la base mientras una programada la reemplaza (EN_ESPERA). */
+export interface TarifaApi {
+  id: number; porcentaje: string; vigente_desde: string; vigente_hasta: string | null; programada: boolean;
+  estado: "VIGENTE" | "PROGRAMADA" | "TERMINADA" | "EN_ESPERA"; administrador: number;
+}
 
 export const adminApi = {
   publicaciones: (estado?: string) => todas<PublicacionAdmin>("/admin/publicaciones", estado ? { estado } : {}),
@@ -388,8 +393,13 @@ export const adminApi = {
   quitarRestriccion: (id: number) => api.delete(`/admin/usuarios/${id}/restriccion`),
   /** RF-D-ADM-03.1: con desde y hasta, el historial trae solo las tarifas vigentes en ese rango. */
   tarifa: (desde?: string, hasta?: string) =>
-    api.get<{ porcentaje: string; historial: TarifaApi[] }>("/admin/tarifa-servicio", { params: { desde: desde || undefined, hasta: hasta || undefined } }),
+    api.get<{ porcentaje: string; base: string | null; historial: TarifaApi[] }>("/admin/tarifa-servicio", { params: { desde: desde || undefined, hasta: hasta || undefined } }),
   cambiarTarifa: (porcentaje: string) => api.put<TarifaApi>("/admin/tarifa-servicio", { porcentaje }),
+  /** Tarifa para un rango de días (ambos incluidos) que reemplaza a la base en esas fechas. */
+  programarTarifa: (porcentaje: string, desde: string, hasta: string) =>
+    api.post<TarifaApi>("/admin/tarifa-servicio/programadas", { porcentaje, desde, hasta }),
+  /** Solo antes de que empiece a regir. */
+  cancelarTarifaProgramada: (id: number) => api.delete(`/admin/tarifa-servicio/programadas/${id}`),
   auditoria: (f: { usuario?: number; tipo?: string; desde?: string; hasta?: string; page?: number }) =>
     api.get<Pagina<EventoAuditoriaApi> & { tipos: { clave: string; nombre: string }[] }>("/admin/auditoria", { params: f }),
   tablero: (desde: string, hasta: string) => api.get<TableroApi>("/admin/tablero", { params: { desde, hasta } }),

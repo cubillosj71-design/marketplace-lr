@@ -10,7 +10,7 @@ from decimal import ROUND_HALF_UP, Decimal
 
 from django.conf import settings
 from django.contrib.postgres.constraints import ExclusionConstraint
-from django.contrib.postgres.fields import DateRangeField, RangeOperators
+from django.contrib.postgres.fields import DateRangeField, DateTimeRangeField, RangeOperators
 from django.db import models
 from django.db.models import F, Func, Q, Value
 
@@ -59,16 +59,20 @@ class PeriodoCalendario(models.Model):
 
 
 class TarifaServicio(models.Model):
-    """Historial del porcentaje que cobra la plataforma (0 % a 30 %, RF-D-ADM-03.1).
+    """Porcentaje que cobra la plataforma (0 % a 30 %, RF-D-ADM-03.1). Hay dos clases de tarifa:
 
-    Cada tarifa rige en [vigente_desde, vigente_hasta). vigente_hasta NULL es la tarifa vigente hoy: solo puede haber
-    una abierta, y al crear una nueva la anterior se cierra en la misma transacción con vigente_hasta = vigente_desde
-    de la nueva."""
+    - Base (programada = False): rige siempre que no haya una programada. Solo hay una abierta (vigente_hasta NULL);
+      al cambiarla, la anterior se cierra en la misma transacción con vigente_hasta = vigente_desde de la nueva.
+    - Programada (programada = True): el Administrador la fija para un rango de fechas [vigente_desde, vigente_hasta)
+      y en esas fechas reemplaza a la base. Siempre tiene fin y dos programadas no se cruzan (restricción EXCLUDE).
+
+    Así ningún día queda sin tarifa: si no hay una programada, se cobra la base."""
 
     administrador = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
     porcentaje = models.DecimalField(max_digits=5, decimal_places=2)
     vigente_desde = models.DateTimeField()
     vigente_hasta = models.DateTimeField(null=True, blank=True)
+    programada = models.BooleanField(default=False)
 
     class Meta:
         db_table = "tarifa_servicio"
@@ -80,6 +84,15 @@ class TarifaServicio(models.Model):
             # Una sola tarifa abierta: índice único parcial sobre las filas con vigente_hasta NULL
             models.UniqueConstraint(fields=["vigente_hasta"], condition=Q(vigente_hasta__isnull=True),
                                     nulls_distinct=False, name="tarifa_una_sola_vigente"),
+            # Una programada siempre tiene fecha de fin (la base es la única que puede quedar abierta)
+            models.CheckConstraint(condition=Q(programada=False) | Q(vigente_hasta__isnull=False), name="tarifa_programada_con_fin"),
+            # Dos tarifas programadas no comparten ningún momento (como la doble reserva, ADR-004)
+            ExclusionConstraint(
+                name="tarifa_programada_sin_cruce",
+                expressions=[(Func(F("vigente_desde"), F("vigente_hasta"), Value("[)"), function="tstzrange",
+                                   output_field=DateTimeRangeField()), RangeOperators.OVERLAPS)],
+                condition=Q(programada=True),
+            ),
         ]
 
 
