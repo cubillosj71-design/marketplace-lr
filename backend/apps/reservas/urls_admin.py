@@ -10,6 +10,8 @@ from . import views
 
 urlpatterns = [
     path("tarifa-servicio", views.TarifaServicioAdmin.as_view(), name="tarifa-servicio"),
+    path("tarifa-servicio/programadas", views.TarifasProgramadasAdmin.as_view(), name="tarifas-programadas"),
+    path("tarifa-servicio/programadas/<int:pk>", views.TarifaProgramadaAdmin.as_view(), name="tarifa-programada"),
     path("reservas", views.ReservasAdmin.as_view(), name="reservas"),
     path("reservas/resueltas", views.ReservasResueltasAdmin.as_view(), name="reservas-resueltas"),
     path("reservas/<int:pk>", views.ReservaEnRevisionAdmin.as_view(), name="reserva-admin"),

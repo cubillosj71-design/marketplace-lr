@@ -125,11 +125,15 @@ def _filtrar_vigente_en(momento) -> Q:
 
 
 def _obtener_tarifa_vigente(momento=None) -> TarifaServicio | None:
-    """La tarifa que regía en el momento (por defecto, ahora). Antes de la primera tarifa se usa la primera, para que
-    una fecha anterior a la carga inicial no quede sin tarifa."""
+    """La tarifa que rige en un momento (por defecto, ahora).
+
+    Primero una tarifa programada cuyo rango contenga el momento; si no hay, la tarifa base de ese momento. Antes de la
+    primera tarifa base se usa la primera, para que una fecha anterior a la carga inicial no quede sin tarifa."""
     momento = momento or reloj.obtener_fecha_hora()
-    return (TarifaServicio.objects.filter(_filtrar_vigente_en(momento)).order_by("-vigente_desde").first()
-            or TarifaServicio.objects.order_by("vigente_desde").first())
+    vigentes = TarifaServicio.objects.filter(_filtrar_vigente_en(momento))
+    return (vigentes.filter(programada=True).first()
+            or vigentes.filter(programada=False).order_by("-vigente_desde").first()
+            or TarifaServicio.objects.filter(programada=False).order_by("vigente_desde").first())
 
 
 def consultar_tarifa_vigente(momento=None) -> Decimal:
@@ -160,10 +164,40 @@ def _calcular_inicio_del_dia(valor) -> datetime:
     return timezone.make_aware(datetime.combine(valor, time.min))
 
 
-def _serializar_tarifa(t: TarifaServicio) -> dict:
-    """Convierte una tarifa en {id, porcentaje, vigente_desde, vigente_hasta, administrador}."""
+def _calcular_estado_tarifa(t: TarifaServicio, ahora: datetime, vigente_id: int | None) -> str:
+    """Estado de una tarifa en un momento: VIGENTE (la que se cobra ahora), PROGRAMADA (empieza después),
+    TERMINADA (ya pasó) o EN_ESPERA (la base, mientras una programada la reemplaza)."""
+    if t.id == vigente_id:
+        return "VIGENTE"
+    if t.vigente_hasta and t.vigente_hasta <= ahora:
+        return "TERMINADA"
+    if t.vigente_desde > ahora:
+        return "PROGRAMADA"
+    return "EN_ESPERA"
+
+
+def _serializar_tarifa(t: TarifaServicio, ahora: datetime | None = None, vigente_id: int | None = None) -> dict:
+    """Convierte una tarifa en {id, porcentaje, vigente_desde, vigente_hasta, programada, estado, administrador}.
+
+    Args:
+        t: la tarifa.
+        ahora, vigente_id: momento de referencia y tarifa que rige en él; si no llegan, se calculan (en listas se
+            calculan una sola vez y se pasan).
+    """
+    ahora = ahora or reloj.obtener_fecha_hora()
+    if vigente_id is None:
+        vigente = _obtener_tarifa_vigente(ahora)
+        vigente_id = vigente.id if vigente else None
     return {"id": t.id, "porcentaje": f"{t.porcentaje:.2f}", "vigente_desde": t.vigente_desde,
-            "vigente_hasta": t.vigente_hasta, "administrador": t.administrador_id}
+            "vigente_hasta": t.vigente_hasta, "programada": t.programada,
+            "estado": _calcular_estado_tarifa(t, ahora, vigente_id), "administrador": t.administrador_id}
+
+
+def _serializar_tarifas(tarifas) -> list[dict]:
+    """Serializa una lista de tarifas calculando una sola vez el momento y la tarifa que rige en él."""
+    ahora = reloj.obtener_fecha_hora()
+    vigente = _obtener_tarifa_vigente(ahora)
+    return [_serializar_tarifa(t, ahora, vigente.id if vigente else None) for t in tarifas]
 
 
 def consultar_tarifas_vigentes(desde, hasta) -> list[dict]:
@@ -175,7 +209,7 @@ def consultar_tarifas_vigentes(desde, hasta) -> list[dict]:
     if fin <= inicio:
         raise ErrorNegocio("La fecha inicial no puede ser posterior a la final.", campo="desde")
     qs = TarifaServicio.objects.filter(Q(vigente_desde__lt=fin) & (Q(vigente_hasta__isnull=True) | Q(vigente_hasta__gt=inicio)))
-    return [_serializar_tarifa(t) for t in qs.order_by("vigente_desde", "id")]
+    return _serializar_tarifas(qs.order_by("vigente_desde", "id"))
 
 
 def consultar_historial_tarifa(desde=None, hasta=None) -> list[dict]:
@@ -183,31 +217,147 @@ def consultar_historial_tarifa(desde=None, hasta=None) -> list[dict]:
     if desde or hasta:
         filas = consultar_tarifas_vigentes(desde or date(2000, 1, 1), hasta or reloj.obtener_fecha_hoy())
         return list(reversed(filas))
-    return [_serializar_tarifa(t) for t in TarifaServicio.objects.order_by("-vigente_desde", "-id")]
+    return _serializar_tarifas(TarifaServicio.objects.order_by("-vigente_desde", "-id"))
+
+
+def _validar_porcentaje(porcentaje) -> None:
+    """La tarifa debe estar entre 0 % y 30 % (CA-22.2).
+
+    Raises:
+        ErrorNegocio: con campo "porcentaje".
+    """
+    if porcentaje is None or not (Decimal("0") <= porcentaje <= Decimal("30")):
+        raise ErrorNegocio("El porcentaje debe estar entre 0 % y 30 %.", campo="porcentaje")
+
+
+def consultar_porcentaje_base() -> str | None:
+    """Porcentaje de la tarifa base abierta (la que rige cuando no hay una programada), como texto con dos decimales."""
+    base = TarifaServicio.objects.filter(programada=False, vigente_hasta__isnull=True).first()
+    return f"{base.porcentaje:.2f}" if base else None
 
 
 def cambiar_tarifa(admin, porcentaje: Decimal, ip=None) -> dict:
-    """Crea la tarifa nueva desde ahora y, en la misma transacción, cierra la que estaba abierta con
-    vigente_hasta = vigente_desde de la nueva. El índice tarifa_una_sola_vigente impide dos abiertas a la vez."""
-    if porcentaje is None or not (Decimal("0") <= porcentaje <= Decimal("30")):
-        raise ErrorNegocio("El porcentaje debe estar entre 0 % y 30 %.", campo="porcentaje")
+    """Cambia la tarifa sin fecha de fin desde este momento (CA-22.1): rige hasta que se vuelva a cambiar.
+
+    En la misma transacción cierra la anterior sin fecha de fin (vigente_hasta = vigente_desde de la nueva) y termina
+    en este momento la tarifa con fecha de fin que estuviera en curso, para que se cobre la nueva. El índice
+    tarifa_una_sola_vigente impide dos tarifas sin fecha de fin a la vez.
+
+    Raises:
+        ErrorNegocio: porcentaje fuera de 0 % a 30 % o igual al de la base actual.
+        Conflicto: la base actual empieza después de este momento.
+    """
+    _validar_porcentaje(porcentaje)
     with transaction.atomic():
-        abierta = TarifaServicio.objects.select_for_update().filter(vigente_hasta__isnull=True).first()
+        abierta = TarifaServicio.objects.select_for_update().filter(vigente_hasta__isnull=True, programada=False).first()
         if abierta and porcentaje == abierta.porcentaje:
-            raise ErrorNegocio("Ese ya es el porcentaje vigente.", campo="porcentaje")
+            raise ErrorNegocio("Ese ya es el porcentaje de la tarifa sin fecha de fin.", campo="porcentaje")
         ahora = reloj.obtener_fecha_hora()
         if abierta:
             if ahora <= abierta.vigente_desde:
                 raise Conflicto("La tarifa vigente empieza después de este momento; no se puede reemplazar todavía.")
             abierta.vigente_hasta = ahora
             abierta.save(update_fields=["vigente_hasta"])
+        reemplazada = _terminar_tarifa_con_fin_en_curso(ahora)
         t = TarifaServicio.objects.create(administrador=admin, porcentaje=porcentaje, vigente_desde=ahora)
         auditoria.registrar_evento(admin.id, "TarifaActualizada", entidad="TarifaServicio", entidad_id=t.id, ip=ip, detalle={
             "anterior": str(abierta.porcentaje) if abierta else None, "nuevo": str(porcentaje),
             "tarifa_anterior": abierta.id if abierta else None, "vigente_desde": ahora.isoformat(),
+            **({"termino_tarifa_con_fin": reemplazada.id} if reemplazada else {}),
         })
     return _serializar_tarifa(t)
 
+
+
+def _terminar_tarifa_con_fin_en_curso(ahora: datetime) -> TarifaServicio | None:
+    """Si hay una tarifa con fecha de fin rigiendo en este momento, la termina ahora (la reemplaza la que se guarda).
+
+    Lo último que guarda el Administrador es lo que se cobra desde ese momento. Debe llamarse dentro de una transacción.
+
+    Returns:
+        La tarifa terminada, o None si no había una en curso.
+    """
+    en_curso = (TarifaServicio.objects.select_for_update()
+                .filter(programada=True, vigente_desde__lt=ahora, vigente_hasta__gt=ahora).first())
+    if en_curso:
+        en_curso.vigente_hasta = ahora
+        en_curso.save(update_fields=["vigente_hasta"])
+    return en_curso
+
+
+def _formatear_dia(momento: datetime) -> str:
+    """Día en hora de Colombia como DD/MM/AAAA, para los mensajes."""
+    return timezone.localtime(momento).strftime("%d/%m/%Y")
+
+
+def programar_tarifa(admin, porcentaje: Decimal, desde: date, hasta: date, ip=None) -> dict:
+    """Programa una tarifa para un rango de días (RF-D-ADM-03.1, cambio pedido por el profesor el 2026-11-23).
+
+    Rige desde el inicio del día `desde` hasta el final del día `hasta` (ambos incluidos, hora de Colombia) y en esas
+    fechas reemplaza a la tarifa sin fecha de fin. Si empieza hoy, rige desde este momento (las cotizaciones de más
+    temprano conservan la tarifa con la que se hicieron) y termina en ese momento la tarifa con fecha de fin que
+    estuviera en curso: lo último que se guarda es lo que se cobra. Dos tarifas con fecha de fin no se cruzan.
+
+    Args:
+        admin: el Administrador que la programa.
+        porcentaje: entre 0 % y 30 %.
+        desde, hasta: primer y último día del rango.
+        ip: IP del cliente.
+
+    Returns:
+        La tarifa programada.
+
+    Raises:
+        ErrorNegocio: porcentaje fuera de rango, inicio anterior a hoy o fin anterior al inicio.
+        Conflicto: se cruza con otra tarifa programada.
+    """
+    _validar_porcentaje(porcentaje)
+    if desde < reloj.obtener_fecha_hoy():
+        raise ErrorNegocio("La fecha de inicio no puede ser anterior a hoy.", campo="desde")
+    if hasta < desde:
+        raise ErrorNegocio("La fecha de fin no puede ser anterior a la de inicio.", campo="hasta")
+    ahora = reloj.obtener_fecha_hora()
+    inicio = max(_calcular_inicio_del_dia(desde), ahora)
+    fin = _calcular_inicio_del_dia(hasta + timedelta(days=1))  # el día `hasta` completo
+    with transaction.atomic():
+        reemplazada = _terminar_tarifa_con_fin_en_curso(ahora) if inicio <= ahora else None
+        cruce = (TarifaServicio.objects.select_for_update()
+                 .filter(programada=True, vigente_desde__lt=fin, vigente_hasta__gt=inicio).order_by("vigente_desde").first())
+        if cruce:
+            ultimo = _formatear_dia(cruce.vigente_hasta - timedelta(microseconds=1))
+            raise Conflicto(f"Ya hay una tarifa con fecha de fin que rige del {_formatear_dia(cruce.vigente_desde)} al {ultimo}. "
+                            "Espera a que termine o elige otra fecha.", extra={"tarifa": cruce.id})
+        try:
+            with transaction.atomic():
+                t = TarifaServicio.objects.create(administrador=admin, porcentaje=porcentaje, vigente_desde=inicio,
+                                                  vigente_hasta=fin, programada=True)
+        except IntegrityError as e:  # restricción EXCLUDE: otra programada entró al mismo tiempo
+            raise Conflicto("Ya hay otra tarifa con fecha de fin en esas fechas. Vuelve a cargar la página.") from e
+        auditoria.registrar_evento(admin.id, "TarifaProgramada", entidad="TarifaServicio", entidad_id=t.id, ip=ip, detalle={
+            "porcentaje": str(porcentaje), "desde": desde.isoformat(), "hasta": hasta.isoformat(),
+            **({"termino_tarifa_con_fin": reemplazada.id} if reemplazada else {}),
+        })
+    return _serializar_tarifa(t)
+
+
+def cancelar_tarifa_programada(admin, tarifa_id: int, ip=None) -> None:
+    """Cancela una tarifa programada que todavía no empieza a regir; en sus fechas vuelve a regir la base.
+
+    Raises:
+        NoEncontrado: si no existe o no es una tarifa programada.
+        Conflicto: si ya empezó a regir (ya pudo usarse en cotizaciones).
+    """
+    with transaction.atomic():
+        t = TarifaServicio.objects.select_for_update().filter(pk=tarifa_id, programada=True).first()
+        if not t:
+            raise NoEncontrado("La tarifa programada no existe.")
+        if t.vigente_desde <= reloj.obtener_fecha_hora():
+            raise Conflicto("Esta tarifa ya empezó a regir y no se puede cancelar.")
+        detalle = {"porcentaje": str(t.porcentaje), "desde": _formatear_dia(t.vigente_desde),
+                   "hasta": _formatear_dia(t.vigente_hasta - timedelta(microseconds=1))}
+        t.delete()
+        auditoria.registrar_evento(admin.id, "TarifaProgramadaCancelada", entidad="TarifaServicio", entidad_id=tarifa_id,
+                                   ip=ip, detalle=detalle)
 
 # ---------------------------------------------------------------- cálculo de la cotización (CA-12.1, CA-12.2)
 
