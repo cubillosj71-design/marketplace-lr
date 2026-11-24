@@ -88,7 +88,7 @@ class Cotizacion(models.Model):
     tarifa_servicio = models.DecimalField(max_digits=12, decimal_places=2)
     total_adicionales = models.DecimalField(max_digits=12, decimal_places=2)
     total = models.DecimalField(max_digits=12, decimal_places=2)
-    creada = models.DateTimeField(default=reloj.ahora)  # reloj inyectable: los reportes cuentan por fecha de creación
+    creada = models.DateTimeField(default=reloj.obtener_fecha_hora)  # reloj inyectable: los reportes cuentan por fecha de creación
     vence = models.DateTimeField()
 
     class Meta:
@@ -129,7 +129,7 @@ class Reserva(models.Model):
     total = models.DecimalField(max_digits=12, decimal_places=2)
     estado = models.CharField(max_length=12, choices=EstadoReserva.choices, default=EstadoReserva.CONFIRMADA)
     clave_idempotencia = models.UUIDField(unique=True)
-    creada = models.DateTimeField(default=reloj.ahora)  # reloj inyectable: los reportes cuentan por fecha de creación
+    creada = models.DateTimeField(default=reloj.obtener_fecha_hora)  # reloj inyectable: los reportes cuentan por fecha de creación
     actualizada = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -167,7 +167,7 @@ class Reserva(models.Model):
         """cancelar_reserva(motivo): Cancelacion del diagrama. El porcentaje sale de la política guardada en la reserva
         (lo calcula reservas.services); cancelada_por_id NULL = cancelación automática."""
         self._pasar_a(EstadoReserva.CANCELADA)
-        return Cancelacion.registrar(self, motivo, porcentaje, cancelada_por_id)
+        return Cancelacion.registrar_cancelacion(self, motivo, porcentaje, cancelada_por_id)
 
     def completar_reserva(self) -> None:
         """RF-D-RES-02.3: CONFIRMADA cuya fecha de salida ya pasó."""
@@ -210,10 +210,10 @@ class Cancelacion(models.Model):
         ]
 
     @classmethod
-    def registrar(cls, reserva: Reserva, motivo: str, porcentaje: Decimal, cancelada_por_id: int | None) -> "Cancelacion":
+    def registrar_cancelacion(cls, reserva: Reserva, motivo: str, porcentaje: Decimal, cancelada_por_id: int | None) -> "Cancelacion":
         """Se inserta una sola vez con todos sus valores: la tabla no admite UPDATE (trigger)."""
-        c = cls(reserva=reserva, cancelada_por_id=cancelada_por_id, fecha=reloj.ahora(), motivo=motivo,
-                dias_anticipacion=(reserva.fecha_llegada - reloj.hoy()).days,  # /diasAnticipacion, hora de Colombia
+        c = cls(reserva=reserva, cancelada_por_id=cancelada_por_id, fecha=reloj.obtener_fecha_hora(), motivo=motivo,
+                dias_anticipacion=(reserva.fecha_llegada - reloj.obtener_fecha_hoy()).days,  # /diasAnticipacion, hora de Colombia
                 porcentaje_devolucion=porcentaje)
         c.valor_devolucion = c.calcular_devolucion()
         c.save()

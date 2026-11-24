@@ -80,7 +80,7 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.AlterField(model_name="cotizacion", name="creada", field=models.DateTimeField(default=apps.comun.reloj.ahora)),
-        migrations.AlterField(model_name="reserva", name="creada", field=models.DateTimeField(default=apps.comun.reloj.ahora)),
+        migrations.AlterField(model_name="cotizacion", name="creada", field=models.DateTimeField(default=apps.comun.reloj.obtener_fecha_hora)),
+        migrations.AlterField(model_name="reserva", name="creada", field=models.DateTimeField(default=apps.comun.reloj.obtener_fecha_hora)),
         migrations.RunSQL(VISTAS, QUITAR),
     ]

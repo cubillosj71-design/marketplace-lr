@@ -36,13 +36,13 @@ EVENTOS_DE_DOMINIO = frozenset({
 })
 
 
-def _despues_de_confirmar(nombre: str, datos: dict) -> None:
+def _ejecutar_despues_de_confirmar(nombre: str, datos: dict) -> None:
     for receptor, resultado in evento_dominio.send_robust(sender=nombre, **datos):
         if isinstance(resultado, Exception):
             log.error("Falló un receptor de %s: %r", nombre, resultado, extra={"evento": nombre})
 
 
-def publicar(
+def publicar_evento(
     nombre: str,
     *,
     usuario_id: int | None = None,
@@ -54,10 +54,10 @@ def publicar(
         raise ValueError(f"{nombre} no es un evento de dominio del diagrama; para auditar usa auditoria.services.registrar_evento().")
     datos = dict(nombre=nombre, usuario_id=usuario_id, entidad=entidad, entidad_id=entidad_id, detalle=detalle or {})
     evento_dominio_en_transaccion.send(sender=nombre, **datos)  # misma transacción: si falla, se revierte
-    transaction.on_commit(lambda: _despues_de_confirmar(nombre, datos))
+    transaction.on_commit(lambda: _ejecutar_despues_de_confirmar(nombre, datos))
 
 
-def ip_de(request) -> str | None:
+def obtener_ip(request) -> str | None:
     """IP del cliente; en Render llega en X-Forwarded-For.
 
     El proxy de Render AGREGA la IP real al final de la lista. Se toma la última y no la

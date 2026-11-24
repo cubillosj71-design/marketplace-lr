@@ -6,7 +6,7 @@ from rest_framework import serializers
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.comun.eventos import ip_de
+from apps.comun.eventos import obtener_ip
 from apps.comun.permisos import RequierePermiso
 
 from . import services
@@ -49,7 +49,7 @@ class ReporteArchivo(APIView):
         p.is_valid(raise_exception=True)
         d = p.validated_data
         filtros = {k: d[k] for k in ("rol", "estado", "ciudad", "tipo") if k in d}
-        contenido, nombre, mime = services.generar_reporte(request.user, tipo, d.get("formato", "pdf"), d["desde"], d["hasta"], filtros, ip=ip_de(request))
+        contenido, nombre, mime = services.generar_reporte(request.user, tipo, d.get("formato", "pdf"), d["desde"], d["hasta"], filtros, ip=obtener_ip(request))
         respuesta = HttpResponse(contenido, content_type=mime)
         respuesta["Content-Disposition"] = f'attachment; filename="{nombre}"'
         respuesta["Access-Control-Expose-Headers"] = "Content-Disposition"

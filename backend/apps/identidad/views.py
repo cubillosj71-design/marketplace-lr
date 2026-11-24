@@ -14,9 +14,9 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.comun import rbac
-from apps.comun.entrada import texto_de
+from apps.comun.entrada import leer_texto
 from apps.comun.errores import ErrorNegocio
-from apps.comun.eventos import ip_de
+from apps.comun.eventos import obtener_ip
 from apps.comun.permisos import RequierePermiso
 
 from . import services
@@ -44,7 +44,7 @@ class Registro(APIView):
         d = s.validated_data
         u = services.registrar_usuario(
             nombre_completo=d["nombre_completo"], correo=d["correo"], telefono=d["telefono"], password=d["password"],
-            rol=d["rol"], acepta_datos=d["acepta_datos"], ciudad=d.get("ciudad"), ip=ip_de(request),
+            rol=d["rol"], acepta_datos=d["acepta_datos"], ciudad=d.get("ciudad"), ip=obtener_ip(request),
         )
         return Response(services.convertir_usuario_a_dict(u), status=status.HTTP_201_CREATED)
 
@@ -69,9 +69,9 @@ def _quitar_cookie(respuesta: Response) -> Response:
     return respuesta
 
 
-def _refresh_de(request) -> str:
+def _obtener_refresh(request) -> str:
     # La cookie es la vía normal. El cuerpo se acepta para clientes sin navegador (pruebas, Postman).
-    return request.COOKIES.get(COOKIE["nombre"]) or texto_de(request, "refresh")
+    return request.COOKIES.get(COOKIE["nombre"]) or leer_texto(request, "refresh")
 
 
 class Token(APIView):
@@ -83,7 +83,7 @@ class Token(APIView):
 
     def post(self, request):
         return _responder_con_sesion(
-            services.iniciar_sesion(texto_de(request, "correo"), texto_de(request, "password"), ip=ip_de(request))
+            services.iniciar_sesion(leer_texto(request, "correo"), leer_texto(request, "password"), ip=obtener_ip(request))
         )
 
 
@@ -97,7 +97,7 @@ class TokenRenovar(APIView):
 
     def post(self, request):
         try:
-            sesion = services.renovar_sesion(_refresh_de(request))
+            sesion = services.renovar_sesion(_obtener_refresh(request))
         except ErrorNegocio as error:
             respuesta = Response({"detalle": error.detalle}, status=error.codigo)
             return _quitar_cookie(respuesta)
@@ -112,7 +112,7 @@ class Salir(APIView):
     authentication_classes: list = []
 
     def post(self, request):
-        services.cerrar_sesion(_refresh_de(request), ip=ip_de(request))
+        services.cerrar_sesion(_obtener_refresh(request), ip=obtener_ip(request))
         return _quitar_cookie(Response(status=status.HTTP_204_NO_CONTENT))
 
 
@@ -129,7 +129,7 @@ class Recuperacion(APIView):
     throttle_scope = "recuperacion"
 
     def post(self, request):
-        token = services.solicitar_recuperacion(texto_de(request, "correo"), ip=ip_de(request))
+        token = services.solicitar_recuperacion(leer_texto(request, "correo"), ip=obtener_ip(request))
         cuerpo = {"detalle": "Si el correo está registrado, aquí aparece un enlace que sirve una vez y vence en 20 minutos."}
         if token:
             cuerpo["enlace"] = f"{settings.FRONTEND_URL}/#/restablecer/{token}"
@@ -149,7 +149,7 @@ class RecuperacionToken(APIView):
         return Response({"estado": services.consultar_estado_enlace(token)})
 
     def post(self, request, token):
-        services.restablecer_clave(token, texto_de(request, "password"), ip=ip_de(request))
+        services.restablecer_clave(token, leer_texto(request, "password"), ip=obtener_ip(request))
         return Response({"detalle": "Tu contraseña se actualizó. Ya puedes iniciar sesión."})
 
 
@@ -160,7 +160,7 @@ class Permisos(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        return Response({"rol": rbac.rol_de(request.user), "permisos": sorted(rbac.permisos_de(request.user))})
+        return Response({"rol": rbac.obtener_rol(request.user), "permisos": sorted(rbac.obtener_permisos(request.user))})
 
 
 class Roles(APIView):
@@ -194,7 +194,7 @@ class Perfil(APIView):
     def patch(self, request):
         s = PerfilSerializer(data=request.data, partial=True)
         s.is_valid(raise_exception=True)
-        u = services.actualizar_perfil(request.user, s.validated_data, ip=ip_de(request))
+        u = services.actualizar_perfil(request.user, s.validated_data, ip=obtener_ip(request))
         return Response(services.convertir_usuario_a_dict(u))
 
 
@@ -204,7 +204,7 @@ class Desactivar(APIView):
     permission_classes = [RequierePermiso("cuenta.desactivar")]
 
     def post(self, request):
-        services.desactivar_cuenta(request.user, ip=ip_de(request))
+        services.desactivar_cuenta(request.user, ip=obtener_ip(request))
         return Response({"detalle": "Tu cuenta quedó desactivada. Se reactiva cuando vuelvas a iniciar sesión."})
 
 
@@ -221,14 +221,14 @@ class RestriccionAdmin(APIView):
     def post(self, request, usuario_id):
         s = RestriccionSerializer(data=request.data)
         s.is_valid(raise_exception=True)
-        r = services.restringir_usuario(request.user, usuario_id, s.validated_data["motivo"], s.validated_data.get("fecha_fin"), ip=ip_de(request))
+        r = services.restringir_usuario(request.user, usuario_id, s.validated_data["motivo"], s.validated_data.get("fecha_fin"), ip=obtener_ip(request))
         return Response(
             {"id": r.id, "usuario": usuario_id, "motivo": r.motivo, "fecha_inicio": r.fecha_inicio, "fecha_fin": r.fecha_fin},
             status=status.HTTP_201_CREATED,
         )
 
     def delete(self, request, usuario_id):
-        services.levantar_restriccion(request.user, usuario_id, ip=ip_de(request))
+        services.levantar_restriccion(request.user, usuario_id, ip=obtener_ip(request))
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 

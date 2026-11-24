@@ -35,7 +35,7 @@ def _correr(*args, respuesta=None, monkeypatch=None):
             if isinstance(respuesta, BaseException):
                 raise respuesta
             return respuesta
-        monkeypatch.setattr(cargar_demo.Command, "leer", staticmethod(leer))
+        monkeypatch.setattr(cargar_demo.Command, "leer_respuesta", staticmethod(leer))
     salida = StringIO()
     call_command("cargar_demo", *args, stdout=salida)
     return salida.getvalue()
@@ -98,7 +98,7 @@ def test_reiniciar_con_si_no_pregunta(demo, settings, monkeypatch):
     def no_preguntar(_):
         raise AssertionError("con --si no debe preguntar")
 
-    monkeypatch.setattr(cargar_demo.Command, "leer", staticmethod(no_preguntar))
+    monkeypatch.setattr(cargar_demo.Command, "leer_respuesta", staticmethod(no_preguntar))
     salida = StringIO()
     call_command("cargar_demo", "--reiniciar", "--si", stdout=salida)
     assert "Se borrarán 0 usuarios, 0 publicaciones y 0 reservas" in salida.getvalue()

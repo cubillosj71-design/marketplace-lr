@@ -23,9 +23,9 @@ def _es_transaccional(item) -> bool:
 def _reactivar_triggers(sender, **kwargs):
     """flush emite post_migrate justo después del TRUNCATE: ahí se vuelven a encender los triggers."""
     if sender.name == "apps.pagos":
-        from apps.comun.bd import _cambiar
+        from apps.comun.bd import _cambiar_triggers
 
-        _cambiar("ENABLE")
+        _cambiar_triggers("ENABLE")
 
 
 post_migrate.connect(_reactivar_triggers, dispatch_uid="pruebas_reactivar_triggers")
@@ -39,10 +39,10 @@ def pytest_runtest_teardown(item, nextitem):
     if _es_transaccional(item):
         from pytest_django.plugin import blocking_manager_key
 
-        from apps.comun.bd import _cambiar
+        from apps.comun.bd import _cambiar_triggers
 
         with item.config.stash[blocking_manager_key].unblock():
-            _cambiar("DISABLE")
+            _cambiar_triggers("DISABLE")
     yield
 
 
@@ -150,10 +150,10 @@ def reloj():
     from apps.comun import reloj as r
 
     def _fijar(texto: str):
-        r.fijar(timezone.make_aware(datetime.fromisoformat(texto if "T" in texto else texto + "T09:00")))
+        r.fijar_fecha_hora(timezone.make_aware(datetime.fromisoformat(texto if "T" in texto else texto + "T09:00")))
 
     yield _fijar
-    r.fijar(None)
+    r.fijar_fecha_hora(None)
 
 
 @pytest.fixture

@@ -6,7 +6,7 @@ import pytest
 from django.apps import apps
 
 from apps.catalogo import services as catalogo
-from apps.comun.fechas import fecha_maxima
+from apps.comun.fechas import calcular_fecha_maxima
 from apps.comun.management.commands.cargar_demo import PUBLICACIONES
 
 pytestmark = pytest.mark.django_db
@@ -130,7 +130,7 @@ def test_la_cuenta_restringida_de_la_demo_no_aparece(demo, cliente):
 
 
 def test_limite_de_12_meses_en_la_busqueda(cliente):
-    limite = fecha_maxima()
+    limite = calcular_fecha_maxima()
     r = cliente.get(BUSCAR, {"llegada": limite - timedelta(days=2), "salida": limite + timedelta(days=1)})
     assert r.status_code == 400 and "12 meses" in r.json()["detalle"]
     assert cliente.get(BUSCAR, {"llegada": limite - timedelta(days=2), "salida": limite}).status_code == 200

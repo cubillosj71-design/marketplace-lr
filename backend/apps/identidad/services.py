@@ -33,14 +33,14 @@ ROLES_REGISTRO = (RolUsuario.HUESPED, RolUsuario.ANFITRION)
 
 def obtener_datos_usuario(usuario_id: int) -> dict | None:
     u = Usuario.objects.filter(pk=usuario_id).first()
-    return _dict(u) if u else None
+    return _serializar_usuario(u) if u else None
 
 
 def obtener_nombres_usuarios(ids) -> dict[int, str]:
     return dict(Usuario.objects.filter(pk__in=set(ids)).values_list("id", "nombre_completo"))
 
 
-def _vigentes(ahora=None):
+def _filtrar_vigentes(ahora=None):
     """Restricciones vigentes en este momento (misma regla que RestriccionUsuario.esta_vigente)."""
     ahora = ahora or timezone.now()
     return RestriccionUsuario.objects.filter(fecha_inicio__lte=ahora).filter(Q(fecha_fin__isnull=True) | Q(fecha_fin__gt=ahora))
@@ -49,7 +49,7 @@ def _vigentes(ahora=None):
 def listar_cuentas_activas(ids) -> set[int]:
     """Usuarios con la cuenta activa y sin restricción vigente (sus publicaciones son visibles, CA-04.3)."""
     ids = set(ids)
-    restringidos = set(_vigentes().filter(usuario_id__in=ids).values_list("usuario_id", flat=True))
+    restringidos = set(_filtrar_vigentes().filter(usuario_id__in=ids).values_list("usuario_id", flat=True))
     return set(Usuario.objects.filter(pk__in=ids - restringidos, activa=True).values_list("id", flat=True))
 
 
@@ -64,8 +64,8 @@ def listar_usuarios_registrados(desde=None, hasta=None, rol=None, activa=None, r
         qs = qs.filter(rol=rol)
     if activa is not None:
         qs = qs.filter(activa=activa)
-    vigentes = {r.usuario_id: r for r in _vigentes().filter(usuario__in=qs)}
-    lista = [{**_dict(u, u.id in vigentes), "motivo_restriccion": vigentes[u.id].motivo if u.id in vigentes else None} for u in qs]
+    vigentes = {r.usuario_id: r for r in _filtrar_vigentes().filter(usuario__in=qs)}
+    lista = [{**_serializar_usuario(u, u.id in vigentes), "motivo_restriccion": vigentes[u.id].motivo if u.id in vigentes else None} for u in qs]
     return [u for u in lista if restringida is None or u["restringida"] == restringida]
 
 
@@ -80,7 +80,7 @@ def contar_usuarios_por_rol(hasta=None) -> dict[str, int]:
 
 def obtener_restriccion_vigente(usuario_id: int) -> RestriccionUsuario | None:
     """La cuenta está restringida mientras exista una restricción vigente (no hay columna de estado)."""
-    return _vigentes().filter(usuario_id=usuario_id).first()
+    return _filtrar_vigentes().filter(usuario_id=usuario_id).first()
 
 
 def listar_usuarios_para_admin(rol: str | None = None, q: str | None = None) -> list[dict]:
@@ -90,9 +90,9 @@ def listar_usuarios_para_admin(rol: str | None = None, q: str | None = None) -> 
         qs = qs.filter(rol=rol)
     if q and q.strip():
         qs = qs.filter(Q(nombre_completo__icontains=q.strip()) | Q(correo__icontains=q.strip()))
-    vigentes = {r.usuario_id: r for r in _vigentes().filter(usuario__in=qs)}
+    vigentes = {r.usuario_id: r for r in _filtrar_vigentes().filter(usuario__in=qs)}
     return [{
-        **_dict(u, u.id in vigentes),
+        **_serializar_usuario(u, u.id in vigentes),
         "motivo_restriccion": vigentes[u.id].motivo if u.id in vigentes else None,
         "restriccion_hasta": vigentes[u.id].fecha_fin if u.id in vigentes else None,
     } for u in qs]
@@ -112,7 +112,7 @@ def registrar_usuario(*, nombre_completo, correo, telefono, password, rol, acept
     _validar_clave(password, Usuario(correo=correo, nombre_completo=nombre_completo))
     ciudad = _limpiar_ciudad(ciudad)
     with transaction.atomic():
-        u = Usuario.registrar(correo, password, rol, nombre_completo=nombre_completo.strip(), telefono=telefono,
+        u = Usuario.registrar_usuario(correo, password, rol, nombre_completo=nombre_completo.strip(), telefono=telefono,
                               ciudad=ciudad)
         auditoria.registrar_evento(u.id, "UsuarioRegistrado", entidad="Usuario", entidad_id=u.id, detalle={"rol": rol}, ip=ip)
     return u
@@ -145,7 +145,7 @@ def iniciar_sesion(correo: str, password: str, ip=None) -> dict:
         u.save(update_fields=["last_login"])
         auditoria.registrar_evento(u.id, "InicioSesion", entidad="Usuario", entidad_id=u.id, detalle={"reactivada": reactivada}, ip=ip)
     refresh = RefreshToken.for_user(u)
-    return {"access": str(refresh.access_token), "refresh": str(refresh), "usuario": _dict(u),
+    return {"access": str(refresh.access_token), "refresh": str(refresh), "usuario": _serializar_usuario(u),
             **({"aviso": "Tu cuenta se reactivó. ¡Bienvenido de nuevo!"} if reactivada else {})}
 
 
@@ -163,7 +163,7 @@ def renovar_sesion(refresh: str) -> dict:
     if not u or not u.is_active:
         raise ErrorNegocio("Tu sesión terminó. Inicia sesión de nuevo.", codigo=401)
     nuevo = RefreshToken.for_user(u)
-    return {"access": str(nuevo.access_token), "refresh": str(nuevo), "usuario": _dict(u)}
+    return {"access": str(nuevo.access_token), "refresh": str(nuevo), "usuario": _serializar_usuario(u)}
 
 
 def cerrar_sesion(refresh: str, ip=None) -> None:
@@ -187,7 +187,7 @@ def _cerrar_todas_las_sesiones(u: Usuario) -> None:
 
 # ---------------------------------------------------------------- CU-USU-03 Recuperar contraseña
 
-def _hash(token: str) -> str:
+def _calcular_hash(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
@@ -204,7 +204,7 @@ def solicitar_recuperacion(correo: str, ip=None) -> str | None:
         # Un solo enlace vivo por cuenta: los anteriores sin usar dejan de servir.
         TokenRecuperacion.objects.filter(usuario=u, usado_en__isnull=True, vence__gt=ahora).update(vence=ahora)
         TokenRecuperacion.objects.create(
-            usuario=u, token_hash=_hash(token), vence=ahora + timedelta(minutes=settings.MINUTOS_ENLACE_RECUPERACION)
+            usuario=u, token_hash=_calcular_hash(token), vence=ahora + timedelta(minutes=settings.MINUTOS_ENLACE_RECUPERACION)
         )
         auditoria.registrar_evento(u.id, "RecuperacionSolicitada", entidad="Usuario", entidad_id=u.id, ip=ip)
     # No se envía correo: la recuperación es simulada y el enlace se muestra en pantalla
@@ -213,7 +213,7 @@ def solicitar_recuperacion(correo: str, ip=None) -> str | None:
 
 
 def consultar_estado_enlace(token: str) -> str:
-    t = TokenRecuperacion.objects.filter(token_hash=_hash(token)).first()
+    t = TokenRecuperacion.objects.filter(token_hash=_calcular_hash(token)).first()
     if not t:
         return "inexistente"
     if t.usado_en:
@@ -223,7 +223,7 @@ def consultar_estado_enlace(token: str) -> str:
 
 def restablecer_clave(token: str, password: str, ip=None) -> None:
     with transaction.atomic():
-        t = TokenRecuperacion.objects.select_for_update().filter(token_hash=_hash(token)).first()
+        t = TokenRecuperacion.objects.select_for_update().filter(token_hash=_calcular_hash(token)).first()
         if not t:
             raise ErrorNegocio("El enlace no es válido.", codigo=404)
         if t.usado_en:
@@ -333,7 +333,7 @@ def _validar_clave(password: str, usuario: Usuario) -> None:
         raise ErrorNegocio(" ".join(e.messages), campo="password") from e
 
 
-def _dict(u: Usuario, restringida: bool | None = None) -> dict:
+def _serializar_usuario(u: Usuario, restringida: bool | None = None) -> dict:
     return {
         "id": u.id, "correo": u.correo, "nombre_completo": u.nombre_completo, "telefono": u.telefono,
         "ciudad": u.ciudad, "rol": u.rol, "activa": u.activa,
@@ -344,4 +344,4 @@ def _dict(u: Usuario, restringida: bool | None = None) -> dict:
 
 
 def convertir_usuario_a_dict(u: Usuario) -> dict:
-    return _dict(u)
+    return _serializar_usuario(u)

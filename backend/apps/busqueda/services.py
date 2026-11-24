@@ -17,18 +17,18 @@ from django.utils import timezone
 
 from apps.catalogo import services as catalogo
 from apps.comun.errores import ErrorNegocio, NoEncontrado
-from apps.comun.fechas import fecha_maxima, validar_estancia
+from apps.comun.fechas import calcular_fecha_maxima, validar_estancia
 from apps.identidad import services as identidad
 from apps.resenas import services as resenas
 from apps.reservas import services as reservas
 
 
-def _dinero(v) -> str | None:
+def _formatear_dinero(v) -> str | None:
     return None if v is None else f"{Decimal(v):.2f}"
 
 
-def _calificacion(c: dict) -> dict:
-    return {"promedio": _dinero(c["promedio"]) if c["promedio"] is not None else None, "total": c["total"]}
+def _obtener_calificacion(c: dict) -> dict:
+    return {"promedio": _formatear_dinero(c["promedio"]) if c["promedio"] is not None else None, "total": c["total"]}
 
 
 def buscar_publicaciones(*, ciudad: int | None = None, llegada: date | None = None, salida: date | None = None, huespedes: int = 1,
@@ -65,10 +65,10 @@ def buscar_publicaciones(*, ciudad: int | None = None, llegada: date | None = No
     return [{
         "id": p.id, "titulo": p.titulo, "ciudad_id": p.ciudad_id, "ciudad": p.ciudad,
         "tipo_alojamiento_id": p.tipo_alojamiento_id, "tipo": p.tipo, "capacidad": p.capacidad,
-        "precio_noche": _dinero(p.precio_noche), "tarifa_limpieza": _dinero(p.tarifa_limpieza),
-        "descuento_porcentaje": _dinero(p.descuento_porcentaje), "descuento_min_noches": p.descuento_min_noches,
+        "precio_noche": _formatear_dinero(p.precio_noche), "tarifa_limpieza": _formatear_dinero(p.tarifa_limpieza),
+        "descuento_porcentaje": _formatear_dinero(p.descuento_porcentaje), "descuento_min_noches": p.descuento_min_noches,
         "politica_id": p.politica_id, "servicios": p.servicios, "imagen_principal": p.imagen_principal,
-        "calificacion": _calificacion(cal.get(p.id, {"promedio": None, "total": 0})),
+        "calificacion": _obtener_calificacion(cal.get(p.id, {"promedio": None, "total": 0})),
     } for p in lista]
 
 
@@ -78,17 +78,17 @@ def consultar_detalle_publicacion(publicacion_id: int, desde: date | None = None
     if not catalogo.es_buscable(publicacion_id):
         raise NoEncontrado("Este alojamiento no está disponible.")
     desde = desde or timezone.localdate()
-    hasta = min(hasta or desde + timedelta(days=90), fecha_maxima())
+    hasta = min(hasta or desde + timedelta(days=90), calcular_fecha_maxima())
     if hasta <= desde:
         raise ErrorNegocio("La fecha final debe ser posterior a la inicial.", campo="hasta")
     d = catalogo.obtener_detalle_publico(publicacion_id)
     for campo in ("precio_noche", "tarifa_limpieza", "descuento_porcentaje"):
-        d[campo] = _dinero(d[campo])
-    d["servicios_adicionales"] = [{**a, "precio": _dinero(a["precio"])} for a in d["servicios_adicionales"]]
+        d[campo] = _formatear_dinero(d[campo])
+    d["servicios_adicionales"] = [{**a, "precio": _formatear_dinero(a["precio"])} for a in d["servicios_adicionales"]]
     if d["politica"]:
-        d["politica"]["tramos"] = [{**t, "porcentaje_devolucion": _dinero(t["porcentaje_devolucion"])} for t in d["politica"]["tramos"]]
+        d["politica"]["tramos"] = [{**t, "porcentaje_devolucion": _formatear_dinero(t["porcentaje_devolucion"])} for t in d["politica"]["tramos"]]
     d["anfitrion_nombre"] = identidad.obtener_nombres_usuarios([d["anfitrion"]]).get(d["anfitrion"])
-    d["calificacion"] = _calificacion(resenas.consultar_calificacion(publicacion_id))
+    d["calificacion"] = _obtener_calificacion(resenas.consultar_calificacion(publicacion_id))
     d["disponibilidad"] = {"desde": desde, "hasta": hasta,
                            "noches_no_disponibles": reservas.consultar_noches_no_disponibles_de(publicacion_id, desde, hasta)}
     return d

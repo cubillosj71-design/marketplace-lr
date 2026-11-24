@@ -3,7 +3,7 @@
 Las tablas evento_auditoria, reserva, pago y cancelacion tienen un trigger BEFORE TRUNCATE que impide vaciarlas
 (RNF-E-CON-01). Django vacía la base con TRUNCATE en `flush`, que usan `cargar_demo --reiniciar`
 (solo desarrollo) y la limpieza de las pruebas con transaction=True. Solo esos dos casos usan
-`vaciado_permitido()`, que apaga esos triggers mientras corre y los vuelve a encender al salir.
+`permitir_vaciado()`, que apaga esos triggers mientras corre y los vuelve a encender al salir.
 """
 
 from contextlib import contextmanager
@@ -18,16 +18,16 @@ TRIGGERS_SIN_VACIAR = (
 )
 
 
-def _cambiar(accion: str) -> None:
+def _cambiar_triggers(accion: str) -> None:
     with connection.cursor() as c:
         for tabla, trigger in TRIGGERS_SIN_VACIAR:
             c.execute(f"ALTER TABLE {tabla} {accion} TRIGGER {trigger}")
 
 
 @contextmanager
-def vaciado_permitido():
-    _cambiar("DISABLE")
+def permitir_vaciado():
+    _cambiar_triggers("DISABLE")
     try:
         yield
     finally:
-        _cambiar("ENABLE")
+        _cambiar_triggers("ENABLE")

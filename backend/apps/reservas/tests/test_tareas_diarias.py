@@ -57,7 +57,7 @@ def test_concilia_los_pagos_en_verificacion(con_token, cliente, alojamiento_740,
     Pago = apps.get_model("pagos", "Pago")
     pendiente = Pago.objects.create(cotizacion_id=r["cotizacion"], tipo="COBRO", monto=1000, estado="EN_VERIFICACION",
                                     clave_idempotencia=uuid.uuid4())
-    monkeypatch.setattr(AdaptadorSimulado, "consultar", lambda self, clave: ResultadoPago("APROBADO", "pi_confirmado"))
+    monkeypatch.setattr(AdaptadorSimulado, "consultar_pago", lambda self, clave: ResultadoPago("APROBADO", "pi_confirmado"))
     assert cliente.post(RUTA, HTTP_X_TOKEN_TAREAS=TOKEN).json()["pagos_conciliados"] == 1
     pendiente.refresh_from_db()
     assert (pendiente.estado, pendiente.referencia_externa) == ("APROBADO", "pi_confirmado")

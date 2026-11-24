@@ -55,13 +55,13 @@ def test_resolver_mantener_no_crea_cancelacion(reserva):
 
 
 def test_la_devolucion_usa_la_pasarela_del_cobro(reserva, entrar, reloj, settings, monkeypatch):
-    """Un cobro hecho con Stripe (pi_...) se devuelve con AdaptadorStripe.devolver(referencia, monto)."""
+    """Un cobro hecho con Stripe (pi_...) se devuelve con AdaptadorStripe.devolver_pago(referencia, monto)."""
     from apps.pagos.pasarela import AdaptadorStripe, ResultadoPago
 
     Pago().objects.filter(reserva_id=reserva.id, tipo="COBRO").update(referencia_externa="pi_prueba")
     settings.STRIPE_SECRET_KEY = "llave-falsa-solo-para-pruebas"
     llamadas = []
-    monkeypatch.setattr(AdaptadorStripe, "devolver",
+    monkeypatch.setattr(AdaptadorStripe, "devolver_pago",
                         lambda self, referencia, monto: llamadas.append((referencia, monto)) or ResultadoPago("APROBADO", "re_prueba"))
     reloj("2026-11-15")
     r = entrar("huesped@correo.com", "Clave1234").post(f"/api/v1/reservas/{reserva.id}/cancelar", {"motivo": "Viaje"}, format="json")
@@ -72,26 +72,26 @@ def test_la_devolucion_usa_la_pasarela_del_cobro(reserva, entrar, reloj, setting
 
 # ---------------- Usuario (MOD-01)
 def test_registrar_guarda_la_autorizacion_de_datos():
-    u = Usuario().registrar("nuevo@correo.com", "Segura2026", "HUESPED", nombre_completo="Nuevo", telefono="300")
+    u = Usuario().registrar_usuario("nuevo@correo.com", "Segura2026", "HUESPED", nombre_completo="Nuevo", telefono="300")
     assert u.check_password("Segura2026") and u.autorizacion_datos is not None and u.activa
 
 
 def test_iniciar_sesion_verifica_correo_y_clave():
-    u = Usuario().registrar("nuevo@correo.com", "Segura2026", "HUESPED", nombre_completo="Nuevo", telefono="300")
+    u = Usuario().registrar_usuario("nuevo@correo.com", "Segura2026", "HUESPED", nombre_completo="Nuevo", telefono="300")
     assert u.iniciar_sesion(" Nuevo@Correo.com ", "Segura2026")
     assert not u.iniciar_sesion("nuevo@correo.com", "otra")
     assert not u.iniciar_sesion("otro@correo.com", "Segura2026")
 
 
 def test_actualizar_perfil_no_deja_datos_vacios():
-    u = Usuario().registrar("nuevo@correo.com", "Segura2026", "HUESPED", nombre_completo="Nuevo", telefono="300")
+    u = Usuario().registrar_usuario("nuevo@correo.com", "Segura2026", "HUESPED", nombre_completo="Nuevo", telefono="300")
     assert u.actualizar_perfil(nombre=" Ana ") == ["nombre_completo"] and u.nombre_completo == "Ana"
     with pytest.raises(ErrorNegocio):
         u.actualizar_perfil(telefono="  ")
 
 
 def test_desactivar_y_reactivar():
-    u = Usuario().registrar("nuevo@correo.com", "Segura2026", "HUESPED", nombre_completo="Nuevo", telefono="300")
+    u = Usuario().registrar_usuario("nuevo@correo.com", "Segura2026", "HUESPED", nombre_completo="Nuevo", telefono="300")
     u.desactivar_cuenta()
     assert not Usuario().objects.get(pk=u.pk).activa
     u.reactivar_cuenta()

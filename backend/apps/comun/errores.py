@@ -11,7 +11,7 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import exception_handler
 
-from .eventos import ip_de
+from .eventos import obtener_ip
 
 log = logging.getLogger("marketplace")
 
@@ -53,7 +53,7 @@ def manejar_excepcion(exc, contexto):
 def _auditar_falla(exc, contexto) -> None:
     request = contexto.get("request")
     usuario = getattr(request, "user", None)
-    auditar_falla(exc, actor_id=getattr(usuario, "id", None), ip=ip_de(request), ruta=getattr(request, "path", None))
+    auditar_falla(exc, actor_id=getattr(usuario, "id", None), ip=obtener_ip(request), ruta=getattr(request, "path", None))
 
 
 def auditar_falla(exc: Exception, *, actor_id: int | None = None, ip: str | None = None, entidad: str | None = None,

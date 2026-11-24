@@ -57,7 +57,7 @@ def test_la_reversa_no_borra_una_ciudad_con_publicaciones(publicar):
 
 def test_las_ciudades_salen_en_orden_alfabetico(cliente):
     nombres = [c["nombre"] for c in cliente.get("/api/v1/catalogo/ciudades").json()]
-    assert nombres == sorted(nombres, key=catalogo.clave_alfabetica)
+    assert nombres == sorted(nombres, key=catalogo.calcular_clave_alfabetica)
     assert nombres[:3] == ["Barichara", "Barranquilla", "Bogotá"]
     # "San Andrés" y "San Gil" van antes de "Santa Fe de Antioquia" y "Santa Marta"; las tildes no cambian el orden
     assert nombres.index("San Andrés") < nombres.index("San Gil") < nombres.index("Santa Fe de Antioquia") < nombres.index("Santa Marta")

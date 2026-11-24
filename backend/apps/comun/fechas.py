@@ -20,9 +20,9 @@ def sumar_meses(d: date, meses: int) -> date:
     return date(anio, mes, min(d.day, calendar.monthrange(anio, mes)[1]))
 
 
-def fecha_maxima(hoy: date | None = None) -> date:
+def calcular_fecha_maxima(hoy: date | None = None) -> date:
     """Última fecha de salida aceptada: hoy + 12 meses."""
-    return sumar_meses(hoy or reloj.hoy(), MESES_MAXIMOS)
+    return sumar_meses(hoy or reloj.obtener_fecha_hoy(), MESES_MAXIMOS)
 
 
 def validar_estancia(llegada: date, salida: date, *, permitir_pasado: bool = False,
@@ -30,9 +30,9 @@ def validar_estancia(llegada: date, salida: date, *, permitir_pasado: bool = Fal
     """Valida el rango [llegada, salida) y devuelve el número de noches."""
     if salida <= llegada:  # CA-10.3
         raise ErrorNegocio("La fecha de salida debe ser posterior a la de llegada.", campo=campo_salida)
-    if not permitir_pasado and llegada < reloj.hoy():
+    if not permitir_pasado and llegada < reloj.obtener_fecha_hoy():
         raise ErrorNegocio("La fecha de llegada no puede ser anterior a hoy.", campo=campo_llegada)
-    limite = fecha_maxima()
+    limite = calcular_fecha_maxima()
     if salida > limite:  # RF-D-ALO-02.2
         raise ErrorNegocio(f"Solo se aceptan fechas hasta el {limite:%d/%m/%Y} (12 meses desde hoy).", campo=campo_salida)
     return (salida - llegada).days

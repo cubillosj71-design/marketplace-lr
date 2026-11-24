@@ -6,7 +6,7 @@ from decimal import Decimal
 import pytest
 from django.apps import apps
 
-from apps.comun.fechas import fecha_maxima
+from apps.comun.fechas import calcular_fecha_maxima
 
 pytestmark = pytest.mark.django_db
 COTIZAR = "/api/v1/reservas/cotizaciones"
@@ -84,7 +84,7 @@ def test_adicional_de_otro_alojamiento_no_se_acepta(alojamiento, publicar, entra
 
 def test_limite_de_12_meses_y_fechas_pasadas(alojamiento, entrar, dias):
     h = entrar("huesped@correo.com")
-    limite = fecha_maxima()
+    limite = calcular_fecha_maxima()
     r = _cotizar(h, alojamiento, limite - timedelta(days=2), limite + timedelta(days=1))
     assert r.status_code == 400 and r.json()["campo"] == "fecha_salida"
     assert _cotizar(h, alojamiento, limite - timedelta(days=2), limite).status_code == 201
