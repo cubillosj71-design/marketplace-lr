@@ -178,64 +178,55 @@ export function Registro() {
 }
 
 /* ---------------- CU-USU-03 Recuperar contraseña ---------------- */
-async function solicitarEnlace(correo: string): Promise<{ ok: true; token: string } | { ok: false; error: string }> {
+/** El enlace llega al correo de la cuenta. La API responde lo mismo exista o no la cuenta, así que la pantalla
+ *  tampoco lo dice: siempre muestra "revisa tu correo". */
+async function solicitarEnlace(correo: string): Promise<{ ok: true; detalle: string } | { ok: false; error: string }> {
   try {
     const { data } = await identidadApi.solicitarRecuperacion(correo.trim());
-    const token = data.enlace?.split("/restablecer/")[1];
-    // Si el correo no existe, la API no lo revela: responde igual, solo que sin enlace.
-    if (!token) return { ok: false, error: "No apareció un enlace para ese correo. Revisa que esté bien escrito." };
-    return { ok: true, token };
+    return { ok: true, detalle: data.detalle };
   } catch (e) {
     return { ok: false, error: leerError(e).error };
   }
 }
 
 export function Recuperar() {
-  const toast = useToast();
   const [correo, setCorreo] = useState("");
   const [error, setError] = useState("");
-  const [token, setToken] = useState<string | null>(null);
-  const enlace = !token ? "" : import.meta.env.VITE_ROUTER === "memory"
-    ? `alojamientos-lr/restablecer/${token}`
-    : `${location.origin}${location.pathname}#/restablecer/${token}`;
+  const [enviando, setEnviando] = useState(false);
+  const [detalle, setDetalle] = useState<string | null>(null);
+
+  const enviar = async () => {
+    if (!correoValido(correo)) return setError("Escribe un correo válido.");
+    setEnviando(true);
+    const r = await solicitarEnlace(correo);
+    setEnviando(false);
+    if (!r.ok) return setError(r.error);
+    setError(""); setDetalle(r.detalle);
+  };
 
   return (
     <AuthLayout>
       <Link to="/ingresar" className="back"><ArrowLeft /> Volver a ingresar</Link>
       <div className="head">
         <h1>¿Olvidaste tu contraseña?</h1>
-        <p>Escribe el correo de tu cuenta y te damos un enlace para definir una nueva.</p>
+        <p>Escribe el correo de tu cuenta y te enviaremos un enlace para definir una nueva.</p>
       </div>
-      {!token ? (
-        <form className="stack" noValidate onSubmit={async (e) => {
-          e.preventDefault();
-          if (!correoValido(correo)) return setError("Escribe un correo válido.");
-          const r = await solicitarEnlace(correo);
-          if (!r.ok) return setError(r.error);
-          setError(""); setToken(r.token);
-        }}>
+      {detalle === null ? (
+        <form className="stack" noValidate onSubmit={(e) => { e.preventDefault(); void enviar(); }}>
           <Field label="Correo electrónico" error={error}>
             <input className="input" type="email" placeholder="tu@correo.com" value={correo} onChange={(e) => setCorreo(e.target.value)} />
           </Field>
-          <button className="btn btn-primary btn-block" type="submit">Generar enlace</button>
+          <button className="btn btn-primary btn-block" type="submit" disabled={enviando}>{enviando ? "Enviando…" : "Enviar enlace"}</button>
         </form>
       ) : (
         <div className="stack">
-          <Alert tipo="info">
-            <b>Recuperación simulada.</b> Como la plataforma no envía correos, aquí tienes el enlace.
-          </Alert>
-          <div className="card card-tight stack-sm" style={{ boxShadow: "none" }}>
-            <span className="label">Tu enlace</span>
-            <code style={{ fontSize: 13, wordBreak: "break-all", color: "var(--brand-800)" }}>{enlace}</code>
-            <span className="hint-text" style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
-              <Clock size={14} /> Vence en 20 minutos y sirve una sola vez.
-            </span>
-          </div>
+          <Alert tipo="ok"><b>Revisa tu correo.</b> {detalle}</Alert>
+          <span className="hint-text" style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+            <Clock size={14} /> Enviado a {correo.trim()}. ¿No llegó en unos minutos? Revisa la carpeta de spam o pide otro enlace.
+          </span>
           <div className="row">
-            <Link className="btn btn-primary" to={`/restablecer/${token}`}>Abrir enlace</Link>
-            <button className="btn btn-secondary" onClick={() => { navigator.clipboard?.writeText(enlace).catch(() => {}); toast("Enlace copiado"); }}>
-              <Copy /> Copiar
-            </button>
+            <button className="btn btn-secondary" disabled={enviando} onClick={() => void enviar()}>Enviar otro enlace</button>
+            <Link className="btn btn-ghost" to="/ingresar">Volver a ingresar</Link>
           </div>
         </div>
       )}

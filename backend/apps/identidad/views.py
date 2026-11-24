@@ -119,9 +119,9 @@ class Salir(APIView):
 class Recuperacion(APIView):
     """POST /identidad/recuperacion (RF-D-USU-01.3, CA-03.1).
 
-    La recuperación es simulada y el MVP no envía correos (AMB-08, AMB-12): el enlace se
-    devuelve para mostrarlo en pantalla, también en producción. Con un correo que no
-    existe la respuesta tiene el mismo estado y el mismo mensaje, solo que sin enlace.
+    El enlace llega al correo de la cuenta; la API nunca lo devuelve. La respuesta es la misma (202 y el mismo
+    mensaje) exista o no la cuenta, y el correo sale en segundo plano para que tampoco el tiempo de respuesta lo
+    revele.
     """
 
     permission_classes = [AllowAny]
@@ -129,11 +129,11 @@ class Recuperacion(APIView):
     throttle_scope = "recuperacion"
 
     def post(self, request):
-        token = services.solicitar_recuperacion(leer_texto(request, "correo"), ip=obtener_ip(request))
-        cuerpo = {"detalle": "Si el correo está registrado, aquí aparece un enlace que sirve una vez y vence en 20 minutos."}
-        if token:
-            cuerpo["enlace"] = f"{settings.FRONTEND_URL}/#/restablecer/{token}"
-        return Response(cuerpo, status=status.HTTP_202_ACCEPTED)
+        services.solicitar_recuperacion(leer_texto(request, "correo"), ip=obtener_ip(request))
+        minutos = settings.MINUTOS_ENLACE_RECUPERACION
+        return Response({"detalle": "Si el correo está registrado, te enviamos un enlace para cambiar tu contraseña. "
+                                    f"Revisa tu bandeja de entrada y la carpeta de spam. El enlace sirve una vez y vence en {minutos} minutos."},
+                        status=status.HTTP_202_ACCEPTED)
 
 
 class RecuperacionToken(APIView):
