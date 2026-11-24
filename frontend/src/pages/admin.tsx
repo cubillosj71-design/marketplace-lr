@@ -499,20 +499,26 @@ export function TarifaServicioPage() {
           )}
           <div className="table-wrap">
             <table className="table">
-              <thead><tr><th>Porcentaje</th><th>Desde</th><th>Hasta</th><th>Administrador</th></tr></thead>
+              <thead><tr><th>Porcentaje</th><th>Desde</th><th>Hasta</th><th>Estado</th><th>Administrador</th></tr></thead>
               <tbody>
                 {(historial ?? []).map((t) => (
                   <tr key={t.id}>
                     <td><b>{Number(t.porcentaje)} %</b></td>
                     <td>{fechaHora(t.vigente_desde)}</td>
-                    <td>{t.vigente_hasta ? fechaHora(t.vigente_hasta) : <span className="badge badge-ACTIVA">Vigente</span>}</td>
+                    {/* La tarifa vigente no tiene fecha de fin: rige hasta que el Administrador fije otra; en ese
+                        momento se cierra con la fecha y hora del cambio (vigente_hasta). */}
+                    <td>{t.vigente_hasta ? fechaHora(t.vigente_hasta) : <span className="muted" style={{ whiteSpace: "nowrap" }}>Sin fecha de fin</span>}</td>
+                    <td>{t.vigente_hasta
+                      ? <span className="badge badge-BORRADOR">Terminada</span>
+                      : <span className="badge badge-ACTIVA">Vigente</span>}</td>
                     <td>{nombres[t.administrador] ?? `#${t.administrador}`}</td>
                   </tr>
                 ))}
-                {historial && historial.length === 0 && <tr><td colSpan={4} className="muted">Ninguna tarifa estuvo vigente en ese rango.</td></tr>}
+                {historial && historial.length === 0 && <tr><td colSpan={5} className="muted">Ninguna tarifa estuvo vigente en ese rango.</td></tr>}
               </tbody>
             </table>
           </div>
+          <p className="subtle" style={{ margin: 0 }}>La tarifa vigente no tiene fecha de fin: rige hasta que se fije una nueva, y en ese momento queda terminada con la fecha y hora del cambio.</p>
         </section>
       </div>
     </Page>
